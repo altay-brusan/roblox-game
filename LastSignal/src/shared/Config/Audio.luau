@@ -95,7 +95,7 @@ Audio.Cues = {
 	-- Train: locomotive and rolling stock
 	--------------------------------------------------------------------
 	train_engine_idle = cue({
-		id = 0,
+		id = 16480555593,
 		bus = "train",
 		volume = 0.55,
 		looped = true,
@@ -104,7 +104,7 @@ Audio.Cues = {
 		description = "Diesel idle loop at the engine bay. Pitch and volume track throttle notch.",
 	}),
 	train_engine_load = cue({
-		id = 0,
+		id = 16480555445,
 		bus = "train",
 		volume = 0.7,
 		looped = true,
@@ -113,7 +113,7 @@ Audio.Cues = {
 		description = "Engine under load. Crossfaded over idle proportionally to notch.",
 	}),
 	train_wheels_roll = cue({
-		id = 0,
+		id = 16480554578,
 		bus = "train",
 		volume = 0.6,
 		looped = true,
@@ -122,7 +122,7 @@ Audio.Cues = {
 		description = "Rail roll loop under each bogie. Playback speed tracks train speed.",
 	}),
 	train_rail_joint = cue({
-		id = 0,
+		id = 16480551554,
 		bus = "train",
 		volume = 0.5,
 		pitchVariance = 0.08,
@@ -149,7 +149,7 @@ Audio.Cues = {
 		description = "Emergency brake. Loud, ugly, and heard from a long way off.",
 	}),
 	train_horn = cue({
-		id = 0,
+		id = 15675062723,
 		bus = "train",
 		volume = 1.0,
 		rollOffMin = 30,
@@ -158,7 +158,7 @@ Audio.Cues = {
 		description = "Air horn. Also the creature repel tool, so it must read at distance.",
 	}),
 	train_door = cue({
-		id = 0,
+		id = 365551423,
 		bus = "train",
 		volume = 0.6,
 		pitchVariance = 0.05,
@@ -167,7 +167,7 @@ Audio.Cues = {
 		description = "Pneumatic carriage door cycle.",
 	}),
 	train_coupler = cue({
-		id = 0,
+		id = 16480575861,
 		bus = "train",
 		volume = 0.8,
 		rollOffMin = 10,
@@ -190,7 +190,7 @@ Audio.Cues = {
 		description = "Engine stall when fuel runs dry or condition fails.",
 	}),
 	train_start = cue({
-		id = 0,
+		id = 9118934517,
 		bus = "train",
 		volume = 0.85,
 		description = "Engine crank and catch.",
@@ -199,70 +199,70 @@ Audio.Cues = {
 	--------------------------------------------------------------------
 	-- Weather and forest ambience
 	--------------------------------------------------------------------
-	rain_light = cue({ id = 0, bus = "ambience", volume = 0.5, looped = true, description = "Light rain bed, exterior." }),
-	rain_heavy = cue({ id = 0, bus = "ambience", volume = 0.75, looped = true, description = "Heavy rain bed, exterior." }),
-	rain_on_roof = cue({ id = 0, bus = "ambience", volume = 0.6, looped = true, description = "Rain on the carriage roof, interior only." }),
+	rain_light = cue({ id = 1516791621, bus = "ambience", volume = 0.5, looped = true, description = "Light rain bed, exterior." }),
+	rain_heavy = cue({ id = 1516791621, bus = "ambience", volume = 0.75, looped = true, description = "Heavy rain bed, exterior." }),
+	rain_on_roof = cue({ id = 1516791621, bus = "ambience", volume = 0.6, looped = true, description = "Rain on the carriage roof, interior only." }),
 	wind_forest = cue({ id = 0, bus = "ambience", volume = 0.45, looped = true, description = "Wind through conifers." }),
 	forest_night = cue({ id = 0, bus = "ambience", volume = 0.4, looped = true, description = "Distant night forest bed. Goes quiet when threat is high." }),
-	thunder_distant = cue({ id = 0, bus = "ambience", volume = 0.7, subtitle = "[Distant thunder]", description = "Occasional distant thunder." }),
+	thunder_distant = cue({ id = 12222030, bus = "ambience", volume = 0.7, subtitle = "[Distant thunder]", description = "Occasional distant thunder." }),
 	station_hum = cue({ id = 0, bus = "ambience", volume = 0.35, looped = true, description = "Failing fluorescent hum at powered stations." }),
-	tunnel_tone = cue({ id = 0, bus = "ambience", volume = 0.5, looped = true, description = "Low enclosed tone inside the service tunnel." }),
+	tunnel_tone = cue({ id = 9120510269, bus = "ambience", volume = 0.5, looped = true, description = "Low enclosed tone inside the service tunnel." }),
 
 	--------------------------------------------------------------------
 	-- Player
 	--------------------------------------------------------------------
-	footstep_metal = cue({ id = 0, bus = "sfx", volume = 0.4, pitchVariance = 0.1, description = "Footstep on carriage decking." }),
-	footstep_gravel = cue({ id = 0, bus = "sfx", volume = 0.4, pitchVariance = 0.1, description = "Footstep on ballast." }),
-	footstep_wood = cue({ id = 0, bus = "sfx", volume = 0.35, pitchVariance = 0.1, description = "Footstep on sleepers and boardwalk." }),
-	footstep_soil = cue({ id = 0, bus = "sfx", volume = 0.3, pitchVariance = 0.1, description = "Footstep on forest floor." }),
-	footstep_concrete = cue({ id = 0, bus = "sfx", volume = 0.4, pitchVariance = 0.1, description = "Footstep on platform concrete." }),
-	breath_tired = cue({ id = 0, bus = "sfx", volume = 0.5, looped = true, description = "Exhausted breathing when stamina bottoms out." }),
+	footstep_metal = cue({ id = 12221952, bus = "sfx", volume = 0.4, pitchVariance = 0.1, description = "Footstep on carriage decking." }),
+	footstep_gravel = cue({ id = 12221962, bus = "sfx", volume = 0.4, pitchVariance = 0.1, description = "Footstep on ballast." }),
+	footstep_wood = cue({ id = 12221952, bus = "sfx", volume = 0.35, pitchVariance = 0.1, description = "Footstep on sleepers and boardwalk." }),
+	footstep_soil = cue({ id = 12221962, bus = "sfx", volume = 0.3, pitchVariance = 0.1, description = "Footstep on forest floor." }),
+	footstep_concrete = cue({ id = 12221952, bus = "sfx", volume = 0.4, pitchVariance = 0.1, description = "Footstep on platform concrete." }),
+	breath_tired = cue({ id = 12222242, bus = "sfx", volume = 0.5, looped = true, description = "Exhausted breathing when stamina bottoms out." }),
 	heartbeat = cue({ id = 0, bus = "sfx", volume = 0.6, looped = true, description = "Heartbeat under low health and during a chase." }),
-	hurt = cue({ id = 0, bus = "sfx", volume = 0.7, pitchVariance = 0.08, description = "Player takes damage." }),
+	hurt = cue({ id = 12222242, bus = "sfx", volume = 0.7, pitchVariance = 0.08, description = "Player takes damage." }),
 	downed = cue({ id = 0, bus = "sfx", volume = 0.8, subtitle = "[A crew member goes down]", directionalHint = true, description = "A crew member is downed." }),
 	revive = cue({ id = 0, bus = "sfx", volume = 0.7, description = "Revive completes." }),
-	flashlight_click = cue({ id = 0, bus = "sfx", volume = 0.5, description = "Flashlight toggle." }),
+	flashlight_click = cue({ id = 12221976, bus = "sfx", volume = 0.5, description = "Flashlight toggle." }),
 	flashlight_die = cue({ id = 0, bus = "sfx", volume = 0.5, description = "Flashlight battery gives out." }),
 
 	--------------------------------------------------------------------
 	-- Items, tools and machinery
 	--------------------------------------------------------------------
-	item_pickup = cue({ id = 0, bus = "sfx", volume = 0.5, description = "Generic pickup." }),
-	item_drop = cue({ id = 0, bus = "sfx", volume = 0.45, description = "Generic drop." }),
-	item_fuel_pour = cue({ id = 0, bus = "sfx", volume = 0.6, description = "Refuelling the locomotive." }),
+	item_pickup = cue({ id = 17208319162, bus = "sfx", volume = 0.5, description = "Generic pickup." }),
+	item_drop = cue({ id = 12222140, bus = "sfx", volume = 0.45, description = "Generic drop." }),
+	item_fuel_pour = cue({ id = 365203457, bus = "sfx", volume = 0.6, description = "Refuelling the locomotive." }),
 	item_bandage = cue({ id = 0, bus = "sfx", volume = 0.5, description = "Applying a bandage." }),
-	item_battery = cue({ id = 0, bus = "sfx", volume = 0.5, description = "Loading a battery." }),
-	repair_wrench = cue({ id = 0, bus = "sfx", volume = 0.55, pitchVariance = 0.1, description = "Repair progress tick." }),
-	generator_start = cue({ id = 0, bus = "sfx", volume = 0.8, subtitle = "[Generator coughs into life]", description = "Generator start." }),
-	generator_run = cue({ id = 0, bus = "sfx", volume = 0.55, looped = true, description = "Generator running loop." }),
-	breaker_throw = cue({ id = 0, bus = "sfx", volume = 0.7, description = "Heavy electrical breaker." }),
-	lever_switch = cue({ id = 0, bus = "sfx", volume = 0.6, description = "Track switch lever." }),
-	door_wood_open = cue({ id = 0, bus = "sfx", volume = 0.5, pitchVariance = 0.06, description = "Building door opening." }),
-	door_metal_open = cue({ id = 0, bus = "sfx", volume = 0.55, pitchVariance = 0.06, description = "Metal door opening." }),
-	locker_open = cue({ id = 0, bus = "sfx", volume = 0.45, description = "Searching a locker or crate." }),
+	item_battery = cue({ id = 16480551554, bus = "sfx", volume = 0.5, description = "Loading a battery." }),
+	repair_wrench = cue({ id = 16480575731, bus = "sfx", volume = 0.55, pitchVariance = 0.1, description = "Repair progress tick." }),
+	generator_start = cue({ id = 9118934517, bus = "sfx", volume = 0.8, subtitle = "[Generator coughs into life]", description = "Generator start." }),
+	generator_run = cue({ id = 16480557782, bus = "sfx", volume = 0.55, looped = true, description = "Generator running loop." }),
+	breaker_throw = cue({ id = 12222170, bus = "sfx", volume = 0.7, description = "Heavy electrical breaker." }),
+	lever_switch = cue({ id = 12222183, bus = "sfx", volume = 0.6, description = "Track switch lever." }),
+	door_wood_open = cue({ id = 365551423, bus = "sfx", volume = 0.5, pitchVariance = 0.06, description = "Building door opening." }),
+	door_metal_open = cue({ id = 365551423, bus = "sfx", volume = 0.55, pitchVariance = 0.06, description = "Metal door opening." }),
+	locker_open = cue({ id = 365551423, bus = "sfx", volume = 0.45, description = "Searching a locker or crate." }),
 
 	--------------------------------------------------------------------
 	-- Weapons
 	--------------------------------------------------------------------
-	melee_swing = cue({ id = 0, bus = "sfx", volume = 0.55, pitchVariance = 0.12, description = "Melee swing through air." }),
-	melee_hit_flesh = cue({ id = 0, bus = "sfx", volume = 0.7, pitchVariance = 0.1, description = "Melee connecting with a creature." }),
-	melee_hit_hard = cue({ id = 0, bus = "sfx", volume = 0.65, pitchVariance = 0.1, description = "Melee connecting with metal or wood." }),
+	melee_swing = cue({ id = 12222200, bus = "sfx", volume = 0.55, pitchVariance = 0.12, description = "Melee swing through air." }),
+	melee_hit_flesh = cue({ id = 12222152, bus = "sfx", volume = 0.7, pitchVariance = 0.1, description = "Melee connecting with a creature." }),
+	melee_hit_hard = cue({ id = 12222046, bus = "sfx", volume = 0.65, pitchVariance = 0.1, description = "Melee connecting with metal or wood." }),
 	gun_revolver = cue({ id = 0, bus = "sfx", volume = 1.0, rollOffMax = 900, subtitle = "[Gunshot]", description = "Revolver discharge." }),
 	gun_shotgun = cue({ id = 0, bus = "sfx", volume = 1.0, rollOffMax = 1100, subtitle = "[Shotgun blast]", description = "Shotgun discharge." }),
 	gun_rifle = cue({ id = 0, bus = "sfx", volume = 1.0, rollOffMax = 1200, subtitle = "[Rifle shot]", description = "Bolt rifle discharge." }),
-	gun_flare = cue({ id = 0, bus = "sfx", volume = 0.8, description = "Flare gun launch." }),
-	gun_dry = cue({ id = 0, bus = "sfx", volume = 0.5, description = "Dry fire on an empty chamber." }),
+	gun_flare = cue({ id = 12222084, bus = "sfx", volume = 0.8, description = "Flare gun launch." }),
+	gun_dry = cue({ id = 12222140, bus = "sfx", volume = 0.5, description = "Dry fire on an empty chamber." }),
 	reload_revolver = cue({ id = 0, bus = "sfx", volume = 0.6, description = "Swing-out cylinder, eject, load, close." }),
 	reload_shotgun_shell = cue({ id = 0, bus = "sfx", volume = 0.6, pitchVariance = 0.05, description = "Single shell into the tube, one per shell." }),
 	reload_bolt = cue({ id = 0, bus = "sfx", volume = 0.6, description = "Bolt cycle." }),
-	bullet_impact = cue({ id = 0, bus = "sfx", volume = 0.6, pitchVariance = 0.15, description = "Bullet impact at the hit point." }),
+	bullet_impact = cue({ id = 12222046, bus = "sfx", volume = 0.6, pitchVariance = 0.15, description = "Bullet impact at the hit point." }),
 
 	--------------------------------------------------------------------
 	-- Radio and voice
 	--------------------------------------------------------------------
 	radio_static = cue({ id = 0, bus = "voice", volume = 0.4, looped = true, description = "Carrier static under every radio line." }),
-	radio_open = cue({ id = 0, bus = "voice", volume = 0.6, description = "Squelch opening before a transmission." }),
-	radio_close = cue({ id = 0, bus = "voice", volume = 0.5, description = "Squelch closing after a transmission." }),
+	radio_open = cue({ id = 15675059323, bus = "voice", volume = 0.6, description = "Squelch opening before a transmission." }),
+	radio_close = cue({ id = 15675032796, bus = "voice", volume = 0.5, description = "Squelch closing after a transmission." }),
 	radio_distort = cue({ id = 0, bus = "voice", volume = 0.7, subtitle = "[The signal warps]", description = "Distortion sting used when a transmission is not the dispatcher." }),
 	radio_tune = cue({ id = 0, bus = "voice", volume = 0.5, description = "Tuning the set between frequencies." }),
 
@@ -270,7 +270,7 @@ Audio.Cues = {
 	-- The Signal-Eater
 	--------------------------------------------------------------------
 	creature_distant = cue({
-		id = 0,
+		id = 9120031442,
 		bus = "creature",
 		volume = 0.7,
 		rollOffMax = 1200,
@@ -279,7 +279,7 @@ Audio.Cues = {
 		description = "Distant call. The first warning a crew gets, deliberately vague in direction.",
 	}),
 	creature_near = cue({
-		id = 0,
+		id = 9120031442,
 		bus = "creature",
 		volume = 0.85,
 		rollOffMax = 380,
@@ -288,7 +288,7 @@ Audio.Cues = {
 		description = "Close proximity vocalisation.",
 	}),
 	creature_chase = cue({
-		id = 0,
+		id = 9120031442,
 		bus = "creature",
 		volume = 1.0,
 		looped = true,
@@ -297,8 +297,8 @@ Audio.Cues = {
 		directionalHint = true,
 		description = "Chase loop. Unmistakable, because a chase must never be ambiguous.",
 	}),
-	creature_attack = cue({ id = 0, bus = "creature", volume = 1.0, subtitle = "[It strikes]", description = "Attack." }),
-	creature_repelled = cue({ id = 0, bus = "creature", volume = 0.9, subtitle = "[It recoils and retreats]", description = "Driven off by the horn, a flare or sustained damage." }),
+	creature_attack = cue({ id = 9120031442, bus = "creature", volume = 1.0, subtitle = "[It strikes]", description = "Attack." }),
+	creature_repelled = cue({ id = 9120031442, bus = "creature", volume = 0.9, subtitle = "[It recoils and retreats]", description = "Driven off by the horn, a flare or sustained damage." }),
 	creature_mimic = cue({
 		id = 0,
 		bus = "creature",
@@ -308,7 +308,7 @@ Audio.Cues = {
 		description = "Mimicry cue. Deliberately routed on the creature bus so a careful player can learn to tell.",
 	}),
 	footsteps_outside = cue({
-		id = 0,
+		id = 12221962,
 		bus = "creature",
 		volume = 0.5,
 		rollOffMax = 90,
@@ -320,9 +320,9 @@ Audio.Cues = {
 	--------------------------------------------------------------------
 	-- Music
 	--------------------------------------------------------------------
-	music_lobby = cue({ id = 0, bus = "music", volume = 0.45, looped = true, description = "Lobby bed. Warm, tired, safe." }),
+	music_lobby = cue({ id = 15675069601, bus = "music", volume = 0.45, looped = true, description = "Lobby bed. Warm, tired, safe." }),
 	music_departure = cue({ id = 0, bus = "music", volume = 0.6, description = "Departure cue under the cinematic." }),
-	music_travel = cue({ id = 0, bus = "music", volume = 0.35, looped = true, description = "Sparse travel bed between stations." }),
+	music_travel = cue({ id = 15675051846, bus = "music", volume = 0.35, looped = true, description = "Sparse travel bed between stations." }),
 	music_tension = cue({ id = 0, bus = "music", volume = 0.5, looped = true, description = "Rising bed while threat sits in the upper bands." }),
 	music_climax = cue({ id = 0, bus = "music", volume = 0.7, looped = true, description = "Final sequence." }),
 	music_resolution = cue({ id = 0, bus = "music", volume = 0.6, description = "Ending cue." }),
@@ -330,14 +330,14 @@ Audio.Cues = {
 	--------------------------------------------------------------------
 	-- Interface
 	--------------------------------------------------------------------
-	ui_hover = cue({ id = 0, bus = "ui", volume = 0.25, description = "Button hover." }),
-	ui_click = cue({ id = 0, bus = "ui", volume = 0.4, description = "Button press." }),
-	ui_open = cue({ id = 0, bus = "ui", volume = 0.4, description = "Panel opening." }),
-	ui_close = cue({ id = 0, bus = "ui", volume = 0.35, description = "Panel closing." }),
-	ui_error = cue({ id = 0, bus = "ui", volume = 0.5, description = "Rejected action." }),
-	ui_reward = cue({ id = 0, bus = "ui", volume = 0.6, description = "Reward granted." }),
-	ui_objective = cue({ id = 0, bus = "ui", volume = 0.5, subtitle = "[Objective updated]", description = "Objective updated." }),
-	ui_countdown = cue({ id = 0, bus = "ui", volume = 0.5, description = "Departure countdown tick." }),
+	ui_hover = cue({ id = 10066931761, bus = "ui", volume = 0.25, description = "Button hover." }),
+	ui_click = cue({ id = 15675032796, bus = "ui", volume = 0.4, description = "Button press." }),
+	ui_open = cue({ id = 15675024286, bus = "ui", volume = 0.4, description = "Panel opening." }),
+	ui_close = cue({ id = 15675028888, bus = "ui", volume = 0.35, description = "Panel closing." }),
+	ui_error = cue({ id = 16480558943, bus = "ui", volume = 0.5, description = "Rejected action." }),
+	ui_reward = cue({ id = 17208361335, bus = "ui", volume = 0.6, description = "Reward granted." }),
+	ui_objective = cue({ id = 17208372272, bus = "ui", volume = 0.5, subtitle = "[Objective updated]", description = "Objective updated." }),
+	ui_countdown = cue({ id = 12221990, bus = "ui", volume = 0.5, description = "Departure countdown tick." }),
 } :: { [string]: CueDef }
 
 --------------------------------------------------------------------------

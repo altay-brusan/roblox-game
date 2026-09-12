@@ -63,6 +63,9 @@ local shakeIntensity = 0
 local cinematicStartedAt = 0
 local cinematicDuration = 0
 local spectateTarget: Player? = nil
+-- Rate limit for the watchdog log, so a persistent fault reports once a minute
+-- rather than once a second.
+local lastWatchdogLogAt = 0
 
 --------------------------------------------------------------------------
 -- Mouse behaviour
@@ -123,14 +126,35 @@ local function apply()
 	end
 
 	-- firstPerson and downed share the same fundamentals.
-	camera.CameraType = Enum.CameraType.Custom
+	--
+	-- Every assignment below is guarded by an inequality check. Writing a
+	-- property that already holds the right value is not free: Roblox's own
+	-- camera scripts also write these, and two writers assigning every frame
+	-- is what produces a camera that visibly fights itself. Only correcting a
+	-- genuine mismatch also means the watchdog below has something meaningful
+	-- to detect.
+	if camera.CameraType ~= Enum.CameraType.Custom then
+		camera.CameraType = Enum.CameraType.Custom
+	end
+
 	local currentHumanoid = humanoid()
-	if currentHumanoid then
+	if currentHumanoid and camera.CameraSubject ~= currentHumanoid then
 		camera.CameraSubject = currentHumanoid
 	end
-	player.CameraMode = Enum.CameraMode.LockFirstPerson
-	player.CameraMinZoomDistance = 0.5
-	player.CameraMaxZoomDistance = 0.5
+
+	if player.CameraMode ~= Enum.CameraMode.LockFirstPerson then
+		player.CameraMode = Enum.CameraMode.LockFirstPerson
+	end
+	-- Zoom limits must be written widest-first. Assigning a minimum above the
+	-- current maximum is rejected, which is how the spectate mode used to
+	-- leave these in an inconsistent state on the way back to first person.
+	if player.CameraMaxZoomDistance < 0.5 then
+		player.CameraMaxZoomDistance = 0.5
+		player.CameraMinZoomDistance = 0.5
+	else
+		player.CameraMinZoomDistance = 0.5
+		player.CameraMaxZoomDistance = 0.5
+	end
 	setMouse(true)
 end
 
@@ -376,12 +400,36 @@ function CameraController.start()
 				continue
 			end
 			if mode == "firstPerson" or mode == "downed" then
+				-- A missing CameraSubject is only wrong when there is a
+				-- character to be the subject. Between a respawn request and
+				-- the character arriving, nil is the correct value, and
+				-- treating it as a fault is what made this watchdog fire once
+				-- a second forever and fill the output with corrections.
+				local currentHumanoid = humanoid()
 				local wrongType = current.CameraType ~= Enum.CameraType.Custom
 				local wrongMode = player.CameraMode ~= Enum.CameraMode.LockFirstPerson
-				local wrongSubject = current.CameraSubject == nil
+				local wrongSubject = currentHumanoid ~= nil and current.CameraSubject ~= currentHumanoid
+
 				if wrongType or wrongMode or wrongSubject then
-					log.debug("camera watchdog corrected the view")
 					apply()
+					-- Log at most once a minute, and say which condition
+					-- tripped, so a genuine recurring fault is still visible
+					-- without drowning the output.
+					local now = os.clock()
+					if now - lastWatchdogLogAt > 60 then
+						lastWatchdogLogAt = now
+						local reasons = {}
+						if wrongType then
+							table.insert(reasons, "CameraType")
+						end
+						if wrongMode then
+							table.insert(reasons, "CameraMode")
+						end
+						if wrongSubject then
+							table.insert(reasons, "CameraSubject")
+						end
+						log.debug("camera watchdog corrected: " .. table.concat(reasons, ", "))
+					end
 				end
 			elseif mode == "cinematic" then
 				if current.CameraType ~= Enum.CameraType.Scriptable then

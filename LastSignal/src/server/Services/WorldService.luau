@@ -41,6 +41,8 @@ local BuildKit = require(script.Parent.Parent.World.BuildKit)
 local ForestBuilder = require(script.Parent.Parent.World.ForestBuilder)
 local LobbyBuilder = require(script.Parent.Parent.World.LobbyBuilder)
 local StationBuilder = require(script.Parent.Parent.World.StationBuilder)
+local TrainBuilder = require(script.Parent.Parent.World.TrainBuilder)
+local TrainRegistry = require(Shared.Registry.TrainRegistry)
 
 local log = Logger.new("WorldService")
 
@@ -64,6 +66,7 @@ export type Lane = {
 
 local lanes: { Lane } = {}
 local lobby: LobbyBuilder.BuiltLobby? = nil
+local previewTrain: TrainBuilder.BuiltTrain? = nil
 local worldRoot: Folder? = nil
 
 WorldService.LaneReady = Signal.new() :: Signal.Signal<Lane>
@@ -93,6 +96,59 @@ function WorldService.buildLobby(): LobbyBuilder.BuiltLobby
 		parent = built.model,
 	})
 
+	-- The preview train on the near siding. The brief asks for a train preview
+	-- in the lobby, and without one the first question every player asks is
+	-- "where is the train", because the expedition train only exists inside a
+	-- lane after departure.
+	--
+	-- It is the real TrainBuilder output, not a mock-up, so what you look at in
+	-- the yard is exactly what you board.
+	local previewOk, preview = pcall(function()
+		return TrainBuilder.build(
+			TrainRegistry.StarterTrainId,
+			"livery_depot",
+			"interior_standard",
+			built.trainPreviewCF,
+			built.model,
+			991
+		)
+	end)
+
+	if previewOk and preview then
+		-- It must not carry the Train tag: the client ride controller resolves
+		-- the train it is riding by that tag, and a stationary lobby train
+		-- would be picked up instead of the real one.
+		preview.model:RemoveTag("Train")
+		preview.model:AddTag("PreviewTrain")
+		preview.model.Name = "PreviewTrain"
+
+		-- Lit, so it reads as a living object in a dark yard rather than a
+		-- silhouette. Marker and tail lamps are already on from the builder.
+		for _, spot in preview.headlights do
+			spot.Enabled = true
+		end
+		for _, light in preview.cabinLights do
+			light.Enabled = true
+		end
+		for _, light in preview.interiorLights do
+			light.Enabled = true
+		end
+		-- Doors open, so a player can walk through it before they ever depart.
+		for _, door in preview.doors do
+			local closed = door.model:GetAttribute("ClosedCFrame")
+			if typeof(closed) ~= "CFrame" then
+				closed = door.hinge.CFrame
+				door.model:SetAttribute("ClosedCFrame", closed)
+			end
+			door.model:PivotTo((closed :: CFrame) * CFrame.Angles(0, math.rad(105), 0))
+		end
+
+		previewTrain = preview
+		log.info(string.format("lobby preview train built (%d parts)", preview.partCount))
+	else
+		log.error("lobby preview train failed to build:", tostring(preview))
+	end
+
 	lobby = built
 	log.info(
 		string.format(
@@ -102,6 +158,10 @@ function WorldService.buildLobby(): LobbyBuilder.BuiltLobby
 		)
 	)
 	return built
+end
+
+function WorldService.getPreviewTrain(): TrainBuilder.BuiltTrain?
+	return previewTrain
 end
 
 function WorldService.getLobby(): LobbyBuilder.BuiltLobby?

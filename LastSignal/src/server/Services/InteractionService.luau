@@ -516,6 +516,7 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		"take",
 		"door",
 		"discover",
+		"lobby",
 		"cancel",
 	})
 	if not action then
@@ -580,6 +581,27 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		end
 		ProgressionService.addStat(player, "items_collected", added)
 		Net.fireClient("InteractResult", player, { ok = true, action = "pickup", itemId = itemId, quantity = added })
+		return
+	end
+
+	----------------------------------------------------------------------
+	-- Lobby fixtures. These work without an expedition, which is the whole
+	-- point: they are how a player reaches the crew panel and departs.
+	----------------------------------------------------------------------
+	if action == "lobby" then
+		local panel: string? = nil
+		if target:HasTag("CrewBoard") then
+			panel = "crew"
+		elseif target:HasTag("NoticeBoard") then
+			panel = "quests"
+		elseif target:HasTag("StoresCounter") then
+			panel = "shop"
+		elseif target:HasTag("WorkshopBench") then
+			panel = "loadout"
+		end
+		if panel then
+			Net.fireClient("InteractResult", player, { ok = true, action = "open_panel", panel = panel })
+		end
 		return
 	end
 
@@ -884,6 +906,14 @@ function InteractionService.start()
 	wire("SupplyRack", "Open", "Supply rack")
 	wire("DroppedItem", "Take", "")
 	wire("RadioSet", "Radio", "")
+
+	-- Lobby fixtures. Without these the crew board is scenery and the only way
+	-- to start an expedition is to guess a keyboard shortcut, which is how the
+	-- first build shipped and why nobody could find the train.
+	wire("CrewBoard", "Form a crew", "Crew board")
+	wire("NoticeBoard", "Read", "Notice board")
+	wire("StoresCounter", "Browse", "Stores")
+	wire("WorkshopBench", "Open loadout", "Workshop bench")
 
 	log.info("started")
 end

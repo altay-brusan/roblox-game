@@ -527,7 +527,7 @@ Audio.Cues = {
 	-- Train: locomotive and rolling stock
 	--------------------------------------------------------------------
 	train_engine_idle = cue({
-		id = 0,
+		id = 16480555593,
 		bus = "train",
 		volume = 0.55,
 		looped = true,
@@ -536,7 +536,7 @@ Audio.Cues = {
 		description = "Diesel idle loop at the engine bay. Pitch and volume track throttle notch.",
 	}),
 	train_engine_load = cue({
-		id = 0,
+		id = 16480555445,
 		bus = "train",
 		volume = 0.7,
 		looped = true,
@@ -545,7 +545,7 @@ Audio.Cues = {
 		description = "Engine under load. Crossfaded over idle proportionally to notch.",
 	}),
 	train_wheels_roll = cue({
-		id = 0,
+		id = 16480554578,
 		bus = "train",
 		volume = 0.6,
 		looped = true,
@@ -554,7 +554,7 @@ Audio.Cues = {
 		description = "Rail roll loop under each bogie. Playback speed tracks train speed.",
 	}),
 	train_rail_joint = cue({
-		id = 0,
+		id = 16480551554,
 		bus = "train",
 		volume = 0.5,
 		pitchVariance = 0.08,
@@ -581,7 +581,7 @@ Audio.Cues = {
 		description = "Emergency brake. Loud, ugly, and heard from a long way off.",
 	}),
 	train_horn = cue({
-		id = 0,
+		id = 15675062723,
 		bus = "train",
 		volume = 1.0,
 		rollOffMin = 30,
@@ -590,7 +590,7 @@ Audio.Cues = {
 		description = "Air horn. Also the creature repel tool, so it must read at distance.",
 	}),
 	train_door = cue({
-		id = 0,
+		id = 365551423,
 		bus = "train",
 		volume = 0.6,
 		pitchVariance = 0.05,
@@ -599,7 +599,7 @@ Audio.Cues = {
 		description = "Pneumatic carriage door cycle.",
 	}),
 	train_coupler = cue({
-		id = 0,
+		id = 16480575861,
 		bus = "train",
 		volume = 0.8,
 		rollOffMin = 10,
@@ -622,7 +622,7 @@ Audio.Cues = {
 		description = "Engine stall when fuel runs dry or condition fails.",
 	}),
 	train_start = cue({
-		id = 0,
+		id = 9118934517,
 		bus = "train",
 		volume = 0.85,
 		description = "Engine crank and catch.",
@@ -631,70 +631,70 @@ Audio.Cues = {
 	--------------------------------------------------------------------
 	-- Weather and forest ambience
 	--------------------------------------------------------------------
-	rain_light = cue({ id = 0, bus = "ambience", volume = 0.5, looped = true, description = "Light rain bed, exterior." }),
-	rain_heavy = cue({ id = 0, bus = "ambience", volume = 0.75, looped = true, description = "Heavy rain bed, exterior." }),
-	rain_on_roof = cue({ id = 0, bus = "ambience", volume = 0.6, looped = true, description = "Rain on the carriage roof, interior only." }),
+	rain_light = cue({ id = 1516791621, bus = "ambience", volume = 0.5, looped = true, description = "Light rain bed, exterior." }),
+	rain_heavy = cue({ id = 1516791621, bus = "ambience", volume = 0.75, looped = true, description = "Heavy rain bed, exterior." }),
+	rain_on_roof = cue({ id = 1516791621, bus = "ambience", volume = 0.6, looped = true, description = "Rain on the carriage roof, interior only." }),
 	wind_forest = cue({ id = 0, bus = "ambience", volume = 0.45, looped = true, description = "Wind through conifers." }),
 	forest_night = cue({ id = 0, bus = "ambience", volume = 0.4, looped = true, description = "Distant night forest bed. Goes quiet when threat is high." }),
-	thunder_distant = cue({ id = 0, bus = "ambience", volume = 0.7, subtitle = "[Distant thunder]", description = "Occasional distant thunder." }),
+	thunder_distant = cue({ id = 12222030, bus = "ambience", volume = 0.7, subtitle = "[Distant thunder]", description = "Occasional distant thunder." }),
 	station_hum = cue({ id = 0, bus = "ambience", volume = 0.35, looped = true, description = "Failing fluorescent hum at powered stations." }),
-	tunnel_tone = cue({ id = 0, bus = "ambience", volume = 0.5, looped = true, description = "Low enclosed tone inside the service tunnel." }),
+	tunnel_tone = cue({ id = 9120510269, bus = "ambience", volume = 0.5, looped = true, description = "Low enclosed tone inside the service tunnel." }),
 
 	--------------------------------------------------------------------
 	-- Player
 	--------------------------------------------------------------------
-	footstep_metal = cue({ id = 0, bus = "sfx", volume = 0.4, pitchVariance = 0.1, description = "Footstep on carriage decking." }),
-	footstep_gravel = cue({ id = 0, bus = "sfx", volume = 0.4, pitchVariance = 0.1, description = "Footstep on ballast." }),
-	footstep_wood = cue({ id = 0, bus = "sfx", volume = 0.35, pitchVariance = 0.1, description = "Footstep on sleepers and boardwalk." }),
-	footstep_soil = cue({ id = 0, bus = "sfx", volume = 0.3, pitchVariance = 0.1, description = "Footstep on forest floor." }),
-	footstep_concrete = cue({ id = 0, bus = "sfx", volume = 0.4, pitchVariance = 0.1, description = "Footstep on platform concrete." }),
-	breath_tired = cue({ id = 0, bus = "sfx", volume = 0.5, looped = true, description = "Exhausted breathing when stamina bottoms out." }),
+	footstep_metal = cue({ id = 12221952, bus = "sfx", volume = 0.4, pitchVariance = 0.1, description = "Footstep on carriage decking." }),
+	footstep_gravel = cue({ id = 12221962, bus = "sfx", volume = 0.4, pitchVariance = 0.1, description = "Footstep on ballast." }),
+	footstep_wood = cue({ id = 12221952, bus = "sfx", volume = 0.35, pitchVariance = 0.1, description = "Footstep on sleepers and boardwalk." }),
+	footstep_soil = cue({ id = 12221962, bus = "sfx", volume = 0.3, pitchVariance = 0.1, description = "Footstep on forest floor." }),
+	footstep_concrete = cue({ id = 12221952, bus = "sfx", volume = 0.4, pitchVariance = 0.1, description = "Footstep on platform concrete." }),
+	breath_tired = cue({ id = 12222242, bus = "sfx", volume = 0.5, looped = true, description = "Exhausted breathing when stamina bottoms out." }),
 	heartbeat = cue({ id = 0, bus = "sfx", volume = 0.6, looped = true, description = "Heartbeat under low health and during a chase." }),
-	hurt = cue({ id = 0, bus = "sfx", volume = 0.7, pitchVariance = 0.08, description = "Player takes damage." }),
+	hurt = cue({ id = 12222242, bus = "sfx", volume = 0.7, pitchVariance = 0.08, description = "Player takes damage." }),
 	downed = cue({ id = 0, bus = "sfx", volume = 0.8, subtitle = "[A crew member goes down]", directionalHint = true, description = "A crew member is downed." }),
 	revive = cue({ id = 0, bus = "sfx", volume = 0.7, description = "Revive completes." }),
-	flashlight_click = cue({ id = 0, bus = "sfx", volume = 0.5, description = "Flashlight toggle." }),
+	flashlight_click = cue({ id = 12221976, bus = "sfx", volume = 0.5, description = "Flashlight toggle." }),
 	flashlight_die = cue({ id = 0, bus = "sfx", volume = 0.5, description = "Flashlight battery gives out." }),
 
 	--------------------------------------------------------------------
 	-- Items, tools and machinery
 	--------------------------------------------------------------------
-	item_pickup = cue({ id = 0, bus = "sfx", volume = 0.5, description = "Generic pickup." }),
-	item_drop = cue({ id = 0, bus = "sfx", volume = 0.45, description = "Generic drop." }),
-	item_fuel_pour = cue({ id = 0, bus = "sfx", volume = 0.6, description = "Refuelling the locomotive." }),
+	item_pickup = cue({ id = 17208319162, bus = "sfx", volume = 0.5, description = "Generic pickup." }),
+	item_drop = cue({ id = 12222140, bus = "sfx", volume = 0.45, description = "Generic drop." }),
+	item_fuel_pour = cue({ id = 365203457, bus = "sfx", volume = 0.6, description = "Refuelling the locomotive." }),
 	item_bandage = cue({ id = 0, bus = "sfx", volume = 0.5, description = "Applying a bandage." }),
-	item_battery = cue({ id = 0, bus = "sfx", volume = 0.5, description = "Loading a battery." }),
-	repair_wrench = cue({ id = 0, bus = "sfx", volume = 0.55, pitchVariance = 0.1, description = "Repair progress tick." }),
-	generator_start = cue({ id = 0, bus = "sfx", volume = 0.8, subtitle = "[Generator coughs into life]", description = "Generator start." }),
-	generator_run = cue({ id = 0, bus = "sfx", volume = 0.55, looped = true, description = "Generator running loop." }),
-	breaker_throw = cue({ id = 0, bus = "sfx", volume = 0.7, description = "Heavy electrical breaker." }),
-	lever_switch = cue({ id = 0, bus = "sfx", volume = 0.6, description = "Track switch lever." }),
-	door_wood_open = cue({ id = 0, bus = "sfx", volume = 0.5, pitchVariance = 0.06, description = "Building door opening." }),
-	door_metal_open = cue({ id = 0, bus = "sfx", volume = 0.55, pitchVariance = 0.06, description = "Metal door opening." }),
-	locker_open = cue({ id = 0, bus = "sfx", volume = 0.45, description = "Searching a locker or crate." }),
+	item_battery = cue({ id = 16480551554, bus = "sfx", volume = 0.5, description = "Loading a battery." }),
+	repair_wrench = cue({ id = 16480575731, bus = "sfx", volume = 0.55, pitchVariance = 0.1, description = "Repair progress tick." }),
+	generator_start = cue({ id = 9118934517, bus = "sfx", volume = 0.8, subtitle = "[Generator coughs into life]", description = "Generator start." }),
+	generator_run = cue({ id = 16480557782, bus = "sfx", volume = 0.55, looped = true, description = "Generator running loop." }),
+	breaker_throw = cue({ id = 12222170, bus = "sfx", volume = 0.7, description = "Heavy electrical breaker." }),
+	lever_switch = cue({ id = 12222183, bus = "sfx", volume = 0.6, description = "Track switch lever." }),
+	door_wood_open = cue({ id = 365551423, bus = "sfx", volume = 0.5, pitchVariance = 0.06, description = "Building door opening." }),
+	door_metal_open = cue({ id = 365551423, bus = "sfx", volume = 0.55, pitchVariance = 0.06, description = "Metal door opening." }),
+	locker_open = cue({ id = 365551423, bus = "sfx", volume = 0.45, description = "Searching a locker or crate." }),
 
 	--------------------------------------------------------------------
 	-- Weapons
 	--------------------------------------------------------------------
-	melee_swing = cue({ id = 0, bus = "sfx", volume = 0.55, pitchVariance = 0.12, description = "Melee swing through air." }),
-	melee_hit_flesh = cue({ id = 0, bus = "sfx", volume = 0.7, pitchVariance = 0.1, description = "Melee connecting with a creature." }),
-	melee_hit_hard = cue({ id = 0, bus = "sfx", volume = 0.65, pitchVariance = 0.1, description = "Melee connecting with metal or wood." }),
+	melee_swing = cue({ id = 12222200, bus = "sfx", volume = 0.55, pitchVariance = 0.12, description = "Melee swing through air." }),
+	melee_hit_flesh = cue({ id = 12222152, bus = "sfx", volume = 0.7, pitchVariance = 0.1, description = "Melee connecting with a creature." }),
+	melee_hit_hard = cue({ id = 12222046, bus = "sfx", volume = 0.65, pitchVariance = 0.1, description = "Melee connecting with metal or wood." }),
 	gun_revolver = cue({ id = 0, bus = "sfx", volume = 1.0, rollOffMax = 900, subtitle = "[Gunshot]", description = "Revolver discharge." }),
 	gun_shotgun = cue({ id = 0, bus = "sfx", volume = 1.0, rollOffMax = 1100, subtitle = "[Shotgun blast]", description = "Shotgun discharge." }),
 	gun_rifle = cue({ id = 0, bus = "sfx", volume = 1.0, rollOffMax = 1200, subtitle = "[Rifle shot]", description = "Bolt rifle discharge." }),
-	gun_flare = cue({ id = 0, bus = "sfx", volume = 0.8, description = "Flare gun launch." }),
-	gun_dry = cue({ id = 0, bus = "sfx", volume = 0.5, description = "Dry fire on an empty chamber." }),
+	gun_flare = cue({ id = 12222084, bus = "sfx", volume = 0.8, description = "Flare gun launch." }),
+	gun_dry = cue({ id = 12222140, bus = "sfx", volume = 0.5, description = "Dry fire on an empty chamber." }),
 	reload_revolver = cue({ id = 0, bus = "sfx", volume = 0.6, description = "Swing-out cylinder, eject, load, close." }),
 	reload_shotgun_shell = cue({ id = 0, bus = "sfx", volume = 0.6, pitchVariance = 0.05, description = "Single shell into the tube, one per shell." }),
 	reload_bolt = cue({ id = 0, bus = "sfx", volume = 0.6, description = "Bolt cycle." }),
-	bullet_impact = cue({ id = 0, bus = "sfx", volume = 0.6, pitchVariance = 0.15, description = "Bullet impact at the hit point." }),
+	bullet_impact = cue({ id = 12222046, bus = "sfx", volume = 0.6, pitchVariance = 0.15, description = "Bullet impact at the hit point." }),
 
 	--------------------------------------------------------------------
 	-- Radio and voice
 	--------------------------------------------------------------------
 	radio_static = cue({ id = 0, bus = "voice", volume = 0.4, looped = true, description = "Carrier static under every radio line." }),
-	radio_open = cue({ id = 0, bus = "voice", volume = 0.6, description = "Squelch opening before a transmission." }),
-	radio_close = cue({ id = 0, bus = "voice", volume = 0.5, description = "Squelch closing after a transmission." }),
+	radio_open = cue({ id = 15675059323, bus = "voice", volume = 0.6, description = "Squelch opening before a transmission." }),
+	radio_close = cue({ id = 15675032796, bus = "voice", volume = 0.5, description = "Squelch closing after a transmission." }),
 	radio_distort = cue({ id = 0, bus = "voice", volume = 0.7, subtitle = "[The signal warps]", description = "Distortion sting used when a transmission is not the dispatcher." }),
 	radio_tune = cue({ id = 0, bus = "voice", volume = 0.5, description = "Tuning the set between frequencies." }),
 
@@ -702,7 +702,7 @@ Audio.Cues = {
 	-- The Signal-Eater
 	--------------------------------------------------------------------
 	creature_distant = cue({
-		id = 0,
+		id = 9120031442,
 		bus = "creature",
 		volume = 0.7,
 		rollOffMax = 1200,
@@ -711,7 +711,7 @@ Audio.Cues = {
 		description = "Distant call. The first warning a crew gets, deliberately vague in direction.",
 	}),
 	creature_near = cue({
-		id = 0,
+		id = 9120031442,
 		bus = "creature",
 		volume = 0.85,
 		rollOffMax = 380,
@@ -720,7 +720,7 @@ Audio.Cues = {
 		description = "Close proximity vocalisation.",
 	}),
 	creature_chase = cue({
-		id = 0,
+		id = 9120031442,
 		bus = "creature",
 		volume = 1.0,
 		looped = true,
@@ -729,8 +729,8 @@ Audio.Cues = {
 		directionalHint = true,
 		description = "Chase loop. Unmistakable, because a chase must never be ambiguous.",
 	}),
-	creature_attack = cue({ id = 0, bus = "creature", volume = 1.0, subtitle = "[It strikes]", description = "Attack." }),
-	creature_repelled = cue({ id = 0, bus = "creature", volume = 0.9, subtitle = "[It recoils and retreats]", description = "Driven off by the horn, a flare or sustained damage." }),
+	creature_attack = cue({ id = 9120031442, bus = "creature", volume = 1.0, subtitle = "[It strikes]", description = "Attack." }),
+	creature_repelled = cue({ id = 9120031442, bus = "creature", volume = 0.9, subtitle = "[It recoils and retreats]", description = "Driven off by the horn, a flare or sustained damage." }),
 	creature_mimic = cue({
 		id = 0,
 		bus = "creature",
@@ -740,7 +740,7 @@ Audio.Cues = {
 		description = "Mimicry cue. Deliberately routed on the creature bus so a careful player can learn to tell.",
 	}),
 	footsteps_outside = cue({
-		id = 0,
+		id = 12221962,
 		bus = "creature",
 		volume = 0.5,
 		rollOffMax = 90,
@@ -752,9 +752,9 @@ Audio.Cues = {
 	--------------------------------------------------------------------
 	-- Music
 	--------------------------------------------------------------------
-	music_lobby = cue({ id = 0, bus = "music", volume = 0.45, looped = true, description = "Lobby bed. Warm, tired, safe." }),
+	music_lobby = cue({ id = 15675069601, bus = "music", volume = 0.45, looped = true, description = "Lobby bed. Warm, tired, safe." }),
 	music_departure = cue({ id = 0, bus = "music", volume = 0.6, description = "Departure cue under the cinematic." }),
-	music_travel = cue({ id = 0, bus = "music", volume = 0.35, looped = true, description = "Sparse travel bed between stations." }),
+	music_travel = cue({ id = 15675051846, bus = "music", volume = 0.35, looped = true, description = "Sparse travel bed between stations." }),
 	music_tension = cue({ id = 0, bus = "music", volume = 0.5, looped = true, description = "Rising bed while threat sits in the upper bands." }),
 	music_climax = cue({ id = 0, bus = "music", volume = 0.7, looped = true, description = "Final sequence." }),
 	music_resolution = cue({ id = 0, bus = "music", volume = 0.6, description = "Ending cue." }),
@@ -762,14 +762,14 @@ Audio.Cues = {
 	--------------------------------------------------------------------
 	-- Interface
 	--------------------------------------------------------------------
-	ui_hover = cue({ id = 0, bus = "ui", volume = 0.25, description = "Button hover." }),
-	ui_click = cue({ id = 0, bus = "ui", volume = 0.4, description = "Button press." }),
-	ui_open = cue({ id = 0, bus = "ui", volume = 0.4, description = "Panel opening." }),
-	ui_close = cue({ id = 0, bus = "ui", volume = 0.35, description = "Panel closing." }),
-	ui_error = cue({ id = 0, bus = "ui", volume = 0.5, description = "Rejected action." }),
-	ui_reward = cue({ id = 0, bus = "ui", volume = 0.6, description = "Reward granted." }),
-	ui_objective = cue({ id = 0, bus = "ui", volume = 0.5, subtitle = "[Objective updated]", description = "Objective updated." }),
-	ui_countdown = cue({ id = 0, bus = "ui", volume = 0.5, description = "Departure countdown tick." }),
+	ui_hover = cue({ id = 10066931761, bus = "ui", volume = 0.25, description = "Button hover." }),
+	ui_click = cue({ id = 15675032796, bus = "ui", volume = 0.4, description = "Button press." }),
+	ui_open = cue({ id = 15675024286, bus = "ui", volume = 0.4, description = "Panel opening." }),
+	ui_close = cue({ id = 15675028888, bus = "ui", volume = 0.35, description = "Panel closing." }),
+	ui_error = cue({ id = 16480558943, bus = "ui", volume = 0.5, description = "Rejected action." }),
+	ui_reward = cue({ id = 17208361335, bus = "ui", volume = 0.6, description = "Reward granted." }),
+	ui_objective = cue({ id = 17208372272, bus = "ui", volume = 0.5, subtitle = "[Objective updated]", description = "Objective updated." }),
+	ui_countdown = cue({ id = 12221990, bus = "ui", volume = 0.5, description = "Departure countdown tick." }),
 } :: { [string]: CueDef }
 
 --------------------------------------------------------------------------
@@ -14235,6 +14235,7 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		"take",
 		"door",
 		"discover",
+		"lobby",
 		"cancel",
 	})
 	if not action then
@@ -14299,6 +14300,27 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		end
 		ProgressionService.addStat(player, "items_collected", added)
 		Net.fireClient("InteractResult", player, { ok = true, action = "pickup", itemId = itemId, quantity = added })
+		return
+	end
+
+	----------------------------------------------------------------------
+	-- Lobby fixtures. These work without an expedition, which is the whole
+	-- point: they are how a player reaches the crew panel and departs.
+	----------------------------------------------------------------------
+	if action == "lobby" then
+		local panel: string? = nil
+		if target:HasTag("CrewBoard") then
+			panel = "crew"
+		elseif target:HasTag("NoticeBoard") then
+			panel = "quests"
+		elseif target:HasTag("StoresCounter") then
+			panel = "shop"
+		elseif target:HasTag("WorkshopBench") then
+			panel = "loadout"
+		end
+		if panel then
+			Net.fireClient("InteractResult", player, { ok = true, action = "open_panel", panel = panel })
+		end
 		return
 	end
 
@@ -14603,6 +14625,14 @@ function InteractionService.start()
 	wire("SupplyRack", "Open", "Supply rack")
 	wire("DroppedItem", "Take", "")
 	wire("RadioSet", "Radio", "")
+
+	-- Lobby fixtures. Without these the crew board is scenery and the only way
+	-- to start an expedition is to guess a keyboard shortcut, which is how the
+	-- first build shipped and why nobody could find the train.
+	wire("CrewBoard", "Form a crew", "Crew board")
+	wire("NoticeBoard", "Read", "Notice board")
+	wire("StoresCounter", "Browse", "Stores")
+	wire("WorkshopBench", "Open loadout", "Workshop bench")
 
 	log.info("started")
 end
@@ -19532,6 +19562,8 @@ local BuildKit = require(script.Parent.Parent.World.BuildKit)
 local ForestBuilder = require(script.Parent.Parent.World.ForestBuilder)
 local LobbyBuilder = require(script.Parent.Parent.World.LobbyBuilder)
 local StationBuilder = require(script.Parent.Parent.World.StationBuilder)
+local TrainBuilder = require(script.Parent.Parent.World.TrainBuilder)
+local TrainRegistry = require(Shared.Registry.TrainRegistry)
 
 local log = Logger.new("WorldService")
 
@@ -19555,6 +19587,7 @@ export type Lane = {
 
 local lanes: { Lane } = {}
 local lobby: LobbyBuilder.BuiltLobby? = nil
+local previewTrain: TrainBuilder.BuiltTrain? = nil
 local worldRoot: Folder? = nil
 
 WorldService.LaneReady = Signal.new() :: Signal.Signal<Lane>
@@ -19584,6 +19617,59 @@ function WorldService.buildLobby(): LobbyBuilder.BuiltLobby
 		parent = built.model,
 	})
 
+	-- The preview train on the near siding. The brief asks for a train preview
+	-- in the lobby, and without one the first question every player asks is
+	-- "where is the train", because the expedition train only exists inside a
+	-- lane after departure.
+	--
+	-- It is the real TrainBuilder output, not a mock-up, so what you look at in
+	-- the yard is exactly what you board.
+	local previewOk, preview = pcall(function()
+		return TrainBuilder.build(
+			TrainRegistry.StarterTrainId,
+			"livery_depot",
+			"interior_standard",
+			built.trainPreviewCF,
+			built.model,
+			991
+		)
+	end)
+
+	if previewOk and preview then
+		-- It must not carry the Train tag: the client ride controller resolves
+		-- the train it is riding by that tag, and a stationary lobby train
+		-- would be picked up instead of the real one.
+		preview.model:RemoveTag("Train")
+		preview.model:AddTag("PreviewTrain")
+		preview.model.Name = "PreviewTrain"
+
+		-- Lit, so it reads as a living object in a dark yard rather than a
+		-- silhouette. Marker and tail lamps are already on from the builder.
+		for _, spot in preview.headlights do
+			spot.Enabled = true
+		end
+		for _, light in preview.cabinLights do
+			light.Enabled = true
+		end
+		for _, light in preview.interiorLights do
+			light.Enabled = true
+		end
+		-- Doors open, so a player can walk through it before they ever depart.
+		for _, door in preview.doors do
+			local closed = door.model:GetAttribute("ClosedCFrame")
+			if typeof(closed) ~= "CFrame" then
+				closed = door.hinge.CFrame
+				door.model:SetAttribute("ClosedCFrame", closed)
+			end
+			door.model:PivotTo((closed :: CFrame) * CFrame.Angles(0, math.rad(105), 0))
+		end
+
+		previewTrain = preview
+		log.info(string.format("lobby preview train built (%d parts)", preview.partCount))
+	else
+		log.error("lobby preview train failed to build:", tostring(preview))
+	end
+
 	lobby = built
 	log.info(
 		string.format(
@@ -19593,6 +19679,10 @@ function WorldService.buildLobby(): LobbyBuilder.BuiltLobby
 		)
 	)
 	return built
+end
+
+function WorldService.getPreviewTrain(): TrainBuilder.BuiltTrain?
+	return previewTrain
 end
 
 function WorldService.getLobby(): LobbyBuilder.BuiltLobby?
@@ -20756,6 +20846,189 @@ function BuildKit.prompt(
 	prompt.Style = Enum.ProximityPromptStyle.Custom
 	prompt.Parent = parent
 	return prompt
+end
+
+--------------------------------------------------------------------------
+-- Signage
+--------------------------------------------------------------------------
+
+export type SignOptions = { plate: Color3?, ink: Color3?, subtitle: string?, material: Enum.Material? }
+export type PostSignOptions = { height: number?, width: number?, subtitle: string?, plate: Color3? }
+
+--- An enamel sign: a backing plate with text printed on one face.
+---
+--- Railways are covered in lettering, and a yard with no signs reads as a
+--- blockout however detailed the geometry is. This is also how the lobby tells
+--- a player where to go without a tutorial panel: the crew board says what it
+--- is on the board itself.
+---
+--- Text is rendered with a SurfaceGui rather than a decal, so there is no image
+--- asset to upload and the lettering stays sharp at any distance.
+function BuildKit.sign(
+	cf: CFrame,
+	width: number,
+	height: number,
+	text: string,
+	face: Enum.NormalId,
+	parent: Instance,
+	options: SignOptions?
+): Part
+	local opts: SignOptions = options or {}
+	local plate = BuildKit.detail({
+		name = "Sign",
+		size = Vector3.new(width, height, 0.3),
+		cf = cf,
+		colour = opts.plate or C(28, 38, 32),
+		material = opts.material or Enum.Material.SmoothPlastic,
+		parent = parent,
+	})
+
+	-- A raised border, which is what makes an enamel sign read as enamel.
+	BuildKit.detail({
+		name = "SignBorder",
+		size = Vector3.new(width + 0.3, height + 0.3, 0.22),
+		cf = cf * CFrame.new(0, 0, -0.04),
+		colour = opts.ink or C(226, 222, 210),
+		material = Enum.Material.SmoothPlastic,
+		parent = parent,
+	})
+
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "SignFace"
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.FixedSize
+	gui.CanvasSize = Vector2.new(math.floor(width * 40), math.floor(height * 40))
+	gui.LightInfluence = 0.6
+	gui.Brightness = 1.4
+	gui.AlwaysOnTop = false
+	gui.Parent = plate
+
+	local layout = Instance.new("UIListLayout")
+	layout.FillDirection = Enum.FillDirection.Vertical
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.VerticalAlignment = Enum.VerticalAlignment.Center
+	layout.Padding = UDim.new(0, 4)
+	layout.Parent = gui
+
+	local label = Instance.new("TextLabel")
+	label.Name = "Title"
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.new(1, -12, if opts.subtitle then 0.55 else 1, 0)
+	label.Text = text
+	label.FontFace = Font.fromEnum(Enum.Font.GothamBold)
+	label.TextScaled = true
+	label.TextColor3 = opts.ink or C(226, 222, 210)
+	label.TextWrapped = true
+	label.Parent = gui
+
+	if opts.subtitle then
+		local sub = Instance.new("TextLabel")
+		sub.Name = "Subtitle"
+		sub.BackgroundTransparency = 1
+		sub.Size = UDim2.new(1, -12, 0.35, 0)
+		sub.Text = opts.subtitle
+		sub.FontFace = Font.fromEnum(Enum.Font.Gotham)
+		sub.TextScaled = true
+		sub.TextColor3 = opts.ink or C(226, 222, 210)
+		sub.TextTransparency = 0.25
+		sub.TextWrapped = true
+		sub.Parent = gui
+	end
+
+	return plate
+end
+
+--- Prints text onto a face of an existing part, without adding geometry.
+--- Used where the sign surface already exists, such as the crew board.
+function BuildKit.label(
+	part: BasePart,
+	face: Enum.NormalId,
+	text: string,
+	subtitle: string?,
+	ink: Color3?
+): SurfaceGui
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "Label"
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 40
+	gui.LightInfluence = 0.5
+	gui.Brightness = 1.6
+	gui.Parent = part
+
+	local padding = Instance.new("UIPadding")
+	padding.PaddingTop = UDim.new(0.08, 0)
+	padding.PaddingBottom = UDim.new(0.08, 0)
+	padding.PaddingLeft = UDim.new(0.06, 0)
+	padding.PaddingRight = UDim.new(0.06, 0)
+	padding.Parent = gui
+
+	local layout = Instance.new("UIListLayout")
+	layout.FillDirection = Enum.FillDirection.Vertical
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.VerticalAlignment = Enum.VerticalAlignment.Center
+	layout.Padding = UDim.new(0, 6)
+	layout.Parent = gui
+
+	local title = Instance.new("TextLabel")
+	title.Name = "Title"
+	title.BackgroundTransparency = 1
+	title.Size = UDim2.new(1, 0, if subtitle then 0.45 else 0.8, 0)
+	title.Text = text
+	title.FontFace = Font.fromEnum(Enum.Font.GothamBold)
+	title.TextScaled = true
+	title.TextColor3 = ink or C(226, 222, 210)
+	title.TextWrapped = true
+	title.Parent = gui
+
+	if subtitle then
+		local sub = Instance.new("TextLabel")
+		sub.Name = "Subtitle"
+		sub.BackgroundTransparency = 1
+		sub.Size = UDim2.new(1, 0, 0.3, 0)
+		sub.Text = subtitle
+		sub.FontFace = Font.fromEnum(Enum.Font.Gotham)
+		sub.TextScaled = true
+		sub.TextColor3 = ink or C(198, 158, 78)
+		sub.TextWrapped = true
+		sub.Parent = gui
+	end
+
+	return gui
+end
+
+--- A post-mounted sign, for platform nameboards and yard direction signs.
+function BuildKit.postSign(
+	baseCF: CFrame,
+	text: string,
+	parent: Instance,
+	options: PostSignOptions?
+): Part
+	local opts: PostSignOptions = options or {}
+	local postHeight = opts.height or 9
+	local width = opts.width or 14
+	local height = 3.2
+
+	for _, side in { -1, 1 } do
+		BuildKit.detail({
+			name = "SignPost",
+			size = Vector3.new(0.5, postHeight, 0.5),
+			cf = baseCF * CFrame.new(side * (width * 0.35), postHeight * 0.5, 0),
+			colour = C(58, 62, 60),
+			material = Enum.Material.Metal,
+			parent = parent,
+		})
+	end
+
+	return BuildKit.sign(
+		baseCF * CFrame.new(0, postHeight + height * 0.4, 0),
+		width,
+		height,
+		text,
+		Enum.NormalId.Back,
+		parent,
+		{ plate = opts.plate, subtitle = opts.subtitle }
+	)
 end
 
 --------------------------------------------------------------------------
@@ -22107,6 +22380,56 @@ function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): B
 			* CFrame.new(38 + math.cos(angle) * 9, 3, -14 + math.sin(angle) * 9)
 			* CFrame.Angles(0, math.rad(-90), 0)
 	end
+
+	--------------------------------------------------------------
+	-- Signage and navigation
+	--------------------------------------------------------------
+	-- A yard with no lettering reads as a blockout however detailed the
+	-- geometry is, and a player who cannot see where to go does not depart.
+	-- These are also the whole tutorial: the crew board says what it does.
+
+	BuildKit.label(crewBoard, Enum.NormalId.Left, "CREW BOARD", "Form a crew and depart")
+	BuildKit.label(noticeBoard, Enum.NormalId.Left, "NOTICES", "Orders, rewards and events")
+
+	-- The yard nameboard, on the approach to the shelter.
+	BuildKit.postSign(originCF * CFrame.new(20, 0, -80) * CFrame.Angles(0, math.rad(180), 0), "TOLBRIDGE YARD", model, {
+		width = 22,
+		height = 11,
+		subtitle = "Regional Permanent Way Depot",
+		plate = C(32, 44, 38),
+	})
+
+	-- Direction signs, so the three buildings are findable at night.
+	BuildKit.postSign(originCF * CFrame.new(-46, 0, -18) * CFrame.Angles(0, math.rad(90), 0), "WORKSHOP", model, {
+		width = 13,
+		height = 7,
+		subtitle = "Loadout",
+	})
+	BuildKit.postSign(originCF * CFrame.new(44, 0, 40) * CFrame.Angles(0, math.rad(-90), 0), "STORES", model, {
+		width = 12,
+		height = 7,
+		subtitle = "Liveries and supplies",
+	})
+	BuildKit.postSign(originCF * CFrame.new(30, 0, -34) * CFrame.Angles(0, math.rad(-90), 0), "CREW SHELTER", model, {
+		width = 15,
+		height = 7,
+		subtitle = "Departures",
+	})
+
+	-- The departure road is marked, because the preview train sits on the
+	-- siding beside it and the two need telling apart.
+	BuildKit.postSign(originCF * CFrame.new(departureX + 14, 0, 110) * CFrame.Angles(0, math.rad(180), 0), "DEPARTURE ROAD", model, {
+		width = 17,
+		height = 6,
+		subtitle = "Up main to the north",
+		plate = C(44, 34, 30),
+	})
+	BuildKit.postSign(originCF * CFrame.new(departureX - 20, 0, 90) * CFrame.Angles(0, math.rad(180), 0), "NO. 2 SIDING", model, {
+		width = 15,
+		height = 6,
+		subtitle = "Stabled stock",
+		plate = C(44, 34, 30),
+	})
 
 	model:AddTag("Lobby")
 	model.Parent = parent
@@ -23691,6 +24014,19 @@ function StationBuilder.build(def: StationRegistry.StationDef, originCF: CFrame,
 			end
 			buildEnclosure(cf, spec.size, spec, wallColour, wallMaterial, roofKind, ctx)
 		end
+	end
+
+	-- Platform nameboards. A station a crew arrives at in the dark has to
+	-- announce itself, both so the place reads as finished and so the radio
+	-- can refer to it by a name the player has actually seen written down.
+	local nameboardSide = if def.platformSide == "right" then 1 else -1
+	for _, along in { -70, 70 } do
+		BuildKit.postSign(
+			originCF * CFrame.new(nameboardSide * 26, 3, along) * CFrame.Angles(0, math.rad(nameboardSide * -90), 0),
+			string.upper(def.name),
+			model,
+			{ width = 20, height = 4.6, subtitle = def.subtitle, plate = C(30, 42, 36) }
+		)
 	end
 
 	-- Fixtures.
@@ -26474,6 +26810,9 @@ local shakeIntensity = 0
 local cinematicStartedAt = 0
 local cinematicDuration = 0
 local spectateTarget: Player? = nil
+-- Rate limit for the watchdog log, so a persistent fault reports once a minute
+-- rather than once a second.
+local lastWatchdogLogAt = 0
 
 --------------------------------------------------------------------------
 -- Mouse behaviour
@@ -26534,14 +26873,35 @@ local function apply()
 	end
 
 	-- firstPerson and downed share the same fundamentals.
-	camera.CameraType = Enum.CameraType.Custom
+	--
+	-- Every assignment below is guarded by an inequality check. Writing a
+	-- property that already holds the right value is not free: Roblox's own
+	-- camera scripts also write these, and two writers assigning every frame
+	-- is what produces a camera that visibly fights itself. Only correcting a
+	-- genuine mismatch also means the watchdog below has something meaningful
+	-- to detect.
+	if camera.CameraType ~= Enum.CameraType.Custom then
+		camera.CameraType = Enum.CameraType.Custom
+	end
+
 	local currentHumanoid = humanoid()
-	if currentHumanoid then
+	if currentHumanoid and camera.CameraSubject ~= currentHumanoid then
 		camera.CameraSubject = currentHumanoid
 	end
-	player.CameraMode = Enum.CameraMode.LockFirstPerson
-	player.CameraMinZoomDistance = 0.5
-	player.CameraMaxZoomDistance = 0.5
+
+	if player.CameraMode ~= Enum.CameraMode.LockFirstPerson then
+		player.CameraMode = Enum.CameraMode.LockFirstPerson
+	end
+	-- Zoom limits must be written widest-first. Assigning a minimum above the
+	-- current maximum is rejected, which is how the spectate mode used to
+	-- leave these in an inconsistent state on the way back to first person.
+	if player.CameraMaxZoomDistance < 0.5 then
+		player.CameraMaxZoomDistance = 0.5
+		player.CameraMinZoomDistance = 0.5
+	else
+		player.CameraMinZoomDistance = 0.5
+		player.CameraMaxZoomDistance = 0.5
+	end
 	setMouse(true)
 end
 
@@ -26787,12 +27147,36 @@ function CameraController.start()
 				continue
 			end
 			if mode == "firstPerson" or mode == "downed" then
+				-- A missing CameraSubject is only wrong when there is a
+				-- character to be the subject. Between a respawn request and
+				-- the character arriving, nil is the correct value, and
+				-- treating it as a fault is what made this watchdog fire once
+				-- a second forever and fill the output with corrections.
+				local currentHumanoid = humanoid()
 				local wrongType = current.CameraType ~= Enum.CameraType.Custom
 				local wrongMode = player.CameraMode ~= Enum.CameraMode.LockFirstPerson
-				local wrongSubject = current.CameraSubject == nil
+				local wrongSubject = currentHumanoid ~= nil and current.CameraSubject ~= currentHumanoid
+
 				if wrongType or wrongMode or wrongSubject then
-					log.debug("camera watchdog corrected the view")
 					apply()
+					-- Log at most once a minute, and say which condition
+					-- tripped, so a genuine recurring fault is still visible
+					-- without drowning the output.
+					local now = os.clock()
+					if now - lastWatchdogLogAt > 60 then
+						lastWatchdogLogAt = now
+						local reasons = {}
+						if wrongType then
+							table.insert(reasons, "CameraType")
+						end
+						if wrongMode then
+							table.insert(reasons, "CameraMode")
+						end
+						if wrongSubject then
+							table.insert(reasons, "CameraSubject")
+						end
+						log.debug("camera watchdog corrected: " .. table.concat(reasons, ", "))
+					end
 				end
 			elseif mode == "cinematic" then
 				if current.CameraType ~= Enum.CameraType.Scriptable then
@@ -28628,6 +29012,21 @@ local function actionFor(instance: Instance): (string?, string, string)
 		return nil, "", "" -- the event's own prompt handles this
 	end
 
+	-- Lobby fixtures. These are how a player reaches the crew panel, the shop,
+	-- the loadout and the notice board without knowing a keyboard shortcut.
+	if instance:HasTag("CrewBoard") then
+		return "lobby", "Form a crew and depart", "The expedition starts here"
+	end
+	if instance:HasTag("NoticeBoard") then
+		return "lobby", "Read the notices", "Orders, rewards and events"
+	end
+	if instance:HasTag("StoresCounter") then
+		return "lobby", "Browse the stores", "Liveries, cosmetics and supplies"
+	end
+	if instance:HasTag("WorkshopBench") then
+		return "lobby", "Open your loadout", "Train, livery, weapon and appearance"
+	end
+
 	local model = instance:FindFirstAncestorOfClass("Model")
 	if model and model:HasTag("DroppedItem") then
 		local itemId = model:GetAttribute("ItemId")
@@ -28788,6 +29187,13 @@ function InteractionController.start()
 	-- The server's reply to a hold start carries the authoritative duration.
 	Net.onClientEvent("InteractResult", function(payload)
 		if type(payload) ~= "table" then
+			return
+		end
+		-- A lobby fixture asks the client to open the matching panel. Required
+		-- lazily so this controller does not depend on the menu at load time.
+		if payload.action == "open_panel" and type(payload.panel) == "string" then
+			local MenuController = require(script.Parent.MenuController)
+			MenuController.open(payload.panel)
 			return
 		end
 		if payload.action == "hold_start" and payload.target then

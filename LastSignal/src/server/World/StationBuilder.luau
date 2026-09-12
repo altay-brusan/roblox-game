@@ -1557,6 +1557,19 @@ function StationBuilder.build(def: StationRegistry.StationDef, originCF: CFrame,
 		end
 	end
 
+	-- Platform nameboards. A station a crew arrives at in the dark has to
+	-- announce itself, both so the place reads as finished and so the radio
+	-- can refer to it by a name the player has actually seen written down.
+	local nameboardSide = if def.platformSide == "right" then 1 else -1
+	for _, along in { -70, 70 } do
+		BuildKit.postSign(
+			originCF * CFrame.new(nameboardSide * 26, 3, along) * CFrame.Angles(0, math.rad(nameboardSide * -90), 0),
+			string.upper(def.name),
+			model,
+			{ width = 20, height = 4.6, subtitle = def.subtitle, plate = C(30, 42, 36) }
+		)
+	end
+
 	-- Fixtures.
 	local fixtures: { [string]: BasePart } = {}
 	for _, spec in def.layout.fixtures do

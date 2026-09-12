@@ -729,6 +729,189 @@ function BuildKit.prompt(
 end
 
 --------------------------------------------------------------------------
+-- Signage
+--------------------------------------------------------------------------
+
+export type SignOptions = { plate: Color3?, ink: Color3?, subtitle: string?, material: Enum.Material? }
+export type PostSignOptions = { height: number?, width: number?, subtitle: string?, plate: Color3? }
+
+--- An enamel sign: a backing plate with text printed on one face.
+---
+--- Railways are covered in lettering, and a yard with no signs reads as a
+--- blockout however detailed the geometry is. This is also how the lobby tells
+--- a player where to go without a tutorial panel: the crew board says what it
+--- is on the board itself.
+---
+--- Text is rendered with a SurfaceGui rather than a decal, so there is no image
+--- asset to upload and the lettering stays sharp at any distance.
+function BuildKit.sign(
+	cf: CFrame,
+	width: number,
+	height: number,
+	text: string,
+	face: Enum.NormalId,
+	parent: Instance,
+	options: SignOptions?
+): Part
+	local opts: SignOptions = options or {}
+	local plate = BuildKit.detail({
+		name = "Sign",
+		size = Vector3.new(width, height, 0.3),
+		cf = cf,
+		colour = opts.plate or C(28, 38, 32),
+		material = opts.material or Enum.Material.SmoothPlastic,
+		parent = parent,
+	})
+
+	-- A raised border, which is what makes an enamel sign read as enamel.
+	BuildKit.detail({
+		name = "SignBorder",
+		size = Vector3.new(width + 0.3, height + 0.3, 0.22),
+		cf = cf * CFrame.new(0, 0, -0.04),
+		colour = opts.ink or C(226, 222, 210),
+		material = Enum.Material.SmoothPlastic,
+		parent = parent,
+	})
+
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "SignFace"
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.FixedSize
+	gui.CanvasSize = Vector2.new(math.floor(width * 40), math.floor(height * 40))
+	gui.LightInfluence = 0.6
+	gui.Brightness = 1.4
+	gui.AlwaysOnTop = false
+	gui.Parent = plate
+
+	local layout = Instance.new("UIListLayout")
+	layout.FillDirection = Enum.FillDirection.Vertical
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.VerticalAlignment = Enum.VerticalAlignment.Center
+	layout.Padding = UDim.new(0, 4)
+	layout.Parent = gui
+
+	local label = Instance.new("TextLabel")
+	label.Name = "Title"
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.new(1, -12, if opts.subtitle then 0.55 else 1, 0)
+	label.Text = text
+	label.FontFace = Font.fromEnum(Enum.Font.GothamBold)
+	label.TextScaled = true
+	label.TextColor3 = opts.ink or C(226, 222, 210)
+	label.TextWrapped = true
+	label.Parent = gui
+
+	if opts.subtitle then
+		local sub = Instance.new("TextLabel")
+		sub.Name = "Subtitle"
+		sub.BackgroundTransparency = 1
+		sub.Size = UDim2.new(1, -12, 0.35, 0)
+		sub.Text = opts.subtitle
+		sub.FontFace = Font.fromEnum(Enum.Font.Gotham)
+		sub.TextScaled = true
+		sub.TextColor3 = opts.ink or C(226, 222, 210)
+		sub.TextTransparency = 0.25
+		sub.TextWrapped = true
+		sub.Parent = gui
+	end
+
+	return plate
+end
+
+--- Prints text onto a face of an existing part, without adding geometry.
+--- Used where the sign surface already exists, such as the crew board.
+function BuildKit.label(
+	part: BasePart,
+	face: Enum.NormalId,
+	text: string,
+	subtitle: string?,
+	ink: Color3?
+): SurfaceGui
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "Label"
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 40
+	gui.LightInfluence = 0.5
+	gui.Brightness = 1.6
+	gui.Parent = part
+
+	local padding = Instance.new("UIPadding")
+	padding.PaddingTop = UDim.new(0.08, 0)
+	padding.PaddingBottom = UDim.new(0.08, 0)
+	padding.PaddingLeft = UDim.new(0.06, 0)
+	padding.PaddingRight = UDim.new(0.06, 0)
+	padding.Parent = gui
+
+	local layout = Instance.new("UIListLayout")
+	layout.FillDirection = Enum.FillDirection.Vertical
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.VerticalAlignment = Enum.VerticalAlignment.Center
+	layout.Padding = UDim.new(0, 6)
+	layout.Parent = gui
+
+	local title = Instance.new("TextLabel")
+	title.Name = "Title"
+	title.BackgroundTransparency = 1
+	title.Size = UDim2.new(1, 0, if subtitle then 0.45 else 0.8, 0)
+	title.Text = text
+	title.FontFace = Font.fromEnum(Enum.Font.GothamBold)
+	title.TextScaled = true
+	title.TextColor3 = ink or C(226, 222, 210)
+	title.TextWrapped = true
+	title.Parent = gui
+
+	if subtitle then
+		local sub = Instance.new("TextLabel")
+		sub.Name = "Subtitle"
+		sub.BackgroundTransparency = 1
+		sub.Size = UDim2.new(1, 0, 0.3, 0)
+		sub.Text = subtitle
+		sub.FontFace = Font.fromEnum(Enum.Font.Gotham)
+		sub.TextScaled = true
+		sub.TextColor3 = ink or C(198, 158, 78)
+		sub.TextWrapped = true
+		sub.Parent = gui
+	end
+
+	return gui
+end
+
+--- A post-mounted sign, for platform nameboards and yard direction signs.
+function BuildKit.postSign(
+	baseCF: CFrame,
+	text: string,
+	parent: Instance,
+	options: PostSignOptions?
+): Part
+	local opts: PostSignOptions = options or {}
+	local postHeight = opts.height or 9
+	local width = opts.width or 14
+	local height = 3.2
+
+	for _, side in { -1, 1 } do
+		BuildKit.detail({
+			name = "SignPost",
+			size = Vector3.new(0.5, postHeight, 0.5),
+			cf = baseCF * CFrame.new(side * (width * 0.35), postHeight * 0.5, 0),
+			colour = C(58, 62, 60),
+			material = Enum.Material.Metal,
+			parent = parent,
+		})
+	end
+
+	return BuildKit.sign(
+		baseCF * CFrame.new(0, postHeight + height * 0.4, 0),
+		width,
+		height,
+		text,
+		Enum.NormalId.Back,
+		parent,
+		{ plate = opts.plate, subtitle = opts.subtitle }
+	)
+end
+
+--------------------------------------------------------------------------
 -- Track
 --------------------------------------------------------------------------
 

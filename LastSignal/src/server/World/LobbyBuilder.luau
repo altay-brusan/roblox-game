@@ -730,6 +730,56 @@ function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): B
 			* CFrame.Angles(0, math.rad(-90), 0)
 	end
 
+	--------------------------------------------------------------
+	-- Signage and navigation
+	--------------------------------------------------------------
+	-- A yard with no lettering reads as a blockout however detailed the
+	-- geometry is, and a player who cannot see where to go does not depart.
+	-- These are also the whole tutorial: the crew board says what it does.
+
+	BuildKit.label(crewBoard, Enum.NormalId.Left, "CREW BOARD", "Form a crew and depart")
+	BuildKit.label(noticeBoard, Enum.NormalId.Left, "NOTICES", "Orders, rewards and events")
+
+	-- The yard nameboard, on the approach to the shelter.
+	BuildKit.postSign(originCF * CFrame.new(20, 0, -80) * CFrame.Angles(0, math.rad(180), 0), "TOLBRIDGE YARD", model, {
+		width = 22,
+		height = 11,
+		subtitle = "Regional Permanent Way Depot",
+		plate = C(32, 44, 38),
+	})
+
+	-- Direction signs, so the three buildings are findable at night.
+	BuildKit.postSign(originCF * CFrame.new(-46, 0, -18) * CFrame.Angles(0, math.rad(90), 0), "WORKSHOP", model, {
+		width = 13,
+		height = 7,
+		subtitle = "Loadout",
+	})
+	BuildKit.postSign(originCF * CFrame.new(44, 0, 40) * CFrame.Angles(0, math.rad(-90), 0), "STORES", model, {
+		width = 12,
+		height = 7,
+		subtitle = "Liveries and supplies",
+	})
+	BuildKit.postSign(originCF * CFrame.new(30, 0, -34) * CFrame.Angles(0, math.rad(-90), 0), "CREW SHELTER", model, {
+		width = 15,
+		height = 7,
+		subtitle = "Departures",
+	})
+
+	-- The departure road is marked, because the preview train sits on the
+	-- siding beside it and the two need telling apart.
+	BuildKit.postSign(originCF * CFrame.new(departureX + 14, 0, 110) * CFrame.Angles(0, math.rad(180), 0), "DEPARTURE ROAD", model, {
+		width = 17,
+		height = 6,
+		subtitle = "Up main to the north",
+		plate = C(44, 34, 30),
+	})
+	BuildKit.postSign(originCF * CFrame.new(departureX - 20, 0, 90) * CFrame.Angles(0, math.rad(180), 0), "NO. 2 SIDING", model, {
+		width = 15,
+		height = 6,
+		subtitle = "Stabled stock",
+		plate = C(44, 34, 30),
+	})
+
 	model:AddTag("Lobby")
 	model.Parent = parent
 

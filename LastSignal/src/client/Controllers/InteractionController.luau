@@ -225,6 +225,21 @@ local function actionFor(instance: Instance): (string?, string, string)
 		return nil, "", "" -- the event's own prompt handles this
 	end
 
+	-- Lobby fixtures. These are how a player reaches the crew panel, the shop,
+	-- the loadout and the notice board without knowing a keyboard shortcut.
+	if instance:HasTag("CrewBoard") then
+		return "lobby", "Form a crew and depart", "The expedition starts here"
+	end
+	if instance:HasTag("NoticeBoard") then
+		return "lobby", "Read the notices", "Orders, rewards and events"
+	end
+	if instance:HasTag("StoresCounter") then
+		return "lobby", "Browse the stores", "Liveries, cosmetics and supplies"
+	end
+	if instance:HasTag("WorkshopBench") then
+		return "lobby", "Open your loadout", "Train, livery, weapon and appearance"
+	end
+
 	local model = instance:FindFirstAncestorOfClass("Model")
 	if model and model:HasTag("DroppedItem") then
 		local itemId = model:GetAttribute("ItemId")
@@ -385,6 +400,13 @@ function InteractionController.start()
 	-- The server's reply to a hold start carries the authoritative duration.
 	Net.onClientEvent("InteractResult", function(payload)
 		if type(payload) ~= "table" then
+			return
+		end
+		-- A lobby fixture asks the client to open the matching panel. Required
+		-- lazily so this controller does not depend on the menu at load time.
+		if payload.action == "open_panel" and type(payload.panel) == "string" then
+			local MenuController = require(script.Parent.MenuController)
+			MenuController.open(payload.panel)
 			return
 		end
 		if payload.action == "hold_start" and payload.target then
