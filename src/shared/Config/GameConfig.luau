@@ -79,7 +79,19 @@ GameConfig.TrackLength = 14000
 
 GameConfig.MinCrewSize = 1
 GameConfig.MaxCrewSize = 6
-GameConfig.MaxServerPlayers = 24
+-- Single-place mode holds the lobby and every active expedition in one server,
+-- so the player cap is set by how many expedition lanes the server can hold
+-- rather than by anything social. Two-place mode removes this constraint; see
+-- docs/PUBLISHING.md.
+GameConfig.MaxServerPlayers = 12
+
+-- How many expeditions can run at once in single-place mode. Each lane is a
+-- full 14,000 stud corridor of track, forest and stations, built once and
+-- reused between runs. Measured part counts per lane are in docs/PERFORMANCE.md.
+GameConfig.MaxConcurrentExpeditions = 2
+
+-- Lanes are separated along X so streaming never loads two at once.
+GameConfig.ExpeditionLaneSpacing = 9000
 
 GameConfig.DepartureCountdownSeconds = 10
 GameConfig.ReadyRequiredFraction = 1.0 -- every member must be ready to depart
@@ -185,6 +197,10 @@ GameConfig.UseMockDataInStudio = true
 
 GameConfig.MaxActiveLights = 26
 GameConfig.ForestStreamRadius = 620
+-- Half-width of the forest corridor either side of the track. Kept just beyond
+-- the fog distance: trees further out are never visible and only cost memory.
+GameConfig.ForestCorridorHalfWidth = 280
+GameConfig.ForestDensity = 3.5
 GameConfig.CorpseCleanupSeconds = 45
 GameConfig.DroppedItemLifetimeSeconds = 600
 
