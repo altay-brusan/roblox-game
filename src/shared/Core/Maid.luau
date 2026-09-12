@@ -10,10 +10,7 @@
 	functions, threads, and tables exposing Destroy or Disconnect.
 ]]
 
--- Luau types pcall as returning only the success flag when the callee is
--- declared to return nothing, which loses the error message. This cast keeps
--- the (ok, err) pair that the runtime actually provides.
-local protectedCall = (pcall :: any) :: (fn: (...any) -> (), ...any) -> (boolean, string?)
+local Protect = require(script.Parent.Protect)
 
 local Maid = {}
 Maid.__index = Maid
@@ -91,7 +88,7 @@ function Maid.Clean(self: Maid)
 	local tasks = self._tasks
 	self._tasks = {}
 	for _, item in tasks do
-		local ok, err = protectedCall(cleanupTask, item)
+		local ok, err = Protect.call(cleanupTask, item)
 		if not ok then
 			warn("[Maid] cleanup error: " .. tostring(err))
 		end

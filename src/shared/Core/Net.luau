@@ -29,10 +29,7 @@ local RateLimiter = require(script.Parent.RateLimiter)
 local log = Logger.new("Net")
 local IS_SERVER = RunService:IsServer()
 
--- Luau types pcall as returning only the success flag when the callee is
--- declared to return nothing, which loses the error message. This cast keeps
--- the (ok, err) pair the runtime actually provides.
-local protectedCall = (pcall :: any) :: (fn: (...any) -> (), ...any) -> (boolean, string?)
+local Protect = require(script.Parent.Protect)
 
 local Net = {}
 
@@ -213,7 +210,7 @@ function Net.onServerEvent(name: string, handler: (Player, ...any) -> (), option
 			-- rate limited only helps them tune the spam.
 			return
 		end
-		local ok, err = protectedCall(handler, player, ...)
+		local ok, err = Protect.call(handler, player, ...)
 		if not ok then
 			log.error(string.format("handler '%s' for %s failed: %s", name, player.Name, tostring(err)))
 		end
@@ -294,7 +291,7 @@ function Net.onClientEvent(name: string, handler: (...any) -> ()): RBXScriptConn
 	assert(not IS_SERVER, "Net.onClientEvent is client only")
 	local remote = getRemote(name) :: RemoteEvent
 	return remote.OnClientEvent:Connect(function(...)
-		local ok, err = protectedCall(handler, ...)
+		local ok, err = Protect.call(handler, ...)
 		if not ok then
 			log.error(string.format("client handler '%s' failed: %s", name, tostring(err)))
 		end

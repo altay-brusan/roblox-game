@@ -366,7 +366,7 @@ local function buildShelter(cf: CFrame, parent: Instance, lights: { Light }): (B
 	noticeBoard:AddTag("NoticeBoard")
 	-- Pinned papers, so it reads as a notice board before you interact.
 	local rng = Random.new(7)
-	for i = 1, 7 do
+	for _noticeIndex = 1, 7 do
 		BuildKit.detail({
 			name = "Notice",
 			size = Vector3.new(0.1, rng:NextNumber(1.2, 2.2), rng:NextNumber(0.9, 1.6)),
@@ -377,7 +377,6 @@ local function buildShelter(cf: CFrame, parent: Instance, lights: { Light }): (B
 			material = Enum.Material.SmoothPlastic,
 			parent = parent,
 		})
-		_ = i
 	end
 
 	for i = 0, 2 do
