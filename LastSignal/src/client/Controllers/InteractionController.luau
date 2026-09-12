@@ -221,6 +221,9 @@ local function actionFor(instance: Instance): (string?, string, string)
 	if instance:HasTag("RadioSet") then
 		return "read", "Play a recording", ""
 	end
+	if instance:HasTag("DoorLeaf") then
+		return "door", "Work the door", ""
+	end
 	if instance:HasTag("EventToken") then
 		return nil, "", "" -- the event's own prompt handles this
 	end
@@ -442,6 +445,73 @@ function InteractionController.start()
 		else
 			Net.invokeServer("ReviveCommand", "stop", target.UserId)
 		end
+	end)
+
+	-- Pings: look at something, press the key, everybody in the crew sees it.
+	InputController.Action:Connect(function(actionId, pressed)
+		if actionId ~= "ping" or not pressed then
+			return
+		end
+		local camera = workspace.CurrentCamera
+		local character = player.Character
+		if not camera then
+			return
+		end
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		params.FilterDescendantsInstances = if character then { character } else {}
+		local result = workspace:Raycast(camera.CFrame.Position, camera.CFrame.LookVector * 600, params)
+		local position = if result then result.Position else camera.CFrame.Position + camera.CFrame.LookVector * 120
+		Net.fireServer("Ping", position)
+	end)
+
+	Net.onClientEvent("PingBroadcast", function(payload)
+		if type(payload) ~= "table" or typeof(payload.position) ~= "Vector3" then
+			return
+		end
+		-- A world-space marker with the sender's name, visible through
+		-- geometry so it works as a "go here" signal in a dark forest.
+		local anchor = Instance.new("Part")
+		anchor.Name = "Ping"
+		anchor.Size = Vector3.new(0.6, 0.6, 0.6)
+		anchor.CFrame = CFrame.new(payload.position)
+		anchor.Anchored = true
+		anchor.CanCollide = false
+		anchor.CanQuery = false
+		anchor.CanTouch = false
+		anchor.Transparency = 1
+		anchor.Parent = workspace
+
+		local billboard = Instance.new("BillboardGui")
+		billboard.Name = "PingMarker"
+		billboard.Size = UDim2.fromOffset(Theme.space(4), Theme.space(4))
+		billboard.AlwaysOnTop = true
+		billboard.MaxDistance = 700
+		billboard.Parent = anchor
+
+		local diamond = Instance.new("Frame")
+		diamond.BackgroundColor3 = Theme.colour("brass")
+		diamond.BorderSizePixel = 0
+		diamond.Rotation = 45
+		diamond.AnchorPoint = Vector2.new(0.5, 0.5)
+		diamond.Position = UDim2.fromScale(0.5, 0.5)
+		diamond.Size = UDim2.fromScale(0.55, 0.55)
+		diamond.Parent = billboard
+
+		local name = Instance.new("TextLabel")
+		name.BackgroundTransparency = 1
+		name.Size = UDim2.fromScale(3, 0.5)
+		name.Position = UDim2.fromScale(-1, 1)
+		name.Text = tostring(payload.name or "")
+		name.FontFace = Theme.Font.heading
+		name.TextSize = Theme.textSize("tiny")
+		name.TextColor3 = Theme.colour("brass")
+		name.TextStrokeTransparency = 0.4
+		name.Parent = billboard
+
+		task.delay(9, function()
+			anchor:Destroy()
+		end)
 	end)
 
 	RunService.Heartbeat:Connect(function()

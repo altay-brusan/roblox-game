@@ -49,6 +49,7 @@ local BOOT_ORDER = {
 	{ name = "MenuController", module = Controllers.MenuController },
 	{ name = "CinematicController", module = Controllers.CinematicController },
 	{ name = "WeaponController", module = Controllers.WeaponController },
+	{ name = "CabController", module = Controllers.CabController },
 	{ name = "TrainRideController", module = Controllers.TrainRideController },
 }
 
@@ -140,8 +141,8 @@ task.spawn(function()
 		if value.state == "travelling" and value.stationIndex == 0 then
 			hint(
 				"travelling",
-				"Under way",
-				"You are in the carriage. The cab is forward. Fuel and condition are top right; when either runs low, the train stops."
+				"Take the controls",
+				"Sit in the driver's seat. Release the brake, then open the throttle. Fuel and condition are top right."
 			)
 		elseif value.state == "onstation" then
 			hint(

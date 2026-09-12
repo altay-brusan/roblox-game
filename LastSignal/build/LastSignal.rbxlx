@@ -12431,15 +12431,29 @@ end
 
 local function spawnIntoTrain(expedition: Expedition, player: Player)
 	local train = expedition.train
-	local carriage = train.built.carriages[1] or train.built.model
-	local pivot = carriage:GetPivot()
+
+	-- Spawn in the cab, not the carriage.
+	--
+	-- The locomotive and the first carriage are separate vehicles with couplers
+	-- between them and no interior gangway, which is prototypical but means a
+	-- player who spawns in the carriage cannot reach the controls while the
+	-- train is moving. Since driving is the only way an expedition progresses,
+	-- spawning anywhere else made the game uncompletable.
+	local anchor: CFrame
+	local cabSeat = train.built.cab.driverSeat
+	if cabSeat and cabSeat.Parent then
+		anchor = cabSeat.CFrame * CFrame.new(0, 1, 4)
+	else
+		local carriage = train.built.carriages[1] or train.built.model
+		anchor = carriage:GetPivot()
+	end
 
 	local function place(character: Model)
 		local root = character:FindFirstChild("HumanoidRootPart")
 		if root and root:IsA("BasePart") then
 			-- Spread arrivals so a crew of six does not stack inside one another.
-			local offset = Vector3.new(math.random(-3, 3), 5, math.random(-8, 8))
-			root.CFrame = pivot * CFrame.new(offset)
+			local offset = Vector3.new(math.random(-2, 2), 1, math.random(-2, 3))
+			root.CFrame = anchor * CFrame.new(offset)
 		end
 	end
 
@@ -14505,6 +14519,19 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		return
 	end
 
+	if action == "door" then
+		-- Any crew member can work a carriage door from the outside or the
+		-- inside. Without this the only door control is in the cab, which means
+		-- a crew that walks away from the train cannot get back in.
+		local model = part:FindFirstAncestorOfClass("Model")
+		if not part:HasTag("DoorLeaf") and not (model and model.Name == "CarriageDoor") then
+			return
+		end
+		local ok, err = TrainService.applyControl(player, expedition.train, "doors", true)
+		Net.fireClient("InteractResult", player, { ok = ok, error = err, action = "door" })
+		return
+	end
+
 	if action == "store" or action == "take" then
 		if not part:HasTag("SupplyRack") then
 			return
@@ -14585,6 +14612,32 @@ end
 function InteractionService.start()
 	Net.onServerEvent("Interact", handleInteract)
 
+	-- Pings. The brief asks for readable coordination tools that do not depend
+	-- on voice chat, and this is that: look at something, press the key, and
+	-- everybody in your crew sees a marker on it.
+	--
+	-- The position is validated against the sender's own location so a client
+	-- cannot drop a marker across the map, and it is only ever broadcast to the
+	-- sender's own crew.
+	Net.onServerEvent("Ping", function(player, rawPosition)
+		local position = Guard.vector3(rawPosition, 1e6)
+		local root = Guard.aliveRoot(player)
+		if not position or not root then
+			return
+		end
+		if not Guard.withinDistance(root.Position, position, 900) then
+			return
+		end
+
+		local expedition = ExpeditionService.forPlayer(player)
+		local audience = if expedition then ExpeditionService.playersOf(expedition) else { player }
+		Net.fireClients("PingBroadcast", audience, {
+			position = position,
+			userId = player.UserId,
+			name = player.DisplayName,
+		})
+	end)
+
 	Players.PlayerRemoving:Connect(function(player)
 		held[player.UserId] = nil
 	end)
@@ -14625,6 +14678,7 @@ function InteractionService.start()
 	wire("SupplyRack", "Open", "Supply rack")
 	wire("DroppedItem", "Take", "")
 	wire("RadioSet", "Radio", "")
+	wire("DoorLeaf", "Door", "")
 
 	-- Lobby fixtures. Without these the crew board is scenery and the only way
 	-- to start an expedition is to guess a keyboard shortcut, which is how the
@@ -25967,6 +26021,7 @@ local BOOT_ORDER = {
 	{ name = "MenuController", module = Controllers.MenuController },
 	{ name = "CinematicController", module = Controllers.CinematicController },
 	{ name = "WeaponController", module = Controllers.WeaponController },
+	{ name = "CabController", module = Controllers.CabController },
 	{ name = "TrainRideController", module = Controllers.TrainRideController },
 }
 
@@ -26058,8 +26113,8 @@ task.spawn(function()
 		if value.state == "travelling" and value.stationIndex == 0 then
 			hint(
 				"travelling",
-				"Under way",
-				"You are in the carriage. The cab is forward. Fuel and condition are top right; when either runs low, the train stops."
+				"Take the controls",
+				"Sit in the driver's seat. Release the brake, then open the throttle. Fuel and condition are top right."
 			)
 		elseif value.state == "onstation" then
 			hint(
@@ -26744,6 +26799,494 @@ return AudioController
           </Item>
           <Item class="ModuleScript" referent="72">
             <Properties>
+              <string name="Name">CabController</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	CabController
+	-------------
+	The driving interface.
+
+	WHY THIS EXISTS
+	---------------
+	TrainService implements the entire locomotive: eight throttle notches, a
+	service brake, an emergency brake, a reverser, lights, doors, wipers, a
+	horn and an engine start, all validated server-side against whoever is
+	actually sitting in the driver's seat.
+
+	None of it was reachable. The first build had no cab interface at all, so
+	the train sat parked forever and no expedition could ever progress past the
+	opening cinematic. This is that interface.
+
+	HOW IT WORKS
+	------------
+	Sitting in the driver's seat claims the controls from the server. The panel
+	appears, bound to on-screen buttons and to keys, and disappears the moment
+	you stand up. The server releases the controls automatically when the seat
+	is empty, so there is no way to hold the train hostage by walking away.
+
+	The panel is a strip along the bottom of the screen rather than a full
+	modal, because a driver has to be able to see out of the windscreen.
+]]
+
+local ContextActionService = game:GetService("ContextActionService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage:WaitForChild("LastSignal")
+
+local Format = require(Shared.Core.Format)
+local Logger = require(Shared.Core.Logger)
+local Net = require(Shared.Core.Net)
+local Theme = require(script.Parent.Parent.UI.Theme)
+local Widgets = require(script.Parent.Parent.UI.Widgets)
+local StateController = require(script.Parent.StateController)
+
+local log = Logger.new("CabController")
+local player = Players.LocalPlayer
+
+local CabController = {}
+
+local gui: ScreenGui?
+local panel: Frame?
+local statusLabel: TextLabel?
+local throttleLabel: TextLabel?
+local brakeLabel: TextLabel?
+local hintLabel: TextLabel?
+local toggleButtons: { [string]: any } = {}
+
+local seated = false
+local isDriver = false
+local seatConnection: RBXScriptConnection? = nil
+
+--------------------------------------------------------------------------
+-- Sending
+--------------------------------------------------------------------------
+
+local function control(name: string, value: any)
+	Net.fireServer("TrainControl", name, value)
+end
+
+local function trainState(): { [string]: any }?
+	return StateController.get("train")
+end
+
+local function currentThrottle(): number
+	local state = trainState()
+	return if state then state.throttle or 0 else 0
+end
+
+local function notches(): number
+	local state = trainState()
+	return if state then state.notches or 8 else 8
+end
+
+--------------------------------------------------------------------------
+-- Panel
+--------------------------------------------------------------------------
+
+local function build()
+	local playerGui = player:WaitForChild("PlayerGui")
+	local screen = Widgets.screen("LastSignalCab", Theme.Layer.hud + 1, playerGui)
+	gui = screen
+
+	local insets = Theme.safeInsets()
+	local frame = Widgets.panel({
+		name = "Cab",
+		size = UDim2.fromOffset(Theme.space(72), Theme.space(19)),
+		position = UDim2.new(0.5, 0, 1, -insets.bottom - Theme.space(1)),
+		anchor = Vector2.new(0.5, 1),
+		padding = 1.25,
+		background = Theme.colour("backdrop"),
+		transparency = 0.08,
+		parent = screen,
+	})
+	frame.Visible = false
+	panel = frame
+
+	local column = Widgets.column(frame, 0.75)
+
+	-- Status line: what the train is doing right now, in words.
+	statusLabel = Widgets.label({
+		text = "",
+		size = "body",
+		font = Theme.Font.heading,
+		colour = Theme.colour("brass"),
+		align = Enum.TextXAlignment.Center,
+		parent = column,
+		layoutOrder = 1,
+	})
+
+	hintLabel = Widgets.label({
+		text = "",
+		size = "small",
+		colour = Theme.colour("signalAmber"),
+		align = Enum.TextXAlignment.Center,
+		parent = column,
+		layoutOrder = 2,
+	})
+
+	-- Row one: throttle and brake, the two controls that matter.
+	local driveRow = Widgets.row(column, 0.5)
+	driveRow.LayoutOrder = 3
+
+	Widgets.button({
+		text = "Throttle -",
+		width = UDim.new(0.18, 0),
+		parent = driveRow,
+		onClick = function()
+			control("throttle", math.max(0, currentThrottle() - 1))
+		end,
+	})
+
+	throttleLabel = Widgets.label({
+		text = "0 / 8",
+		size = "body",
+		font = Theme.Font.mono,
+		align = Enum.TextXAlignment.Center,
+		parent = driveRow,
+		name = "Throttle",
+	})
+	local resolvedThrottle = throttleLabel :: TextLabel
+	resolvedThrottle.Size = UDim2.new(0.14, 0, 1, 0)
+	resolvedThrottle.AutomaticSize = Enum.AutomaticSize.None
+	resolvedThrottle.TextYAlignment = Enum.TextYAlignment.Center
+	resolvedThrottle.LayoutOrder = 2
+
+	Widgets.button({
+		text = "Throttle +",
+		width = UDim.new(0.18, 0),
+		primary = true,
+		parent = driveRow,
+		layoutOrder = 3,
+		onClick = function()
+			control("throttle", math.min(notches(), currentThrottle() + 1))
+		end,
+	})
+
+	brakeLabel = Widgets.label({
+		text = "",
+		size = "small",
+		align = Enum.TextXAlignment.Center,
+		parent = driveRow,
+		name = "BrakeState",
+	})
+	local resolvedBrake = brakeLabel :: TextLabel
+	resolvedBrake.Size = UDim2.new(0.14, 0, 1, 0)
+	resolvedBrake.AutomaticSize = Enum.AutomaticSize.None
+	resolvedBrake.TextYAlignment = Enum.TextYAlignment.Center
+	resolvedBrake.LayoutOrder = 4
+
+	Widgets.button({
+		text = "Brake",
+		width = UDim.new(0.16, 0),
+		parent = driveRow,
+		layoutOrder = 5,
+		onClick = function()
+			-- Full application, then release by throttling up. A held brake
+			-- would need a press-and-release binding that does not work well
+			-- on touch, and a driver wants a definite state anyway.
+			local state = trainState()
+			local applied = if state then (state.serviceBrake or 0) else 0
+			control("brake", if applied > 0.05 then 0 else 1)
+		end,
+	})
+
+	Widgets.button({
+		text = "EMERGENCY",
+		width = UDim.new(0.2, 0),
+		danger = true,
+		parent = driveRow,
+		layoutOrder = 6,
+		onClick = function()
+			control("emergency", true)
+		end,
+	})
+
+	-- Row two: everything else.
+	local auxRow = Widgets.row(column, 0.5)
+	auxRow.LayoutOrder = 4
+
+	local function auxButton(id: string, label: string, order: number, onClick: () -> ())
+		local button = Widgets.button({
+			text = label,
+			width = UDim.new(0.135, 0),
+			parent = auxRow,
+			layoutOrder = order,
+			onClick = onClick,
+		})
+		toggleButtons[id] = button
+		return button
+	end
+
+	auxButton("reverser", "Forward", 1, function()
+		local state = trainState()
+		local direction = if state then state.direction or 0 else 0
+		-- Cycles reverse, neutral, forward. The server refuses a change while
+		-- the train is rolling, which is prototypical and stops the reverser
+		-- being used as a brake.
+		local nextDirection = if direction == 1 then 0 elseif direction == 0 then -1 else 1
+		control("reverser", nextDirection)
+	end)
+	auxButton("horn", "Horn", 2, function()
+		control("horn", true)
+	end)
+	auxButton("headlights", "Lights", 3, function()
+		control("headlights", true)
+	end)
+	auxButton("interior_lights", "Saloon", 4, function()
+		control("interior_lights", true)
+	end)
+	auxButton("wipers", "Wipers", 5, function()
+		control("wipers", true)
+	end)
+	auxButton("doors", "Doors", 6, function()
+		control("doors", true)
+	end)
+	auxButton("start_engine", "Start", 7, function()
+		control("start_engine", true)
+	end)
+end
+
+--------------------------------------------------------------------------
+-- Refresh
+--------------------------------------------------------------------------
+
+local function refresh()
+	local frame = panel
+	if not frame then
+		return
+	end
+	frame.Visible = seated and isDriver
+	if not frame.Visible then
+		return
+	end
+
+	local state = trainState()
+	if not state then
+		return
+	end
+
+	if throttleLabel then
+		throttleLabel.Text = string.format("%d / %d", state.throttle or 0, state.notches or 8)
+	end
+
+	local brakeApplied = (state.serviceBrake or 0) > 0.05
+	if brakeLabel then
+		brakeLabel.Text = if state.emergencyBrake then "EMERG" elseif brakeApplied then "BRAKE ON" else "released"
+		brakeLabel.TextColor3 = if state.emergencyBrake or brakeApplied then Theme.colour("signalRed") else Theme.colour("textMuted")
+	end
+
+	if statusLabel then
+		local direction = state.direction or 0
+		local directionText = if direction == 1 then "Forward" elseif direction == -1 then "Reverse" else "Neutral"
+		statusLabel.Text = string.format(
+			"%s   %s km/h   fuel %s   condition %s",
+			directionText,
+			Format.speedKph(state.speed or 0),
+			Format.percent((state.fuel or 0) / math.max(1, state.maxFuel or 1)),
+			Format.percent((state.condition or 0) / math.max(1, state.maxCondition or 1))
+		)
+	end
+
+	-- The hint is the single most useful thing on this panel. A stationary
+	-- train is almost always stationary for one of four nameable reasons, and
+	-- saying which removes the guesswork.
+	if hintLabel then
+		local hint = ""
+		if not state.engineRunning then
+			hint = "The engine is not running. Press Start."
+		elseif (state.direction or 0) == 0 then
+			hint = "The reverser is in neutral. Set it to Forward."
+		elseif state.emergencyBrake then
+			hint = "Emergency brake applied. It releases itself once stopped."
+		elseif brakeApplied then
+			hint = "The brake is on. Release it, then open the throttle."
+		elseif (state.throttle or 0) == 0 and (state.speed or 0) < 1 then
+			hint = "Open the throttle to move off."
+		elseif state.doorsOpen then
+			hint = "Doors are open. She will not exceed walking pace."
+		end
+		hintLabel.Text = hint
+		hintLabel.Visible = hint ~= ""
+	end
+
+	local toggle = toggleButtons.reverser
+	if toggle then
+		local direction = state.direction or 0
+		toggle.setText(if direction == 1 then "Forward" elseif direction == -1 then "Reverse" else "Neutral")
+	end
+	if toggleButtons.headlights then
+		toggleButtons.headlights.setText(if state.headlights then "Lights on" else "Lights off")
+	end
+	if toggleButtons.doors then
+		toggleButtons.doors.setText(if state.doorsOpen then "Close doors" else "Open doors")
+	end
+	if toggleButtons.wipers then
+		toggleButtons.wipers.setText(if state.wipers then "Wipers on" else "Wipers off")
+	end
+	if toggleButtons.start_engine then
+		toggleButtons.start_engine.setEnabled(not state.engineRunning)
+	end
+end
+
+--------------------------------------------------------------------------
+-- Key bindings, active only while driving
+--------------------------------------------------------------------------
+
+local CAB_ACTIONS = "LastSignalCabKeys"
+
+local function handleKey(_actionName: string, inputState: Enum.UserInputState, input: InputObject): Enum.ContextActionResult
+	if inputState ~= Enum.UserInputState.Begin then
+		return Enum.ContextActionResult.Pass
+	end
+	local key = input.KeyCode
+	if key == Enum.KeyCode.W then
+		control("throttle", math.min(notches(), currentThrottle() + 1))
+	elseif key == Enum.KeyCode.S then
+		control("throttle", math.max(0, currentThrottle() - 1))
+	elseif key == Enum.KeyCode.Space then
+		local state = trainState()
+		local applied = if state then (state.serviceBrake or 0) else 0
+		control("brake", if applied > 0.05 then 0 else 1)
+	elseif key == Enum.KeyCode.X then
+		control("emergency", true)
+	elseif key == Enum.KeyCode.H then
+		control("horn", true)
+	elseif key == Enum.KeyCode.L then
+		control("headlights", true)
+	elseif key == Enum.KeyCode.O then
+		control("doors", true)
+	end
+	return Enum.ContextActionResult.Sink
+end
+
+local function bindKeys()
+	ContextActionService:BindAction(
+		CAB_ACTIONS,
+		handleKey,
+		false,
+		Enum.KeyCode.W,
+		Enum.KeyCode.S,
+		Enum.KeyCode.Space,
+		Enum.KeyCode.X,
+		Enum.KeyCode.H,
+		Enum.KeyCode.L,
+		Enum.KeyCode.O
+	)
+end
+
+local function unbindKeys()
+	ContextActionService:UnbindAction(CAB_ACTIONS)
+end
+
+--------------------------------------------------------------------------
+-- Seat tracking
+--------------------------------------------------------------------------
+
+local function leaveControls()
+	if not seated then
+		return
+	end
+	seated = false
+	if isDriver then
+		Net.invokeServer("TrainCommand", "release_driver")
+	end
+	isDriver = false
+	unbindKeys()
+	refresh()
+	log.debug("left the controls")
+end
+
+local function takeControls()
+	if seated then
+		return
+	end
+	seated = true
+	local result = Net.invokeServer("TrainCommand", "claim_driver")
+	if type(result) == "table" and result.ok then
+		isDriver = true
+		bindKeys()
+		log.debug("took the controls")
+	else
+		isDriver = false
+		local reason = if type(result) == "table" then tostring(result.error) else "UNAVAILABLE"
+		if reason == "OCCUPIED" then
+			local HUDController = require(script.Parent.HUDController)
+			HUDController.notify({
+				kind = "warning",
+				title = "Somebody else is driving",
+				body = "Only one crew member can be at the controls at a time.",
+				duration = 5,
+			})
+		end
+	end
+	refresh()
+end
+
+local function watchHumanoid(character: Model)
+	if seatConnection then
+		seatConnection:Disconnect()
+		seatConnection = nil
+	end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		return
+	end
+
+	seatConnection = humanoid.Seated:Connect(function(active, seat)
+		if active and seat and seat:HasTag("DriverSeat") then
+			takeControls()
+		else
+			leaveControls()
+		end
+	end)
+
+	-- Cover the case where the character is already seated when this runs,
+	-- such as after a respawn directly into the cab.
+	if humanoid.SeatPart and humanoid.SeatPart:HasTag("DriverSeat") then
+		takeControls()
+	end
+end
+
+--------------------------------------------------------------------------
+
+function CabController.isDriving(): boolean
+	return seated and isDriver
+end
+
+function CabController.start()
+	build()
+
+	if player.Character then
+		watchHumanoid(player.Character)
+	end
+	player.CharacterAdded:Connect(function(character)
+		task.wait(0.2)
+		leaveControls()
+		watchHumanoid(character)
+	end)
+
+	StateController.Changed:Connect(function(key)
+		if key == "train" then
+			refresh()
+		elseif key == "expedition" then
+			-- Leaving an expedition must drop the controls, or the panel would
+			-- linger in the lobby driving a train that no longer exists.
+			local expedition = StateController.get("expedition")
+			if not expedition or expedition.state == "lobby" or expedition.state == "results" then
+				leaveControls()
+			end
+		end
+	end)
+
+	log.info("started")
+end
+
+return CabController
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="73">
+            <Properties>
               <string name="Name">CameraController</string>
               <string name="Source"><![CDATA[--!strict
 --[[
@@ -27197,7 +27740,7 @@ return CameraController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="73">
+          <Item class="ModuleScript" referent="74">
             <Properties>
               <string name="Name">CinematicController</string>
               <string name="Source"><![CDATA[--!strict
@@ -27562,7 +28105,7 @@ return CinematicController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="74">
+          <Item class="ModuleScript" referent="75">
             <Properties>
               <string name="Name">HUDController</string>
               <string name="Source"><![CDATA[--!strict
@@ -27630,6 +28173,10 @@ local downedPanel: Frame?
 local downedRing: Frame?
 local downedText: TextLabel?
 local selfReviveButton
+local departurePanel: Frame?
+local departureTitle: TextLabel?
+local departureDetail: TextLabel?
+local departureMeter
 local notificationStack: Frame?
 local crewStrip: Frame?
 
@@ -27902,6 +28449,50 @@ local function buildDowned(parent: Instance)
 		end,
 	})
 	selfReviveButton.instance.Visible = false
+end
+
+local function buildDeparture(parent: Instance)
+	-- Shown while a crew is counting down and while the server builds the
+	-- expedition lane. Without it the player clicks Depart, the panel closes,
+	-- and nothing visible happens for as long as the world takes to build,
+	-- which reads as the game having hung.
+	local panel = Widgets.panel({
+		name = "Departure",
+		size = UDim2.fromOffset(Theme.space(46), 0),
+		position = UDim2.fromScale(0.5, 0.42),
+		anchor = Vector2.new(0.5, 0.5),
+		padding = 1.75,
+		background = Theme.colour("void"),
+		transparency = 0.12,
+		parent = parent,
+	})
+	panel.AutomaticSize = Enum.AutomaticSize.Y
+	panel.Visible = false
+	departurePanel = panel
+
+	local column = Widgets.column(panel, 0.75)
+
+	departureTitle = Widgets.label({
+		text = "Preparing the line",
+		size = "title",
+		font = Theme.Font.display,
+		colour = Theme.colour("brass"),
+		align = Enum.TextXAlignment.Center,
+		parent = column,
+		layoutOrder = 1,
+	})
+
+	departureDetail = Widgets.label({
+		text = "",
+		size = "small",
+		colour = Theme.colour("textMuted"),
+		align = Enum.TextXAlignment.Center,
+		parent = column,
+		layoutOrder = 2,
+	})
+
+	departureMeter = Widgets.meter(column, Theme.colour("brass"), Theme.space(1.25))
+	departureMeter.instance.LayoutOrder = 3
 end
 
 local function buildNotifications(parent: Instance)
@@ -28252,6 +28843,49 @@ local function refreshDowned()
 	end
 end
 
+local function refreshDeparture()
+	local panel = departurePanel
+	if not panel then
+		return
+	end
+
+	local expedition = StateController.get("expedition")
+	local crew = StateController.get("crew")
+
+	-- The lane is being built. This is the long one, so it gets the bar.
+	if expedition and expedition.state == "preparing" then
+		panel.Visible = true
+		if departureTitle then
+			departureTitle.Text = "Preparing the line"
+		end
+		if departureDetail then
+			departureDetail.Text = tostring(expedition.label or "Claiming the line")
+		end
+		if departureMeter then
+			departureMeter.set(tonumber(expedition.progress) or 0)
+		end
+		return
+	end
+
+	-- The crew countdown, which is the other moment a player is waiting.
+	if crew and crew.state == "departing" and crew.countdownEndsAt then
+		local remaining = math.max(0, (crew.countdownEndsAt :: number) - os.time())
+		panel.Visible = true
+		if departureTitle then
+			departureTitle.Text = string.format("Departing in %d", math.ceil(remaining))
+		end
+		if departureDetail then
+			departureDetail.Text = "Board the train. The leader can still cancel."
+		end
+		if departureMeter then
+			departureMeter.set(1 - math.clamp(remaining / 10, 0, 1))
+		end
+		return
+	end
+
+	panel.Visible = false
+end
+
 local function refreshCrew()
 	local strip = crewStrip
 	local crew = StateController.get("crew")
@@ -28333,6 +28967,7 @@ function HUDController.start()
 	buildAmmo(frame)
 	buildCrosshair(frame)
 	buildDowned(frame)
+	buildDeparture(frame)
 	buildNotifications(frame)
 	buildCrewStrip(frame)
 
@@ -28376,6 +29011,7 @@ function HUDController.start()
 			refreshObjective()
 			refreshTrain()
 			refreshCrew()
+			refreshDeparture()
 		elseif key == "train" then
 			refreshTrain()
 		elseif key == "inventory" then
@@ -28384,6 +29020,7 @@ function HUDController.start()
 			refreshWeapon()
 		elseif key == "crew" then
 			refreshCrew()
+			refreshDeparture()
 		elseif key == "ui" then
 			-- The HUD hides whenever a full panel or the cinematic is showing,
 			-- so there is never a second layer of interface behind a menu.
@@ -28399,6 +29036,7 @@ function HUDController.start()
 			if StateController.isDowned() then
 				refreshDowned()
 			end
+			refreshDeparture()
 		end
 	end)
 
@@ -28408,6 +29046,7 @@ function HUDController.start()
 	refreshQuickSlots()
 	refreshWeapon()
 	refreshCrew()
+	refreshDeparture()
 
 	log.info("started")
 end
@@ -28416,7 +29055,7 @@ return HUDController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="75">
+          <Item class="ModuleScript" referent="76">
             <Properties>
               <string name="Name">InputController</string>
               <string name="Source"><![CDATA[--!strict
@@ -28782,7 +29421,7 @@ return InputController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="76">
+          <Item class="ModuleScript" referent="77">
             <Properties>
               <string name="Name">InteractionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -29008,6 +29647,9 @@ local function actionFor(instance: Instance): (string?, string, string)
 	if instance:HasTag("RadioSet") then
 		return "read", "Play a recording", ""
 	end
+	if instance:HasTag("DoorLeaf") then
+		return "door", "Work the door", ""
+	end
 	if instance:HasTag("EventToken") then
 		return nil, "", "" -- the event's own prompt handles this
 	end
@@ -29231,6 +29873,73 @@ function InteractionController.start()
 		end
 	end)
 
+	-- Pings: look at something, press the key, everybody in the crew sees it.
+	InputController.Action:Connect(function(actionId, pressed)
+		if actionId ~= "ping" or not pressed then
+			return
+		end
+		local camera = workspace.CurrentCamera
+		local character = player.Character
+		if not camera then
+			return
+		end
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		params.FilterDescendantsInstances = if character then { character } else {}
+		local result = workspace:Raycast(camera.CFrame.Position, camera.CFrame.LookVector * 600, params)
+		local position = if result then result.Position else camera.CFrame.Position + camera.CFrame.LookVector * 120
+		Net.fireServer("Ping", position)
+	end)
+
+	Net.onClientEvent("PingBroadcast", function(payload)
+		if type(payload) ~= "table" or typeof(payload.position) ~= "Vector3" then
+			return
+		end
+		-- A world-space marker with the sender's name, visible through
+		-- geometry so it works as a "go here" signal in a dark forest.
+		local anchor = Instance.new("Part")
+		anchor.Name = "Ping"
+		anchor.Size = Vector3.new(0.6, 0.6, 0.6)
+		anchor.CFrame = CFrame.new(payload.position)
+		anchor.Anchored = true
+		anchor.CanCollide = false
+		anchor.CanQuery = false
+		anchor.CanTouch = false
+		anchor.Transparency = 1
+		anchor.Parent = workspace
+
+		local billboard = Instance.new("BillboardGui")
+		billboard.Name = "PingMarker"
+		billboard.Size = UDim2.fromOffset(Theme.space(4), Theme.space(4))
+		billboard.AlwaysOnTop = true
+		billboard.MaxDistance = 700
+		billboard.Parent = anchor
+
+		local diamond = Instance.new("Frame")
+		diamond.BackgroundColor3 = Theme.colour("brass")
+		diamond.BorderSizePixel = 0
+		diamond.Rotation = 45
+		diamond.AnchorPoint = Vector2.new(0.5, 0.5)
+		diamond.Position = UDim2.fromScale(0.5, 0.5)
+		diamond.Size = UDim2.fromScale(0.55, 0.55)
+		diamond.Parent = billboard
+
+		local name = Instance.new("TextLabel")
+		name.BackgroundTransparency = 1
+		name.Size = UDim2.fromScale(3, 0.5)
+		name.Position = UDim2.fromScale(-1, 1)
+		name.Text = tostring(payload.name or "")
+		name.FontFace = Theme.Font.heading
+		name.TextSize = Theme.textSize("tiny")
+		name.TextColor3 = Theme.colour("brass")
+		name.TextStrokeTransparency = 0.4
+		name.Parent = billboard
+
+		task.delay(9, function()
+			anchor:Destroy()
+		end)
+	end)
+
 	RunService.Heartbeat:Connect(function()
 		stepHold()
 
@@ -29268,7 +29977,7 @@ return InteractionController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="77">
+          <Item class="ModuleScript" referent="78">
             <Properties>
               <string name="Name">MenuController</string>
               <string name="Source"><![CDATA[--!strict
@@ -29298,6 +30007,7 @@ return InteractionController
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SocialService = game:GetService("SocialService")
 local Shared = ReplicatedStorage:WaitForChild("LastSignal")
 
 local Balance = require(Shared.Config.Balance)
@@ -29735,10 +30445,34 @@ builders.crew = function(frame: Frame)
 		end
 	end
 
+	-- Official Roblox friend invitation. This is the supported way to bring
+	-- somebody into your server, and it is the only one: a custom invite
+	-- system cannot place another player in this server.
+	Widgets.button({
+		text = "Invite friends",
+		parent = column,
+		layoutOrder = 44,
+		onClick = function()
+			local ok, err = pcall(function()
+				SocialService:PromptGameInvite(player)
+			end)
+			if not ok then
+				log.warn("invite prompt failed:", tostring(err))
+				local HUDController = require(script.Parent.HUDController)
+				HUDController.notify({
+					kind = "warning",
+					title = "Invites are unavailable",
+					body = "Roblox refused the invite prompt. This usually means the experience is not published yet.",
+					duration = 7,
+				})
+			end
+		end,
+	})
+
 	Widgets.button({
 		text = "Leave crew",
 		parent = column,
-		layoutOrder = 43,
+		layoutOrder = 45,
 		onClick = function()
 			Net.invokeServer("CrewCommand", "leave")
 			if rebuild then
@@ -30869,7 +31603,7 @@ return MenuController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="78">
+          <Item class="ModuleScript" referent="79">
             <Properties>
               <string name="Name">StateController</string>
               <string name="Source"><![CDATA[--!strict
@@ -31124,7 +31858,7 @@ return StateController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="79">
+          <Item class="ModuleScript" referent="80">
             <Properties>
               <string name="Name">TrainRideController</string>
               <string name="Source"><![CDATA[--!strict
@@ -31339,7 +32073,7 @@ return TrainRideController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="80">
+          <Item class="ModuleScript" referent="81">
             <Properties>
               <string name="Name">WeaponController</string>
               <string name="Source"><![CDATA[--!strict
@@ -31898,11 +32632,11 @@ return WeaponController
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="81">
+        <Item class="Folder" referent="82">
           <Properties>
             <string name="Name">UI</string>
           </Properties>
-          <Item class="ModuleScript" referent="82">
+          <Item class="ModuleScript" referent="83">
             <Properties>
               <string name="Name">Theme</string>
               <string name="Source"><![CDATA[--!strict
@@ -32176,7 +32910,7 @@ return Theme
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="83">
+          <Item class="ModuleScript" referent="84">
             <Properties>
               <string name="Name">Widgets</string>
               <string name="Source"><![CDATA[--!strict
@@ -32868,13 +33602,13 @@ return Widgets
       </Item>
     </Item>
   </Item>
-  <Item class="TextChatService" referent="84">
+  <Item class="TextChatService" referent="85">
     <Properties>
       <string name="Name">TextChatService</string>
       <token name="ChatVersion">1</token>
     </Properties>
   </Item>
-  <Item class="Workspace" referent="85">
+  <Item class="Workspace" referent="86">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>
@@ -32886,7 +33620,7 @@ return Widgets
       <int name="StreamingMinRadius">192</int>
       <int name="StreamingTargetRadius">640</int>
     </Properties>
-    <Item class="Terrain" referent="86">
+    <Item class="Terrain" referent="87">
       <Properties>
         <string name="Name">Terrain</string>
       </Properties>

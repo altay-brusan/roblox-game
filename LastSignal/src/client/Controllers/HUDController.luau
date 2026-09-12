@@ -63,6 +63,10 @@ local downedPanel: Frame?
 local downedRing: Frame?
 local downedText: TextLabel?
 local selfReviveButton
+local departurePanel: Frame?
+local departureTitle: TextLabel?
+local departureDetail: TextLabel?
+local departureMeter
 local notificationStack: Frame?
 local crewStrip: Frame?
 
@@ -335,6 +339,50 @@ local function buildDowned(parent: Instance)
 		end,
 	})
 	selfReviveButton.instance.Visible = false
+end
+
+local function buildDeparture(parent: Instance)
+	-- Shown while a crew is counting down and while the server builds the
+	-- expedition lane. Without it the player clicks Depart, the panel closes,
+	-- and nothing visible happens for as long as the world takes to build,
+	-- which reads as the game having hung.
+	local panel = Widgets.panel({
+		name = "Departure",
+		size = UDim2.fromOffset(Theme.space(46), 0),
+		position = UDim2.fromScale(0.5, 0.42),
+		anchor = Vector2.new(0.5, 0.5),
+		padding = 1.75,
+		background = Theme.colour("void"),
+		transparency = 0.12,
+		parent = parent,
+	})
+	panel.AutomaticSize = Enum.AutomaticSize.Y
+	panel.Visible = false
+	departurePanel = panel
+
+	local column = Widgets.column(panel, 0.75)
+
+	departureTitle = Widgets.label({
+		text = "Preparing the line",
+		size = "title",
+		font = Theme.Font.display,
+		colour = Theme.colour("brass"),
+		align = Enum.TextXAlignment.Center,
+		parent = column,
+		layoutOrder = 1,
+	})
+
+	departureDetail = Widgets.label({
+		text = "",
+		size = "small",
+		colour = Theme.colour("textMuted"),
+		align = Enum.TextXAlignment.Center,
+		parent = column,
+		layoutOrder = 2,
+	})
+
+	departureMeter = Widgets.meter(column, Theme.colour("brass"), Theme.space(1.25))
+	departureMeter.instance.LayoutOrder = 3
 end
 
 local function buildNotifications(parent: Instance)
@@ -685,6 +733,49 @@ local function refreshDowned()
 	end
 end
 
+local function refreshDeparture()
+	local panel = departurePanel
+	if not panel then
+		return
+	end
+
+	local expedition = StateController.get("expedition")
+	local crew = StateController.get("crew")
+
+	-- The lane is being built. This is the long one, so it gets the bar.
+	if expedition and expedition.state == "preparing" then
+		panel.Visible = true
+		if departureTitle then
+			departureTitle.Text = "Preparing the line"
+		end
+		if departureDetail then
+			departureDetail.Text = tostring(expedition.label or "Claiming the line")
+		end
+		if departureMeter then
+			departureMeter.set(tonumber(expedition.progress) or 0)
+		end
+		return
+	end
+
+	-- The crew countdown, which is the other moment a player is waiting.
+	if crew and crew.state == "departing" and crew.countdownEndsAt then
+		local remaining = math.max(0, (crew.countdownEndsAt :: number) - os.time())
+		panel.Visible = true
+		if departureTitle then
+			departureTitle.Text = string.format("Departing in %d", math.ceil(remaining))
+		end
+		if departureDetail then
+			departureDetail.Text = "Board the train. The leader can still cancel."
+		end
+		if departureMeter then
+			departureMeter.set(1 - math.clamp(remaining / 10, 0, 1))
+		end
+		return
+	end
+
+	panel.Visible = false
+end
+
 local function refreshCrew()
 	local strip = crewStrip
 	local crew = StateController.get("crew")
@@ -766,6 +857,7 @@ function HUDController.start()
 	buildAmmo(frame)
 	buildCrosshair(frame)
 	buildDowned(frame)
+	buildDeparture(frame)
 	buildNotifications(frame)
 	buildCrewStrip(frame)
 
@@ -809,6 +901,7 @@ function HUDController.start()
 			refreshObjective()
 			refreshTrain()
 			refreshCrew()
+			refreshDeparture()
 		elseif key == "train" then
 			refreshTrain()
 		elseif key == "inventory" then
@@ -817,6 +910,7 @@ function HUDController.start()
 			refreshWeapon()
 		elseif key == "crew" then
 			refreshCrew()
+			refreshDeparture()
 		elseif key == "ui" then
 			-- The HUD hides whenever a full panel or the cinematic is showing,
 			-- so there is never a second layer of interface behind a menu.
@@ -832,6 +926,7 @@ function HUDController.start()
 			if StateController.isDowned() then
 				refreshDowned()
 			end
+			refreshDeparture()
 		end
 	end)
 
@@ -841,6 +936,7 @@ function HUDController.start()
 	refreshQuickSlots()
 	refreshWeapon()
 	refreshCrew()
+	refreshDeparture()
 
 	log.info("started")
 end

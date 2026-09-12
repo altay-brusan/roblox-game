@@ -786,6 +786,19 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		return
 	end
 
+	if action == "door" then
+		-- Any crew member can work a carriage door from the outside or the
+		-- inside. Without this the only door control is in the cab, which means
+		-- a crew that walks away from the train cannot get back in.
+		local model = part:FindFirstAncestorOfClass("Model")
+		if not part:HasTag("DoorLeaf") and not (model and model.Name == "CarriageDoor") then
+			return
+		end
+		local ok, err = TrainService.applyControl(player, expedition.train, "doors", true)
+		Net.fireClient("InteractResult", player, { ok = ok, error = err, action = "door" })
+		return
+	end
+
 	if action == "store" or action == "take" then
 		if not part:HasTag("SupplyRack") then
 			return
@@ -866,6 +879,32 @@ end
 function InteractionService.start()
 	Net.onServerEvent("Interact", handleInteract)
 
+	-- Pings. The brief asks for readable coordination tools that do not depend
+	-- on voice chat, and this is that: look at something, press the key, and
+	-- everybody in your crew sees a marker on it.
+	--
+	-- The position is validated against the sender's own location so a client
+	-- cannot drop a marker across the map, and it is only ever broadcast to the
+	-- sender's own crew.
+	Net.onServerEvent("Ping", function(player, rawPosition)
+		local position = Guard.vector3(rawPosition, 1e6)
+		local root = Guard.aliveRoot(player)
+		if not position or not root then
+			return
+		end
+		if not Guard.withinDistance(root.Position, position, 900) then
+			return
+		end
+
+		local expedition = ExpeditionService.forPlayer(player)
+		local audience = if expedition then ExpeditionService.playersOf(expedition) else { player }
+		Net.fireClients("PingBroadcast", audience, {
+			position = position,
+			userId = player.UserId,
+			name = player.DisplayName,
+		})
+	end)
+
 	Players.PlayerRemoving:Connect(function(player)
 		held[player.UserId] = nil
 	end)
@@ -906,6 +945,7 @@ function InteractionService.start()
 	wire("SupplyRack", "Open", "Supply rack")
 	wire("DroppedItem", "Take", "")
 	wire("RadioSet", "Radio", "")
+	wire("DoorLeaf", "Door", "")
 
 	-- Lobby fixtures. Without these the crew board is scenery and the only way
 	-- to start an expedition is to guess a keyboard shortcut, which is how the

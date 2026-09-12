@@ -558,15 +558,29 @@ end
 
 local function spawnIntoTrain(expedition: Expedition, player: Player)
 	local train = expedition.train
-	local carriage = train.built.carriages[1] or train.built.model
-	local pivot = carriage:GetPivot()
+
+	-- Spawn in the cab, not the carriage.
+	--
+	-- The locomotive and the first carriage are separate vehicles with couplers
+	-- between them and no interior gangway, which is prototypical but means a
+	-- player who spawns in the carriage cannot reach the controls while the
+	-- train is moving. Since driving is the only way an expedition progresses,
+	-- spawning anywhere else made the game uncompletable.
+	local anchor: CFrame
+	local cabSeat = train.built.cab.driverSeat
+	if cabSeat and cabSeat.Parent then
+		anchor = cabSeat.CFrame * CFrame.new(0, 1, 4)
+	else
+		local carriage = train.built.carriages[1] or train.built.model
+		anchor = carriage:GetPivot()
+	end
 
 	local function place(character: Model)
 		local root = character:FindFirstChild("HumanoidRootPart")
 		if root and root:IsA("BasePart") then
 			-- Spread arrivals so a crew of six does not stack inside one another.
-			local offset = Vector3.new(math.random(-3, 3), 5, math.random(-8, 8))
-			root.CFrame = pivot * CFrame.new(offset)
+			local offset = Vector3.new(math.random(-2, 2), 1, math.random(-2, 3))
+			root.CFrame = anchor * CFrame.new(offset)
 		end
 	end
 

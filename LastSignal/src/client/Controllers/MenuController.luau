@@ -25,6 +25,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local SocialService = game:GetService("SocialService")
 local Shared = ReplicatedStorage:WaitForChild("LastSignal")
 
 local Balance = require(Shared.Config.Balance)
@@ -462,10 +463,34 @@ builders.crew = function(frame: Frame)
 		end
 	end
 
+	-- Official Roblox friend invitation. This is the supported way to bring
+	-- somebody into your server, and it is the only one: a custom invite
+	-- system cannot place another player in this server.
+	Widgets.button({
+		text = "Invite friends",
+		parent = column,
+		layoutOrder = 44,
+		onClick = function()
+			local ok, err = pcall(function()
+				SocialService:PromptGameInvite(player)
+			end)
+			if not ok then
+				log.warn("invite prompt failed:", tostring(err))
+				local HUDController = require(script.Parent.HUDController)
+				HUDController.notify({
+					kind = "warning",
+					title = "Invites are unavailable",
+					body = "Roblox refused the invite prompt. This usually means the experience is not published yet.",
+					duration = 7,
+				})
+			end
+		end,
+	})
+
 	Widgets.button({
 		text = "Leave crew",
 		parent = column,
-		layoutOrder = 43,
+		layoutOrder = 45,
 		onClick = function()
 			Net.invokeServer("CrewCommand", "leave")
 			if rebuild then
