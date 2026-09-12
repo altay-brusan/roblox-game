@@ -1,0 +1,2 @@
+--!strict
+-- Placeholder replaced in the presentation pass.
