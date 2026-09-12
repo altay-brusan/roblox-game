@@ -9,8 +9,16 @@ Last updated against commit history in this repository.
 
 ## The headline
 
-**Everything in this project has been verified statically. Nothing has been
-verified by running it.**
+**The operator has now run the build once. Everything else remains verified
+statically only.**
+
+That single run found four real defects, and investigating them uncovered three
+more, including one that made the game uncompletable: the train had no driving
+interface at all. All seven are fixed. See [CHECKLIST.md](CHECKLIST.md) for the
+full requirement-by-requirement breakdown, which is now the primary status
+document.
+
+**I still have not played it.**
 
 Roblox Studio is not installed on the machine this was built on, and there is
 no way to execute Luau against a live Roblox DataModel without it. Static

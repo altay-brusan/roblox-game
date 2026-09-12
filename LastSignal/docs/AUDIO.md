@@ -1,6 +1,6 @@
 # Audio
 
-Every cue, why they ship empty, and how to fill them in.
+Every cue, what has audio, and how to fill in the rest.
 
 ---
 
@@ -30,20 +30,28 @@ Every one of those runs whether or not any asset ID is filled in.
 
 ---
 
-## Why the IDs are empty
+## Current state: 57 of 83 cues have audio
 
-A Roblox sound is an asset ID on Roblox's servers. This project cannot create,
-upload or verify one.
+Every ID that is filled in was obtained the same way, twice verified:
 
-Shipping guessed numeric IDs would be worse than shipping none. A wrong ID is
-either silence, an error in the output, or somebody else's audio playing in
-your game without their permission. So every cue has `id = 0`, which
-`AudioController` treats as "not configured": it plays nothing, logs once at
-debug level, and returns.
+1. Searched the Roblox toolbox audio endpoint filtered to `creatorTargetId=1`,
+   which returns only assets created by Roblox itself.
+2. Confirmed through `economy.roblox.com/v2/assets/<id>/details` that the
+   creator really is `Roblox` and the asset type really is Audio.
 
-Critically, **the subtitle still fires**. A player with subtitles enabled gets
-the complete informational content of the game with no audio configured at all.
-That is what makes filling these in an improvement rather than a prerequisite.
+Roblox-created audio is free to use in any experience, so these carry no
+licensing risk and need no permission.
+
+**26 cues are still silent, and cannot be filled from that library.** The
+entire Roblox-created audio collection is 129 assets, most of them pinball
+sounds and interface clicks. It contains no diesel engine, no train horn, no
+brake squeal, no wind, no radio static, no heartbeat, no firearms and no horror
+music. Substituting what is there would be actively wrong: "Cannon_Explode" is
+not a door opening, and shipping that is worse than silence.
+
+A cue with `id = 0` plays nothing, logs once at debug level, and returns.
+**The subtitle still fires**, so a player with subtitles enabled gets the
+complete informational content of the game regardless.
 
 ---
 
@@ -94,43 +102,15 @@ train_horn = cue({
 
 ## Priority order
 
-There are 78 cues. You do not need all of them, and some matter far more than
-others. Fill them in this order.
+Of the 26 that are still silent, these four matter most, in this order:
 
-### Tier 1: without these the game is not frightening (12 cues)
-
-| Cue | Search for |
-| --- | --- |
-| `creature_distant` | distant animal call, monster roar far, eerie howl |
-| `creature_near` | creature growl, monster breathing |
-| `creature_chase` | monster chase loop, pursuit horror loop |
-| `creature_attack` | monster attack, creature strike |
-| `footsteps_outside` | gravel footsteps, walking on gravel |
-| `train_engine_idle` | diesel engine idle loop |
-| `train_engine_load` | diesel engine load, engine revving loop |
-| `train_wheels_roll` | train wheels loop, rail rolling |
-| `train_horn` | train horn, air horn |
-| `radio_static` | radio static loop |
-| `rain_light` | light rain loop |
-| `wind_forest` | wind trees loop |
-
-### Tier 2: the game feels unfinished without these (14 cues)
-
-`train_brake_apply`, `train_brake_emergency`, `train_door`, `train_stall`,
-`footstep_metal`, `footstep_gravel`, `footstep_wood`, `hurt`, `downed`,
-`item_pickup`, `generator_start`, `breaker_throw`, `ui_click`, `ui_open`
-
-### Tier 3: weapons (10 cues)
-
-`gun_revolver`, `gun_shotgun`, `gun_rifle`, `gun_dry`, `reload_revolver`,
-`reload_shotgun_shell`, `reload_bolt`, `melee_swing`, `melee_hit_flesh`,
-`bullet_impact`
-
-### Tier 4: everything else
-
-Music beds, remaining ambience, remaining interface cues, the remaining item
-and machinery sounds. All listed in `Audio.Cues` with a `description` field
-explaining what each one is for and when it plays.
+1. **A diesel engine idle and load loop.** The train is the centrepiece and it
+   currently runs on a machinery loop.
+2. **A train horn.** It is also the creature repel tool, so it is gameplay, not
+   just atmosphere. Currently a low whistle.
+3. **Brake squeal.** Emergency braking is a major beat with no sound.
+4. **`radio_distort`.** One of the four tells that separates the dispatcher
+   from what imitates him.
 
 ---
 
@@ -173,9 +153,42 @@ up or open the train. Those work with no audio at all.
 The boot log reports the count every startup:
 
 ```
-[LAST SIGNAL][Boot] Audio: 26 of 78 cues configured.
+[LAST SIGNAL][Boot] Audio: 57 of 83 cues configured.
 ```
 
 `Audio.audit()` returns the same numbers if you want them in code.
 `Audio.informationalCues()` returns the list of cues that carry information,
 which is the set worth prioritising.
+
+---
+
+## The 26 cues that are still silent
+
+These have no suitable Roblox-created source. Filling them needs audio you own,
+uploaded to your own account.
+
+**Train (7).** `train_brake_apply`, `train_brake_emergency`, `train_wiper`,
+`train_stall`, `train_engine_idle` and `train_engine_load` currently use
+machinery loops rather than a diesel engine, and `train_horn` uses a low
+whistle. Replacing those four with real locomotive audio is the single largest
+improvement available to this game.
+
+**Ambience (4).** `wind_forest`, `forest_night`, `station_hum`, `rain_on_roof`
+(currently the outdoor rain bed).
+
+**Player (3).** `heartbeat`, `revive`, `item_bandage`.
+
+**Radio (3).** `radio_static`, `radio_distort`, `radio_tune`. The distortion
+sting is one of the tells that separates the dispatcher from what imitates him,
+so this one matters more than its size suggests.
+
+**Weapons (7).** `gun_revolver`, `gun_shotgun`, `gun_rifle`, `reload_revolver`,
+`reload_shotgun_shell`, `reload_bolt`, `repair_wrench`.
+
+**Creature and music (2).** `creature_mimic`, and the `music_departure`,
+`music_tension`, `music_climax`, `music_resolution` beds currently fall back to
+two generic loops.
+
+Where a cue is reused rather than empty, the mixer differentiates it by pitch
+and volume, which is a legitimate technique but no substitute for the real
+sound.

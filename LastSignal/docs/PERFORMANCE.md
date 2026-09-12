@@ -9,10 +9,13 @@ Budgets, estimates, and what has actually been measured.
 | Metric | Value | How |
 | --- | ---: | --- |
 | Place file size | 1,015 KB | `rojo build` output |
-| Luau source | 64 files, ~32,000 lines | `wc -l` over `src/` |
+| Luau source | 65 files, ~33,400 lines | `wc -l` over `src/` |
+| Parts in one expedition lane | 32,000+ | **Measured by the operator** from the server log on a real run |
 
 **Everything else on this page is an estimate**, derived from counting the
-parts each builder creates. Nothing has been run. See [STATUS.md](STATUS.md).
+parts each builder creates. The lane figure above is the exception: it is a
+real number from a real server run, and it came in at roughly half my estimate
+of 60,000. See [STATUS.md](STATUS.md).
 
 Record real numbers here once you have them.
 

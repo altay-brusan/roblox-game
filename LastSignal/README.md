@@ -25,7 +25,7 @@ dispatcher. Some of the transmissions are not the dispatcher.
 | `build/` | The built place file (created by `scripts/build.sh`) |
 | `tools/` | Rojo and the Luau analyzer (downloaded, not committed) |
 
-64 Luau modules, roughly 32,000 lines. Every file type-checks in strict mode
+65 Luau modules, roughly 33,400 lines. Every file type-checks in strict mode
 against the real Roblox API.
 
 ---
@@ -49,8 +49,9 @@ source files and rebuild, which is covered in the setup guide.
 
 ## Read this before you publish
 
-Three things ship deliberately switched off, because this project cannot set
-them correctly on your behalf. Each fails safely rather than guessing.
+Two things ship deliberately switched off, because this project cannot set them
+correctly on your behalf. Each fails safely rather than guessing. A third,
+audio, is partially filled.
 
 **Monetization IDs are empty.** Every Game Pass and Developer Product in
 `src/shared/Config/Monetization.luau` has `id = 0`. Zero means "not
@@ -66,12 +67,12 @@ IDs and paste them in. This project has no way to verify which account a
 username currently belongs to, and a wrong guess would hand administrative
 access to the wrong person. See **[docs/ADMIN.md](docs/ADMIN.md)**.
 
-**Audio asset IDs are empty.** Every cue in `src/shared/Config/Audio.luau` has
-`id = 0`. The mixer, ducking, distance attenuation, enclosure filtering,
-speed-reactive engine layering, directional indicators and the complete
-subtitle system are all implemented and running. They have nothing to play.
-Filling in the IDs takes about an hour with the Studio audio browser.
-See **[docs/AUDIO.md](docs/AUDIO.md)**.
+**Audio is 57 of 83 cues.** Every filled ID is Roblox-created audio, verified
+twice against the Roblox asset API, and free to use in any experience. The
+other 26 have no suitable source in that library, which contains no diesel
+engine, no train horn, no wind and no horror music. Those cues stay silent
+rather than playing something wrong; subtitles still carry every informational
+cue. See **[docs/AUDIO.md](docs/AUDIO.md)**.
 
 **Revenue goes to whoever owns the experience the products belong to.** The
 RIPGAMES name in this code does not direct payment. See
@@ -81,15 +82,16 @@ RIPGAMES name in this code does not direct payment. See
 
 ## What is verified and what is not
 
-**[docs/STATUS.md](docs/STATUS.md) is the most important document here.** It
-states, feature by feature, what has been verified and how, and what has not
-been run yet. Read it before forming any expectation about what works.
+**[docs/CHECKLIST.md](docs/CHECKLIST.md) is the most important document here.**
+It lists every requirement from the brief with an honest status, and records the
+seven defects the first real run exposed.
 
-The honest summary: every line of this project type-checks against the real
-Roblox API and the place file builds. None of it has been run, because Roblox
-Studio is not installed on this machine and there is no way to execute Luau
-against a live DataModel without it. Static verification catches a great deal.
-It does not catch everything.
+The honest summary: every line type-checks against the real Roblox API and the
+place file builds. It has been run once, by the operator, which found four
+reported defects and three more behind them, including a missing cab interface
+that made the game uncompletable. All seven are fixed. **It has still never
+been played end to end.** Static verification catches a great deal. It does not
+catch everything.
 
 ---
 
@@ -143,7 +145,8 @@ to reinstall if the folder is missing.
 | Document | What it covers |
 | --- | --- |
 | [SETUP.md](docs/SETUP.md) | Installing Studio and Rojo, opening and editing the place |
-| [STATUS.md](docs/STATUS.md) | **Verified, unverified and incomplete work, feature by feature** |
+| [CHECKLIST.md](docs/CHECKLIST.md) | **Requirement-by-requirement status, and the defects found and fixed** |
+| [STATUS.md](docs/STATUS.md) | Verified, unverified and incomplete work |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Explorer layout, module map, how the systems connect |
 | [MONETIZATION.md](docs/MONETIZATION.md) | Creating the products, where every ID goes |
 | [OWNERSHIP.md](docs/OWNERSHIP.md) | Publishing, and who actually gets paid |

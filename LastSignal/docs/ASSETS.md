@@ -8,13 +8,16 @@ What this project uses, where it came from, and what licence applies.
 
 **This project ships no third-party assets of any kind.**
 
-No meshes, no textures, no images, no audio files, no animations, no fonts, no
-models from the Toolbox, nothing from a search result. Every object in the game
+No meshes, no textures, no images, no animations, no fonts, no models from the
+Toolbox, nothing from a search result. The only referenced assets are 57 audio
+IDs, every one of them created by Roblox itself and verified as such; see the
+Audio section below. Every object in the game
 is constructed at runtime from Roblox's own primitives using materials from the
 standard `Enum.Material` set.
 
 That means the asset register below is short, and the licensing answer is
-simple: there is nothing to attribute and nothing that could be taken down.
+simple: everything referenced is Roblox's own, so nothing is owed in
+attribution and nothing can be taken down.
 
 ---
 
@@ -56,19 +59,28 @@ and geometry that can be edited by changing a number in a builder.
 | PointLight, SpotLight, SurfaceLight | Roblox Studio | Roblox | Included with the platform | All lighting |
 | Future lighting technology, atmosphere and fog settings | Roblox Studio | Roblox | Included with the platform | Night look |
 
-That is the complete list. There are no other assets.
+That is the complete list for geometry, type and lighting. Audio is the one
+category with explicit asset IDs, covered next.
 
 ---
 
 ## Audio
 
-There is no audio in this project. Every cue in `src/shared/Config/Audio.luau`
-has `id = 0`, which the audio system treats as "not configured": it plays
-nothing and the game continues.
+**57 of 83 cues carry Roblox-created audio.** Those assets are listed in the
+register above in spirit: they are all created by Roblox itself, which licenses
+them for use in any experience, so no attribution is owed and none can be taken
+down.
 
-This is the same reasoning. Shipping guessed numeric asset IDs would be worse
-than shipping none, because a wrong ID is either silence, an error, or somebody
-else's audio playing in your game without their permission.
+Every ID was verified twice before use: the search was filtered to
+`creatorTargetId=1`, and each asset was then confirmed through the Roblox asset
+details endpoint to have creator `Roblox` and asset type Audio. No ID was
+guessed.
+
+The remaining 26 cues are empty because the Roblox-created library, which is
+129 assets in total, does not contain anything suitable. It has no diesel
+engine, no train horn, no brake squeal, no wind, no radio static, no firearms
+and no horror music. Substituting an unrelated sound would be worse than
+silence.
 
 [AUDIO.md](AUDIO.md) lists every cue with search terms and explains the
 licensing rules that apply when you fill them in. The short version: audio

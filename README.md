@@ -18,12 +18,14 @@ A RIPGAMES production. Chapter One: The Long Grade.
 | --- | --- |
 | **Play it** | Open `LastSignal/build/LastSignal.rbxlx` in Roblox Studio and press Play |
 | **Project README** | [LastSignal/README.md](LastSignal/README.md) |
-| **What is verified and what is not** | [LastSignal/docs/STATUS.md](LastSignal/docs/STATUS.md) |
+| **Requirement checklist and status** | [LastSignal/docs/CHECKLIST.md](LastSignal/docs/CHECKLIST.md) |
+| What is verified and what is not | [LastSignal/docs/STATUS.md](LastSignal/docs/STATUS.md) |
 | **Install and configuration** | [LastSignal/docs/SETUP.md](LastSignal/docs/SETUP.md) |
 
-**Read `STATUS.md` before forming any expectation about what works.** Every
-line of this project type-checks in strict mode against the real Roblox API and
-the place file builds. None of it has been run, because Roblox Studio was not
+**Read `CHECKLIST.md` before forming any expectation about what works.** Every
+line type-checks in strict mode against the real Roblox API and the place file
+builds. The operator has run it once, which found seven defects, all now fixed.
+It has still never been played end to end, because Roblox Studio was not
 available on the machine it was built on.
 
 ---
