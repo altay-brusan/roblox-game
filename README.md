@@ -3,153 +3,76 @@
 A first-person cooperative horror-survival game for Roblox.
 A RIPGAMES production. Chapter One: The Long Grade.
 
-At 02:17 the last evacuation train leaves an isolated maintenance yard. The
-line runs ninety kilometres north through forest, past five stops that all need
-something before the train can continue. A damaged radio offers guidance from a
-dispatcher. Some of the transmissions are not the dispatcher.
-
-**Keep the train moving. Stay together. Do not trust every voice on the radio.**
+> At 02:17 the last evacuation train leaves an isolated maintenance yard. The
+> line runs ninety kilometres north through forest, past five stops that all
+> need something before the train can continue. A damaged radio offers guidance
+> from a dispatcher. Some of the transmissions are not the dispatcher.
+>
+> **Keep the train moving. Stay together. Do not trust every voice on the radio.**
 
 ---
 
-## What is in this repository
+## Start here
 
-| Path | What it is |
+| | |
 | --- | --- |
-| `src/shared` | Code replicated to both server and client: configuration, registries, core utilities |
-| `src/server` | The authoritative game: services and world builders |
-| `src/client` | Interface, camera, input, audio, viewmodels |
-| `src/replicatedfirst` | The loading screen |
-| `docs/` | Setup, configuration, testing, and an honest status report |
-| `scripts/` | Build and verification scripts |
-| `build/` | The built place file (created by `scripts/build.sh`) |
-| `tools/` | Rojo and the Luau analyzer (downloaded, not committed) |
+| **Play it** | Open `LastSignal/build/LastSignal.rbxlx` in Roblox Studio and press Play |
+| **Project README** | [LastSignal/README.md](LastSignal/README.md) |
+| **What is verified and what is not** | [LastSignal/docs/STATUS.md](LastSignal/docs/STATUS.md) |
+| **Install and configuration** | [LastSignal/docs/SETUP.md](LastSignal/docs/SETUP.md) |
 
-64 Luau modules, roughly 32,000 lines. Every file type-checks in strict mode
-against the real Roblox API.
+**Read `STATUS.md` before forming any expectation about what works.** Every
+line of this project type-checks in strict mode against the real Roblox API and
+the place file builds. None of it has been run, because Roblox Studio was not
+available on the machine it was built on.
 
 ---
 
-## Getting it running
+## Repository layout
 
-Full instructions with the exact commands are in **[docs/SETUP.md](docs/SETUP.md)**.
-The short version:
+```
+LastSignal/
+├── src/shared          configuration, registries, core utilities
+├── src/server          20 services and 6 world builders
+├── src/client          10 controllers and the interface kit
+├── src/replicatedfirst the loading screen
+├── docs/               12 documents: setup, status, monetization, admin, ...
+├── scripts/            check.sh and build.sh
+└── build/              the built place file
 
-1. **Install Roblox Studio.** It is not currently installed on this machine.
-   Download it from <https://create.roblox.com/> and sign in.
-2. **Open the built place.** The file is already built at
-   `build/LastSignal.rbxlx`. Double-click it, or use File, Open in Studio.
-3. **Press Play.** The world builds itself at runtime: the yard first, then an
-   expedition lane in the background. The first lane takes a few seconds.
+tools/                  build toolchain, not committed; see docs/SETUP.md
+```
 
-You do not need Rojo to play it. You need Rojo only if you want to edit the
-source files and rebuild, which is covered in the setup guide.
-
----
-
-## Read this before you publish
-
-Three things ship deliberately switched off, because this project cannot set
-them correctly on your behalf. Each fails safely rather than guessing.
-
-**Monetization IDs are empty.** Every Game Pass and Developer Product in
-`src/shared/Config/Monetization.luau` has `id = 0`. Zero means "not
-configured": the shop renders the item as Unavailable, the buy button is
-disabled, and no purchase can be attempted or simulated. Create the products on
-your published experience and paste the numeric IDs in.
-See **[docs/MONETIZATION.md](docs/MONETIZATION.md)**.
-
-**Administrator user IDs are empty.** `src/shared/Config/Admin.luau` lists
-RIPjafar1 as owner and shayanbrusan1234 as administrator, with their numeric
-user IDs set to `0`. A role with ID 0 grants nothing. Look up the real numeric
-IDs and paste them in. This project has no way to verify which account a
-username currently belongs to, and a wrong guess would hand administrative
-access to the wrong person. See **[docs/ADMIN.md](docs/ADMIN.md)**.
-
-**Audio asset IDs are empty.** Every cue in `src/shared/Config/Audio.luau` has
-`id = 0`. The mixer, ducking, distance attenuation, enclosure filtering,
-speed-reactive engine layering, directional indicators and the complete
-subtitle system are all implemented and running. They have nothing to play.
-Filling in the IDs takes about an hour with the Studio audio browser.
-See **[docs/AUDIO.md](docs/AUDIO.md)**.
-
-**Revenue goes to whoever owns the experience the products belong to.** The
-RIPGAMES name in this code does not direct payment. See
-**[docs/OWNERSHIP.md](docs/OWNERSHIP.md)**.
+64 Luau modules, roughly 32,000 lines.
 
 ---
 
-## What is verified and what is not
+## Three things ship deliberately switched off
 
-**[docs/STATUS.md](docs/STATUS.md) is the most important document here.** It
-states, feature by feature, what has been verified and how, and what has not
-been run yet. Read it before forming any expectation about what works.
+Each fails safely rather than guessing.
 
-The honest summary: every line of this project type-checks against the real
-Roblox API and the place file builds. None of it has been run, because Roblox
-Studio is not installed on this machine and there is no way to execute Luau
-against a live DataModel without it. Static verification catches a great deal.
-It does not catch everything.
+- **Monetization IDs are all zero.** The shop shows every product as
+  Unavailable and no purchase can be attempted or simulated.
+  See [MONETIZATION.md](LastSignal/docs/MONETIZATION.md).
+- **Administrator user IDs are zero.** RIPjafar1 and shayanbrusan1234 are
+  listed with their roles set, but a role with ID 0 grants nothing.
+  See [ADMIN.md](LastSignal/docs/ADMIN.md).
+- **Audio asset IDs are zero.** The mixer, ducking, occlusion and the full
+  subtitle system all run; they have nothing to play.
+  See [AUDIO.md](LastSignal/docs/AUDIO.md).
 
----
-
-## The design in one page
-
-**Structure.** A lobby yard, then five stops along a straight 14,000 stud
-railway, then an ending. Twenty-five to forty minutes for a normal run.
-
-**No two stops ask for the same verb.** Restore power, cooperate on separated
-levers, relay a code by voice, repair under time pressure, then converge. The
-failure mode the brief warns about is "collect four things, five times"; this
-is the structural answer to it.
-
-**The train is kinematic, not physics-driven.** It is one welded rigid assembly
-on an anchored root, moved by CFrame on a fixed tick. Passengers ride by having
-the train's per-frame delta applied to their own character, on their own
-client, which owns their physics. That is why nobody jitters, stretches or
-falls through the floor. See the comment block in `TrainRideController`.
-
-**Threat is a meter the players drive.** Noise, distance from the train, and
-time raise it; objectives and quiet lower it. The horror director schedules
-against bands of that meter with cooldowns and repetition control, rather than
-against a timer or a dice roll. Nothing at all schedules during the cinematic,
-during loading, or inside the immunity window after a respawn.
-
-**The creature cannot be killed.** Damage fills a drive-off meter. It will not
-enter a lit carriage, the horn drives it back at close range, and a flare
-denies ground. All of that counterplay is available on the first run with no
-unlocks and no purchases.
-
-**Nothing paid grants combat power.** No product in this project sells damage,
-health, ammunition, or threat suppression. The one capacity product raises how
-much loot a crew can carry, not how hard they hit.
+Robux is paid to whoever owns the published experience. The RIPGAMES name in
+the code directs nothing. See [OWNERSHIP.md](LastSignal/docs/OWNERSHIP.md).
 
 ---
 
 ## Building from source
 
 ```bash
-bash scripts/check.sh    # sourcemap, syntax, full strict type check
+cd LastSignal
+bash scripts/check.sh    # sourcemap, syntax, strict type check
 bash scripts/build.sh    # writes build/LastSignal.rbxlx
 ```
 
-Both scripts use the tools in `tools/bin`, which `docs/SETUP.md` explains how
-to reinstall if the folder is missing.
-
----
-
-## Documentation
-
-| Document | What it covers |
-| --- | --- |
-| [SETUP.md](docs/SETUP.md) | Installing Studio and Rojo, opening and editing the place |
-| [STATUS.md](docs/STATUS.md) | **Verified, unverified and incomplete work, feature by feature** |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Explorer layout, module map, how the systems connect |
-| [MONETIZATION.md](docs/MONETIZATION.md) | Creating the products, where every ID goes |
-| [OWNERSHIP.md](docs/OWNERSHIP.md) | Publishing, and who actually gets paid |
-| [ADMIN.md](docs/ADMIN.md) | Roles, commands, and the safety rails on them |
-| [EVENTS.md](docs/EVENTS.md) | Running The Lost Conductor, and authoring the next event |
-| [AUDIO.md](docs/AUDIO.md) | Every cue, and how to fill in the asset IDs |
-| [ASSETS.md](docs/ASSETS.md) | The asset register, and why it contains no third-party assets |
-| [TESTING.md](docs/TESTING.md) | The full acceptance checklist, with current results |
-| [PERFORMANCE.md](docs/PERFORMANCE.md) | Budgets, measured part counts, and the streaming setup |
+The toolchain is not committed. [SETUP.md](LastSignal/docs/SETUP.md) has the
+exact commands to download Rojo, the Luau compiler and luau-lsp.
