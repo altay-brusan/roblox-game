@@ -39,7 +39,9 @@ local Audio = {}
 -- AudioService applies the bus gain, the master gain and any active ducking.
 export type BusId = "master" | "music" | "ambience" | "sfx" | "train" | "voice" | "ui" | "creature"
 
-Audio.Buses = {
+export type BusDef = { name: string, default: number }
+
+Audio.Buses = ({
 	master = { name = "Master", default = 0.85 },
 	music = { name = "Music", default = 0.6 },
 	ambience = { name = "Ambience", default = 0.8 },
@@ -48,15 +50,17 @@ Audio.Buses = {
 	voice = { name = "Radio & Voice", default = 1.0 },
 	ui = { name = "Interface", default = 0.7 },
 	creature = { name = "Threat", default = 1.0 },
-}
+} :: { [string]: BusDef })
 
 -- When a bus in `trigger` is playing, buses in `duck` drop by `amount` over
 -- `attack` seconds and recover over `release`. Radio lines must always be
 -- intelligible; that is the entire reason this exists.
-Audio.Ducking = {
+export type DuckRule = { trigger: string, duck: { string }, amount: number, attack: number, release: number }
+
+Audio.Ducking = ({
 	{ trigger = "voice", duck = { "music", "ambience", "train" }, amount = 0.45, attack = 0.12, release = 0.8 },
 	{ trigger = "creature", duck = { "music" }, amount = 0.7, attack = 0.05, release = 1.6 },
-}
+} :: { DuckRule })
 
 --------------------------------------------------------------------------
 -- Cue definitions
