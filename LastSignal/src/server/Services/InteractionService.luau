@@ -48,6 +48,11 @@ local InteractionService = {}
 
 InteractionService.FixtureOperated = Signal.new() :: Signal.Signal<string, Player, BasePart>
 InteractionService.NoiseMade = Signal.new() :: Signal.Signal<Vector3, number, Player?>
+-- A RunTask hold finished: the player, the part, and whether a consumable
+-- was spent to do it faster.
+InteractionService.RunTaskDone = Signal.new() :: Signal.Signal<Player, BasePart, boolean>
+-- Set by JourneyService: the earned Lineman's toolkit shortens night-run tasks.
+InteractionService.holdScale = nil :: ((Player) -> number)?
 
 local MAX_REACH = 12
 
@@ -101,7 +106,10 @@ local function completeHold(player: Player, target: Instance, action: string): b
 		return false
 	end
 	local root = Guard.aliveRoot(player)
-	if not root or not Guard.withinDistance(root.Position, entry.position, MAX_REACH + 4) then
+	-- Against where the target is now: a job on a moving train moves with
+	-- the player, and the position at the start of the hold is left behind.
+	local position = if entry.target:IsA("BasePart") then (entry.target :: BasePart).Position else entry.position
+	if not root or not Guard.withinDistance(root.Position, position, MAX_REACH + 4) then
 		return false
 	end
 	held[player.UserId] = nil
@@ -540,6 +548,7 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		"discover",
 		"lobby",
 		"sit",
+		"run_task",
 		"cancel",
 	})
 	if not action then
@@ -837,6 +846,52 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		return
 	end
 
+	if action == "run_task" then
+		-- A night-run task (JourneyService): a held job on a part tagged
+		-- RunTask, described entirely by its attributes, so an event can add
+		-- one without this file knowing what the event is.
+		if not part:HasTag("RunTask") then
+			return
+		end
+		local blocked = part:GetAttribute("TaskBlocked")
+		if type(blocked) == "string" and blocked ~= "" then
+			Net.fireClient("InteractResult", player, { ok = false, error = "SAY:" .. blocked })
+			return
+		end
+		local needs = part:GetAttribute("TaskNeeds")
+		if type(needs) == "string" and needs ~= "" and not InventoryService.has(player, needs, 1) then
+			Net.fireClient("InteractResult", player, { ok = false, error = "NEEDS:" .. ItemRegistry.getOrFallback(needs).name })
+			return
+		end
+		local seconds = tonumber(part:GetAttribute("TaskSeconds")) or 3
+		local fastItem = part:GetAttribute("TaskFastItem")
+		if type(fastItem) == "string" and InventoryService.has(player, fastItem, 1) then
+			seconds = tonumber(part:GetAttribute("TaskFastSeconds")) or seconds * 0.5
+		end
+		if InteractionService.holdScale then
+			seconds *= InteractionService.holdScale(player)
+		end
+		local entry = held[player.UserId]
+		if not entry or entry.target ~= part then
+			beginHold(player, part, "run_task", seconds, part.Position)
+			return
+		end
+		if not completeHold(player, part, "run_task") then
+			return
+		end
+		local usedFast = type(fastItem) == "string" and part:GetAttribute("TaskFastConsumes") == true and InventoryService.has(player, fastItem, 1)
+		if usedFast then
+			InventoryService.remove(player, fastItem :: string, 1)
+		end
+		local noise = tonumber(part:GetAttribute("TaskNoise"))
+		if noise then
+			InteractionService.NoiseMade:Fire(part.Position, noise, player)
+		end
+		Net.fireClient("InteractResult", player, { ok = true, action = "run_task" })
+		InteractionService.RunTaskDone:Fire(player, part, usedFast)
+		return
+	end
+
 	if action == "repair_train" then
 		if not part:HasTag("TrainRepairPoint") then
 			return
@@ -1041,6 +1096,7 @@ function InteractionService.start()
 	wire("DoorLeaf", "Door", "")
 	wire("TrainSeat", "Sit", "")
 	wire("DriverSeat", "Drive", "")
+	wire("RunTask", "Use", "")
 
 	-- Lobby fixtures. Without these the crew board is scenery and the only way
 	-- to start an expedition is to guess a keyboard shortcut, which is how the

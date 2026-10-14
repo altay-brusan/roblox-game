@@ -103,6 +103,9 @@ local MANIFEST: { [string]: RemoteSpec } = {
 	-- Shop and monetization ---------------------------------------------------
 	ShopState = { kind = "event" }, -- server -> client
 	ShopCommand = { kind = "function", rate = { 10, 1.5 } },
+	-- Night runs: preferences, progress and in-run choices.
+	JourneyCommand = { kind = "function", rate = { 10, 2 } },
+	JourneyChoice = { kind = "event" }, -- server -> client
 	PurchaseResult = { kind = "event" }, -- server -> client
 
 	-- Live events --------------------------------------------------------------

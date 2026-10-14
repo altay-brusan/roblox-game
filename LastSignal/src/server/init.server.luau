@@ -90,6 +90,7 @@ local BOOT_ORDER: { ServiceEntry } = {
 	{ name = "CombatService", module = Services.CombatService, stage = "Gameplay" },
 	{ name = "HorrorDirector", module = Services.HorrorDirector, stage = "Gameplay" },
 	{ name = "SignatureMoments", module = Services.SignatureMoments, stage = "Gameplay" },
+	{ name = "JourneyService", module = Services.JourneyService, stage = "Gameplay" },
 
 	{ name = "EventService", module = Services.EventService, stage = "Live" },
 	{ name = "AdminService", module = Services.AdminService, stage = "Live" },

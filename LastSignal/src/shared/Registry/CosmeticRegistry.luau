@@ -378,6 +378,31 @@ local COSMETICS: { [string]: CosmeticDef } = {
 	}),
 
 	--------------------------------------------------------------------
+	-- Earned on night runs (JourneyRegistry.Unlocks). Never sold.
+	--------------------------------------------------------------------
+	patch_night_run = cosmetic({
+		id = "patch_night_run",
+		slot = "patch",
+		name = "Night Run",
+		description = "Earned by completing a night run.",
+		source = "quest",
+		accent = C(120, 150, 200),
+		glyph = "moon",
+		rarity = 2,
+	}),
+	finish_soot = cosmetic({
+		id = "finish_soot",
+		slot = "finish",
+		name = "Soot",
+		description = "Smoke-blackened steel. Earned by completing five night runs.",
+		source = "quest",
+		body = C(30, 28, 27),
+		accent = C(96, 84, 70),
+		material = Enum.Material.Metal,
+		rarity = 3,
+	}),
+
+	--------------------------------------------------------------------
 	-- Conductor Collection (Game Pass). Three pieces, one look: black
 	-- enamel, polished brass, a warm lamp. Every piece is drawn in game.
 	--------------------------------------------------------------------

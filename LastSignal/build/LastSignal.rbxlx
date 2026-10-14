@@ -2488,6 +2488,9 @@ local MANIFEST: { [string]: RemoteSpec } = {
 	-- Shop and monetization ---------------------------------------------------
 	ShopState = { kind = "event" }, -- server -> client
 	ShopCommand = { kind = "function", rate = { 10, 1.5 } },
+	-- Night runs: preferences, progress and in-run choices.
+	JourneyCommand = { kind = "function", rate = { 10, 2 } },
+	JourneyChoice = { kind = "event" }, -- server -> client
 	PurchaseResult = { kind = "event" }, -- server -> client
 
 	-- Live events --------------------------------------------------------------
@@ -3644,6 +3647,31 @@ local COSMETICS: { [string]: CosmeticDef } = {
 	}),
 
 	--------------------------------------------------------------------
+	-- Earned on night runs (JourneyRegistry.Unlocks). Never sold.
+	--------------------------------------------------------------------
+	patch_night_run = cosmetic({
+		id = "patch_night_run",
+		slot = "patch",
+		name = "Night Run",
+		description = "Earned by completing a night run.",
+		source = "quest",
+		accent = C(120, 150, 200),
+		glyph = "moon",
+		rarity = 2,
+	}),
+	finish_soot = cosmetic({
+		id = "finish_soot",
+		slot = "finish",
+		name = "Soot",
+		description = "Smoke-blackened steel. Earned by completing five night runs.",
+		source = "quest",
+		body = C(30, 28, 27),
+		accent = C(96, 84, 70),
+		material = Enum.Material.Metal,
+		rarity = 3,
+	}),
+
+	--------------------------------------------------------------------
 	-- Conductor Collection (Game Pass). Three pieces, one look: black
 	-- enamel, polished brass, a warm lamp. Every piece is drawn in game.
 	--------------------------------------------------------------------
@@ -4550,6 +4578,332 @@ return ItemRegistry
         </Item>
         <Item class="ModuleScript" referent="30">
           <Properties>
+            <string name="Name">JourneyRegistry</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	JourneyRegistry
+	---------------
+	Night runs: the repeatable journey beside the story.
+
+	The story is one fixed telling. A night run is the same line, the same
+	stations and objectives, with a seeded set of emergencies on the way and a
+	route decision at Tolbridge. It exists so the line is worth riding again,
+	and it is described in the lobby as exactly that: not a new story, a
+	different night on the same railway.
+
+	This file is data. JourneyService plans and runs it; the lobby and the
+	results screen read it, so what a player is told is what the server does.
+
+	PLANNING RULES (enforced by JourneyService.plan, checked by validate)
+	---------------------------------------------------------------------
+	  - Seeded: the same seed, tier and crew size give the same plan.
+	  - Weighted pick, per template weight.
+	  - A template appears at most once per run, and never in two
+	    consecutive segments if it is allowed twice.
+	  - Each template has prerequisites: which segments it may use.
+	  - Tension budget per tier: the sum of template tension may not exceed it.
+	  - Incompatible pairs never share a segment (see `incompatible`), so no
+	    combination removes every solution.
+	  - At most `maxSimultaneous` events active at once, plus one for crews of
+	    three or more, and never more than one that stops the train.
+	  - The headline (highest tension) event of the player's last run is not
+	    the headline again, when that history is available.
+	  - Every segment start leaves a quiet stretch (`quietStuds`) before any
+	    event, and events in a segment are spaced apart.
+	  - If no valid plan is found in 25 attempts, FALLBACK_PLAN is used.
+]]
+
+local TableUtil = require(script.Parent.Parent.Core.TableUtil)
+
+export type Category = "technical" | "route" | "horror" | "station"
+
+export type Template = {
+	id: string,
+	name: string,
+	category: Category,
+	-- One line for the briefing and the report.
+	summary: string,
+	weight: number,
+	tension: number,
+	-- Segments it may be placed in. A segment is the line between two stops:
+	-- segment 1 is the yard to Marrow Halt, segment 2 Marrow to Tolbridge,
+	-- and so on. Station events use the station index instead.
+	segments: { number },
+	-- Stops the train until resolved (only one of these at a time).
+	holdsTrain: boolean,
+	-- Seconds the crew has before the event escalates, then fails.
+	escalateAfter: number,
+	failAfter: number,
+}
+
+local TEMPLATES: { [string]: Template } = {
+	carriage_blackout = {
+		id = "carriage_blackout",
+		name = "Carriage blackout",
+		category = "technical",
+		summary = "The carriage breaker trips and the train goes dark. Reset it in the first carriage. A dark train is not a shelter.",
+		weight = 10,
+		tension = 2,
+		segments = { 2, 3, 4, 5 },
+		holdsTrain = false,
+		escalateAfter = 45,
+		failAfter = 120,
+	},
+	signal_fault = {
+		id = "signal_fault",
+		name = "Signal at danger",
+		category = "route",
+		summary = "A red signal holds the train. Ring Control from the signal post telephone, which runs off the train's power, or wait for the timetable to clear it.",
+		weight = 9,
+		tension = 1,
+		segments = { 2, 3, 4, 5 },
+		holdsTrain = true,
+		escalateAfter = 60,
+		failAfter = 150,
+	},
+	brake_drag = {
+		id = "brake_drag",
+		name = "Dragging brakes",
+		category = "technical",
+		summary = "A brake cylinder sticks on. The train is held to half speed and burns fuel fast until someone releases the valve on the locomotive, from outside.",
+		weight = 8,
+		tension = 1,
+		segments = { 2, 3, 4, 5 },
+		holdsTrain = false,
+		escalateAfter = 60,
+		failAfter = 9999,
+	},
+	fallen_tree = {
+		id = "fallen_tree",
+		name = "Tree across the line",
+		category = "route",
+		summary = "A fallen pine blocks the track. Two cuts clear it, and every cut is heard in the forest.",
+		weight = 8,
+		tension = 2,
+		segments = { 2, 3, 4, 5 },
+		holdsTrain = true,
+		escalateAfter = 50,
+		failAfter = 9999,
+	},
+	electrical_fire = {
+		id = "electrical_fire",
+		name = "Electrical fire",
+		category = "technical",
+		summary = "A heater shorts and a carriage starts to burn. Beat it out, or spend a coolant canister to smother it. Left alone it grows, eats the train's condition, and takes the lights with it.",
+		weight = 7,
+		tension = 2,
+		segments = { 2, 3, 4, 5 },
+		holdsTrain = false,
+		escalateAfter = 25,
+		failAfter = 75,
+	},
+	door_jam = {
+		id = "door_jam",
+		name = "A door that will not latch",
+		category = "technical",
+		summary = "A carriage door swings open and will not stay shut. Train protection holds you to a crawl until it is forced closed; a crowbar makes it quick.",
+		weight = 8,
+		tension = 1,
+		segments = { 1, 2, 3, 4, 5 },
+		holdsTrain = false,
+		escalateAfter = 40,
+		failAfter = 9999,
+	},
+	roof_visitor = {
+		id = "roof_visitor",
+		name = "Something on the roof",
+		category = "horror",
+		summary = "It drops onto the roof and walks the length of the train. Sound the horn to throw it off, or keep every door shut and the lights on until it gives up.",
+		weight = 7,
+		tension = 3,
+		segments = { 3, 4, 5 },
+		holdsTrain = false,
+		escalateAfter = 20,
+		failAfter = 40,
+	},
+	inspection = {
+		id = "inspection",
+		name = "Unscheduled inspection",
+		category = "station",
+		summary = "Control asks for the inspector's log at this station to be signed. It is somewhere on the platform or in the buildings. Signing it earns fuel and credits; skipping it costs nothing but the reward.",
+		weight = 6,
+		tension = 0,
+		-- Station indices: never the first or the last stop.
+		segments = { 2, 3, 4 },
+		holdsTrain = false,
+		escalateAfter = 9999,
+		failAfter = 9999,
+	},
+}
+
+-- Pairs that never share a segment. Each line says why.
+local INCOMPATIBLE: { { string } } = {
+	-- Both stop the train: two holds at once is one long wait.
+	{ "signal_fault", "fallen_tree" },
+	-- The visitor's quiet answer is a lit train; a blackout removes it.
+	{ "roof_visitor", "carriage_blackout" },
+	-- An open door is the visitor's way in; the pair is unwinnable quietly.
+	{ "roof_visitor", "door_jam" },
+	-- A fire already threatens the lights; with a blackout nothing is visible
+	-- to fight it by.
+	{ "electrical_fire", "carriage_blackout" },
+}
+
+export type Route = {
+	id: string,
+	name: string,
+	stations: { number },
+	summary: string,
+}
+
+local ROUTES: { [string]: Route } = {
+	main = {
+		id = "main",
+		name = "Main line",
+		stations = { 1, 2, 3, 4, 5 },
+		summary = "All five stations. Ninety-Three has fuel and supplies, and a station's worth of work.",
+	},
+	cutoff = {
+		id = "cutoff",
+		name = "Ninety-Three cut-off",
+		stations = { 1, 2, 4, 5 },
+		summary = "Runs straight past Ninety-Three: one station shorter, but no refuelling stop between Tolbridge and Hallow Bridge, and a longer dark run.",
+	},
+}
+
+export type Tier = {
+	id: string,
+	name: string,
+	summary: string,
+	events: number,
+	tensionBudget: number,
+	maxSimultaneous: number,
+	-- Fuel at departure, as a fraction of a full tank.
+	startFuel: number,
+	-- Whether the briefing lists the night's events before departure.
+	briefed: boolean,
+	-- Night runs completed (on any tier) before this tier opens.
+	unlockAfter: number,
+}
+
+local TIERS: { Tier } = {
+	{
+		id = "night",
+		name = "Night Run",
+		summary = "Three emergencies on the way, announced in the briefing. A full tank.",
+		events = 3,
+		tensionBudget = 5,
+		maxSimultaneous = 1,
+		startFuel = 1.0,
+		briefed = true,
+		unlockAfter = 0,
+	},
+	{
+		id = "hard",
+		name = "Hard Night",
+		summary = "Five emergencies, two can overlap, and the briefing only tells you how many. Three-quarters of a tank.",
+		events = 5,
+		tensionBudget = 9,
+		maxSimultaneous = 2,
+		startFuel = 0.75,
+		briefed = false,
+		unlockAfter = 1,
+	},
+	{
+		id = "last",
+		name = "Last Train",
+		summary = "Seven emergencies, overlapping, unannounced, on a half tank. For crews who know the line.",
+		events = 7,
+		tensionBudget = 13,
+		maxSimultaneous = 2,
+		startFuel = 0.5,
+		briefed = false,
+		unlockAfter = 3,
+	},
+}
+
+-- Used when no valid plan can be generated. Small, safe and known to work.
+local FALLBACK_PLAN: { { template: string, segment: number } } = {
+	{ template = "door_jam", segment = 2 },
+	{ template = "signal_fault", segment = 3 },
+	{ template = "inspection", segment = 4 },
+}
+
+export type Unlock = {
+	id: string,
+	name: string,
+	description: string,
+	kind: "cosmetic" | "utility",
+	-- Night runs completed to earn it.
+	after: number,
+	cosmetic: string?,
+}
+
+-- Earned only by playing. None of these can be bought.
+local UNLOCKS: { Unlock } = {
+	{
+		id = "patch_night_run",
+		name = "Night Run patch",
+		description = "A crew patch for completing a night run.",
+		kind = "cosmetic",
+		after = 1,
+		cosmetic = "patch_night_run",
+	},
+	{
+		id = "linemans_toolkit",
+		name = "Lineman's toolkit",
+		description = "Night-run repair jobs take 20% less time. Earned after three completed night runs.",
+		kind = "utility",
+		after = 3,
+	},
+	{
+		id = "finish_soot",
+		name = "Soot finish",
+		description = "A smoke-blackened weapon finish for five completed night runs.",
+		kind = "cosmetic",
+		after = 5,
+		cosmetic = "finish_soot",
+	},
+}
+
+local JourneyRegistry = {}
+
+JourneyRegistry.Templates = TableUtil.deepFreeze(TEMPLATES) :: { [string]: Template }
+JourneyRegistry.Incompatible = TableUtil.deepFreeze(INCOMPATIBLE) :: { { string } }
+JourneyRegistry.Routes = TableUtil.deepFreeze(ROUTES) :: { [string]: Route }
+JourneyRegistry.Tiers = TableUtil.deepFreeze(TIERS) :: { Tier }
+JourneyRegistry.FallbackPlan = TableUtil.deepFreeze(FALLBACK_PLAN) :: { { template: string, segment: number } }
+JourneyRegistry.Unlocks = TableUtil.deepFreeze(UNLOCKS) :: { Unlock }
+
+-- Quiet line after each stop before any event may start, in studs.
+JourneyRegistry.quietStuds = 450
+-- Minimum line between two event starts in the same segment, in studs.
+JourneyRegistry.spacingStuds = 700
+
+function JourneyRegistry.tier(id: string?): Tier
+	for _, tier in TIERS do
+		if tier.id == id then
+			return tier
+		end
+	end
+	return TIERS[1]
+end
+
+function JourneyRegistry.incompatible(a: string, b: string): boolean
+	for _, pair in INCOMPATIBLE do
+		if (pair[1] == a and pair[2] == b) or (pair[1] == b and pair[2] == a) then
+			return true
+		end
+	end
+	return false
+end
+
+return JourneyRegistry
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="31">
+          <Properties>
             <string name="Name">QuestRegistry</string>
             <string name="Source"><![CDATA[--!strict
 --[[
@@ -5041,7 +5395,7 @@ return QuestRegistry
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="31">
+        <Item class="ModuleScript" referent="32">
           <Properties>
             <string name="Name">RadioScript</string>
             <string name="Source"><![CDATA[--!strict
@@ -5794,7 +6148,7 @@ return RadioScript
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="32">
+        <Item class="ModuleScript" referent="33">
           <Properties>
             <string name="Name">StationRegistry</string>
             <string name="Source"><![CDATA[--!strict
@@ -6558,7 +6912,7 @@ return StationRegistry
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="33">
+        <Item class="ModuleScript" referent="34">
           <Properties>
             <string name="Name">TrainRegistry</string>
             <string name="Source"><![CDATA[--!strict
@@ -7132,7 +7486,7 @@ return TrainRegistry
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="34">
+        <Item class="ModuleScript" referent="35">
           <Properties>
             <string name="Name">WeaponModels</string>
             <string name="Source"><![CDATA[--!strict
@@ -7372,7 +7726,7 @@ return WeaponModels
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="35">
+        <Item class="ModuleScript" referent="36">
           <Properties>
             <string name="Name">WeaponRegistry</string>
             <string name="Source"><![CDATA[--!strict
@@ -8018,11 +8372,11 @@ return WeaponRegistry
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="36">
+  <Item class="ServerScriptService" referent="37">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Script" referent="37">
+    <Item class="Script" referent="38">
       <Properties>
         <string name="Name">LastSignalServer</string>
         <token name="RunContext">0</token>
@@ -8118,6 +8472,7 @@ local BOOT_ORDER: { ServiceEntry } = {
 	{ name = "CombatService", module = Services.CombatService, stage = "Gameplay" },
 	{ name = "HorrorDirector", module = Services.HorrorDirector, stage = "Gameplay" },
 	{ name = "SignatureMoments", module = Services.SignatureMoments, stage = "Gameplay" },
+	{ name = "JourneyService", module = Services.JourneyService, stage = "Gameplay" },
 
 	{ name = "EventService", module = Services.EventService, stage = "Live" },
 	{ name = "AdminService", module = Services.AdminService, stage = "Live" },
@@ -8278,16 +8633,545 @@ if RunService:IsStudio() then
 end
 ]]></string>
       </Properties>
-      <Item class="Folder" referent="38">
+      <Item class="Folder" referent="39">
         <Properties>
           <string name="Name">Gameplay</string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="39">
+      <Item class="Folder" referent="40">
+        <Properties>
+          <string name="Name">Journey</string>
+        </Properties>
+        <Item class="ModuleScript" referent="41">
+          <Properties>
+            <string name="Name">JourneyEvents</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	JourneyEvents
+	-------------
+	What each night-run emergency does, as a small state machine run by
+	JourneyService. Each has the same shape:
+
+	  start      onset and evidence: what changes, and what the player can see
+	             and hear that tells them what is wrong. Returns false if the
+	             event cannot start here, and JourneyService records that and
+	             moves on (the runtime fallback).
+	  onTask     the player's action, a held RunTask job.
+	  escalate   what gets worse when it is ignored.
+	  fail       the consequence of ignoring it for too long.
+	  cleanup    everything the event put in the world or changed on the train
+	             is put back. Called on resolve, fail, retry and run end.
+
+	Several events act on each other on purpose, so a night is a situation
+	rather than a list:
+	  - The signal post telephone runs off the train's power: during a
+	    carriage blackout it is dead until the breaker is reset.
+	  - An electrical fire left to burn takes the lights out: a blackout.
+	  - The thing on the roof, if it finds a door open or a dark train, forces
+	    a door: a door that will not latch.
+	  - Dragging brakes burn fuel, which matters most on the cut-off, where
+	    there is no refuelling stop.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage.LastSignal
+
+local Balance = require(Shared.Config.Balance)
+
+local C = Color3.fromRGB
+
+export type Ctx = {
+	expedition: any,
+	train: any,
+	state: { [string]: any },
+	elapsed: number,
+	-- Services, handed in by JourneyService so this file has no requires on
+	-- the service graph.
+	notify: (kind: string, title: string, body: string) -> (),
+	radio: (source: string, attribution: string, text: string, duration: number) -> (),
+	cue: (name: string, position: Vector3?) -> (),
+	threat: (amount: number) -> (),
+	noise: (position: Vector3, loudness: number) -> (),
+	holdTrain: (studsAhead: number) -> number,
+	releaseTrain: () -> (),
+	applyLights: () -> (),
+	setDoor: (door: any, angle: number) -> (),
+	chain: (templateId: string) -> (),
+	isActive: (templateId: string) -> boolean,
+	award: (credits: number, fuel: number) -> (),
+	stationFixtures: () -> { BasePart },
+	rng: Random,
+	resolve: (outcome: string) -> (),
+	fail: (outcome: string) -> (),
+}
+
+export type EventImpl = {
+	start: (Ctx) -> boolean,
+	tick: ((Ctx, number) -> ())?,
+	onTask: ((Ctx, BasePart, boolean) -> ())?,
+	onHorn: ((Ctx) -> ())?,
+	escalate: ((Ctx) -> ())?,
+	fail: ((Ctx) -> ())?,
+	cleanup: (Ctx) -> (),
+}
+
+--------------------------------------------------------------------------
+-- Props
+--------------------------------------------------------------------------
+
+local function prop(name: string, size: Vector3, cf: CFrame, colour: Color3, material: Enum.Material, parent: Instance): Part
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Size = size
+	p.CFrame = cf
+	p.Color = colour
+	p.Material = material
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = true
+	p.CanTouch = false
+	p.Parent = parent
+	return p
+end
+
+--- Welds a prop to the train so it rides along.
+local function ride(p: BasePart, train: any)
+	p.Anchored = false
+	p.Massless = true
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = train.built.root
+	weld.Part1 = p
+	weld.Parent = p
+end
+
+--- Makes a part a held night-run job (see InteractionService "run_task").
+local function makeTask(p: BasePart, label: string, detail: string, seconds: number, extra: { [string]: any }?)
+	p:SetAttribute("TaskLabel", label)
+	p:SetAttribute("TaskDetail", detail)
+	p:SetAttribute("TaskSeconds", seconds)
+	for k, v in pairs(extra or {}) do
+		p:SetAttribute(k, v)
+	end
+	p:AddTag("RunTask")
+end
+
+local function trainCF(train: any, distance: number): CFrame
+	return train.origin * CFrame.new(0, 0, -distance)
+end
+
+local function carriageBox(train: any, index: number): (CFrame?, Vector3?)
+	local carriage = train.built.carriages[index]
+	if not carriage then
+		return nil, nil
+	end
+	return carriage:GetBoundingBox()
+end
+
+--------------------------------------------------------------------------
+
+local Events: { [string]: EventImpl } = {}
+
+-- 1. Carriage blackout -----------------------------------------------------
+Events.carriage_blackout = {
+	start = function(ctx)
+		local cf, size = carriageBox(ctx.train, 1)
+		if not cf or not size then
+			return false
+		end
+		ctx.state.wasLit = ctx.train.interiorLights
+		ctx.train.interiorLights = false
+		ctx.applyLights()
+		-- The breaker box glows red: the one lit thing in a dark carriage.
+		local box = prop("CarriageBreaker", Vector3.new(0.6, 1.6, 1.2), cf * CFrame.new(size.X * 0.5 - 1.0, -size.Y * 0.5 + 4.6, -size.Z * 0.5 + 3), C(40, 42, 44), Enum.Material.Metal, ctx.train.built.model)
+		local lamp = prop("BreakerLamp", Vector3.new(0.65, 0.3, 0.3), box.CFrame * CFrame.new(0, 0.5, 0), C(255, 50, 40), Enum.Material.Neon, box)
+		local light = Instance.new("PointLight")
+		light.Color = C(255, 60, 40)
+		light.Range = 10
+		light.Brightness = 2
+		light.Parent = lamp
+		ride(box, ctx.train)
+		ride(lamp, ctx.train)
+		makeTask(box, "Reset the carriage breaker", "Carriage breaker", 3)
+		ctx.state.box = box
+		ctx.cue("breaker_throw", box.Position)
+		ctx.notify("warning", "The carriages are dark", "The carriage breaker has tripped. It is on the wall of the first carriage, lit red.")
+		ctx.radio("dispatch", "Dispatch", "Control. I am reading your carriage circuit as dead. Breaker, first carriage. A dark train is an open door out there.", 7)
+		return true
+	end,
+	tick = function(ctx)
+		-- Other effects (a flicker ending) must not switch the lights back on
+		-- while the breaker is out.
+		if ctx.train.interiorLights then
+			ctx.train.interiorLights = false
+			ctx.applyLights()
+		end
+	end,
+	onTask = function(ctx, part)
+		if part == ctx.state.box then
+			ctx.cue("breaker_throw", part.Position)
+			ctx.resolve("Breaker reset; the lights came back")
+		end
+	end,
+	escalate = function(ctx)
+		ctx.threat(20)
+		ctx.notify("warning", "Something has noticed the dark train", "")
+	end,
+	fail = function(ctx)
+		ctx.threat(25)
+	end,
+	cleanup = function(ctx)
+		if ctx.state.box then
+			ctx.state.box:Destroy()
+		end
+		ctx.train.interiorLights = true
+		ctx.applyLights()
+	end,
+}
+
+-- 2. Signal at danger -------------------------------------------------------
+Events.signal_fault = {
+	start = function(ctx)
+		local holdAt = ctx.holdTrain(320)
+		local base = trainCF(ctx.train, holdAt + 30) * CFrame.new(7.5, 0, 0)
+		local model = Instance.new("Model")
+		model.Name = "SignalAtDanger"
+		model.Parent = ctx.expedition.lane.dropContainer
+		prop("SignalPost", Vector3.new(0.6, 14, 0.6), base * CFrame.new(0, 7, 0), C(40, 40, 42), Enum.Material.Metal, model)
+		prop("SignalHead", Vector3.new(1.6, 3.2, 1.0), base * CFrame.new(0, 13.5, 0), C(24, 24, 26), Enum.Material.Metal, model)
+		local aspect = prop("Aspect", Vector3.new(0.9, 0.9, 0.3), base * CFrame.new(0, 13.5, 0.55), C(255, 40, 30), Enum.Material.Neon, model)
+		local light = Instance.new("PointLight")
+		light.Color = C(255, 40, 30)
+		light.Range = 24
+		light.Brightness = 3
+		light.Parent = aspect
+		local phone = prop("SignalPhone", Vector3.new(1.0, 1.6, 0.8), base * CFrame.new(0, 3.6, 0.7), C(170, 40, 30), Enum.Material.Metal, model)
+		phone.CanCollide = true
+		makeTask(phone, "Ring Control", "Signal post telephone", 3)
+		ctx.state.model = model
+		ctx.state.aspect = aspect
+		ctx.state.light = light
+		ctx.state.phone = phone
+		ctx.notify("info", "Signal at danger", "The signal ahead is red. Ring Control from the telephone on the signal post, or wait for the timetable.")
+		ctx.radio("dispatch", "Dispatch", "Control. You will have a red ahead of you; my board has lost the section. Ring me from the post and I will clear you by hand.", 7)
+		return true
+	end,
+	tick = function(ctx)
+		-- The post telephone is fed from the train's circuit.
+		local phone = ctx.state.phone
+		if phone then
+			phone:SetAttribute("TaskBlocked", if ctx.isActive("carriage_blackout") then "The line is dead. The post telephone runs off the train's power: reset the carriage breaker first." else "")
+		end
+		if ctx.state.clearingAt and os.clock() >= ctx.state.clearingAt then
+			ctx.resolve("Control cleared the signal by telephone")
+		end
+	end,
+	onTask = function(ctx, part)
+		if part == ctx.state.phone and not ctx.state.clearingAt then
+			part:RemoveTag("RunTask")
+			ctx.radio("dispatch", "Dispatch", "Control. I hear you. Clearing the section now. Give it a moment.", 5)
+			ctx.state.clearingAt = os.clock() + 6
+		end
+	end,
+	escalate = function(ctx)
+		ctx.threat(10)
+		ctx.notify("warning", "Still held at the signal", "The forest is getting closer while you wait.")
+	end,
+	fail = function(ctx)
+		-- The timetable clears it eventually; the cost was the wait.
+		ctx.radio("dispatch", "Dispatch", "Control. Timetable has released the section. You have lost time.", 5)
+	end,
+	cleanup = function(ctx)
+		if ctx.state.aspect then
+			ctx.state.aspect.Color = C(60, 255, 120)
+			ctx.state.light.Color = C(60, 255, 120)
+		end
+		local model = ctx.state.model
+		if model then
+			task.delay(4, function()
+				model:Destroy()
+			end)
+		end
+		ctx.releaseTrain()
+	end,
+}
+
+-- 3. Dragging brakes --------------------------------------------------------
+Events.brake_drag = {
+	start = function(ctx)
+		local train = ctx.train
+		ctx.state.cap = 34
+		train.speedCap = ctx.state.cap
+		train.fuelMultiplier = 1.8
+		-- Sparks at the leading bogie, and the valve on the locomotive side.
+		local root = train.built.root
+		local sparks = prop("BrakeSparks", Vector3.new(2, 0.4, 2), root.CFrame * CFrame.new(3.4, -3.2, -4), C(255, 150, 60), Enum.Material.Neon, train.built.model)
+		ride(sparks, train)
+		local fx = Instance.new("Sparkles")
+		fx.SparkleColor = C(255, 160, 80)
+		fx.Parent = sparks
+		local valve = prop("BrakeValve", Vector3.new(0.5, 1.4, 1.4), root.CFrame * CFrame.new(5.6, -1.4, -6), C(200, 60, 40), Enum.Material.Metal, train.built.model)
+		ride(valve, train)
+		makeTask(valve, "Release the brake valve", "Brake cylinder, locomotive side", 5)
+		ctx.state.sparks = sparks
+		ctx.state.valve = valve
+		ctx.cue("train_brake_apply", root.Position)
+		ctx.notify("warning", "The brakes are dragging", "Half speed and heavy fuel burn until the valve on the outside of the locomotive is released. Stop first.")
+		return true
+	end,
+	onTask = function(ctx, part)
+		if part == ctx.state.valve then
+			ctx.resolve("Brake valve released")
+		end
+	end,
+	escalate = function(ctx)
+		-- Heat in the binding shoe takes the cap lower still.
+		ctx.state.cap = 24
+		ctx.train.speedCap = 24
+		ctx.notify("warning", "The brakes are binding harder", "Down to a crawl. The valve is on the outside of the locomotive.")
+	end,
+	cleanup = function(ctx)
+		ctx.train.speedCap = nil
+		ctx.train.fuelMultiplier = nil
+		for _, key in { "sparks", "valve" } do
+			if ctx.state[key] then
+				ctx.state[key]:Destroy()
+			end
+		end
+	end,
+}
+
+-- 4. Tree across the line ---------------------------------------------------
+Events.fallen_tree = {
+	start = function(ctx)
+		local holdAt = ctx.holdTrain(300)
+		local base = trainCF(ctx.train, holdAt + 22)
+		local model = Instance.new("Model")
+		model.Name = "FallenTree"
+		model.Parent = ctx.expedition.lane.dropContainer
+		local trunk = prop("Trunk", Vector3.new(26, 2.6, 2.6), base * CFrame.new(1, 1.4, 0) * CFrame.Angles(0, math.rad(8), math.rad(4)), C(84, 62, 44), Enum.Material.Wood, model)
+		trunk.Shape = Enum.PartType.Cylinder
+		trunk.CanCollide = true
+		for i = 1, 5 do
+			prop("Branch", Vector3.new(0.6, 5, 0.6), trunk.CFrame * CFrame.new(-10 + i * 4, 1.6, 0) * CFrame.Angles(math.rad(25), 0, math.rad(i * 20)), C(70, 54, 40), Enum.Material.Wood, model)
+			prop("Needles", Vector3.new(4, 3, 4), trunk.CFrame * CFrame.new(-10 + i * 4, 3.6, 0), C(36, 54, 38), Enum.Material.Grass, model)
+		end
+		local cuts = {}
+		for i, x in { -4.5, 4.5 } do
+			local cut = prop("CutPoint", Vector3.new(1.2, 3.2, 3.2), trunk.CFrame * CFrame.new(x, 0, 0), C(150, 112, 70), Enum.Material.Wood, model)
+			makeTask(cut, "Cut through the trunk", string.format("Cut %d of 2", i), 6, { TaskNoise = 8 })
+			cuts[cut] = true
+		end
+		ctx.state.model = model
+		ctx.state.cuts = cuts
+		ctx.state.left = 2
+		ctx.notify("warning", "Tree across the line", "The train is held short of it. Two cuts clear it, and the forest hears every one.")
+		ctx.radio("crew", "Crew", "Pine down across both rails. We are not getting past that without cutting it.", 5)
+		return true
+	end,
+	onTask = function(ctx, part)
+		if ctx.state.cuts[part] then
+			ctx.state.cuts[part] = nil
+			part:Destroy()
+			ctx.state.left -= 1
+			ctx.noise(part.Position, 10)
+			if ctx.state.left <= 0 then
+				ctx.resolve("Tree cut and cleared")
+			end
+		end
+	end,
+	escalate = function(ctx)
+		ctx.threat(15)
+	end,
+	cleanup = function(ctx)
+		if ctx.state.model then
+			ctx.state.model:Destroy()
+		end
+		ctx.releaseTrain()
+	end,
+}
+
+-- 5. Electrical fire --------------------------------------------------------
+Events.electrical_fire = {
+	start = function(ctx)
+		local index = if ctx.train.built.carriages[2] then 2 else 1
+		local cf, size = carriageBox(ctx.train, index)
+		if not cf or not size then
+			return false
+		end
+		local heater = prop("BurningHeater", Vector3.new(2.4, 1.4, 1.2), cf * CFrame.new(-size.X * 0.5 + 1.4, -size.Y * 0.5 + 1.6, 0), C(46, 40, 36), Enum.Material.Metal, ctx.train.built.model)
+		ride(heater, ctx.train)
+		local fire = Instance.new("Fire")
+		fire.Size = 4
+		fire.Heat = 6
+		fire.Parent = heater
+		local smoke = Instance.new("Smoke")
+		smoke.Opacity = 0.25
+		smoke.RiseVelocity = 3
+		smoke.Parent = heater
+		local glow = Instance.new("PointLight")
+		glow.Color = C(255, 120, 50)
+		glow.Range = 16
+		glow.Brightness = 2
+		glow.Parent = heater
+		makeTask(heater, "Beat out the fire", "Burning heater (a coolant canister smothers it fast)", 6, {
+			TaskFastItem = "coolant",
+			TaskFastSeconds = 2,
+			TaskFastConsumes = true,
+		})
+		ctx.state.heater = heater
+		ctx.state.fire = fire
+		ctx.notify("danger", "Fire in the carriage", "A heater has shorted. Beat it out, or spend a coolant canister to smother it.")
+		ctx.cue("breaker_throw", heater.Position)
+		return true
+	end,
+	onTask = function(ctx, part, usedFast)
+		if part == ctx.state.heater then
+			ctx.resolve(if usedFast then "Smothered with a coolant canister" else "Beaten out by hand")
+		end
+	end,
+	escalate = function(ctx)
+		if ctx.state.fire then
+			ctx.state.fire.Size = 8
+		end
+		ctx.train.condition = math.max(5, ctx.train.condition - 6)
+		ctx.notify("danger", "The fire is spreading", "It is eating the carriage. The train's condition is dropping.")
+	end,
+	fail = function(ctx)
+		-- It burns through the lighting circuit.
+		ctx.train.condition = math.max(5, ctx.train.condition - 10)
+		ctx.chain("carriage_blackout")
+	end,
+	cleanup = function(ctx)
+		if ctx.state.heater then
+			ctx.state.heater:Destroy()
+		end
+	end,
+}
+
+-- 6. A door that will not latch ---------------------------------------------
+Events.door_jam = {
+	start = function(ctx)
+		local doors = ctx.train.built.doors
+		if #doors == 0 or ctx.train.doorsOpen then
+			return false
+		end
+		local door = doors[ctx.rng:NextInteger(1, #doors)]
+		ctx.state.door = door
+		ctx.setDoor(door, math.rad(65))
+		ctx.train.speedCap = Balance.Train.boardingSpeedLimit * 1.5
+		local handle = prop("DoorCatch", Vector3.new(0.6, 1.4, 0.6), door.hinge.CFrame * CFrame.new(0, 0, 0), C(196, 158, 82), Enum.Material.Metal, ctx.train.built.model)
+		handle.Transparency = 0.4
+		ride(handle, ctx.train)
+		makeTask(handle, "Force the door shut", "Jammed carriage door (quick with a crowbar)", 6, { TaskFastItem = "crowbar", TaskFastSeconds = 2 })
+		ctx.state.handle = handle
+		ctx.cue("train_door", door.hinge.Position)
+		ctx.notify("warning", "A door will not latch", "Train protection holds you to a crawl until it is forced shut. A crowbar makes it quick.")
+		return true
+	end,
+	onTask = function(ctx, part)
+		if part == ctx.state.handle then
+			ctx.resolve("Door forced shut")
+		end
+	end,
+	escalate = function(ctx)
+		ctx.threat(10)
+	end,
+	cleanup = function(ctx)
+		if ctx.state.door then
+			ctx.setDoor(ctx.state.door, 0)
+		end
+		if ctx.state.handle then
+			ctx.state.handle:Destroy()
+		end
+		ctx.train.speedCap = nil
+	end,
+}
+
+-- 7. Something on the roof --------------------------------------------------
+Events.roof_visitor = {
+	start = function(ctx)
+		ctx.state.step = 0
+		ctx.cue("creature_near", ctx.train.built.root.Position + Vector3.new(0, 8, 0))
+		ctx.notify("danger", "Something is on the roof", "Sound the horn to throw it off, or keep every door shut and the lights on until it gives up.")
+		return true
+	end,
+	tick = function(ctx)
+		-- Footsteps walking the length of the roof, every two seconds.
+		ctx.state.nextStep = ctx.state.nextStep or 0
+		if os.clock() >= ctx.state.nextStep then
+			ctx.state.nextStep = os.clock() + 2
+			ctx.state.step += 1
+			local _, size = ctx.train.built.model:GetBoundingBox()
+			local along = ((ctx.state.step * 9) % size.Z) - size.Z * 0.5
+			ctx.cue("footsteps_outside", (ctx.train.built.root.CFrame * CFrame.new(0, 7, along)).Position)
+		end
+	end,
+	onHorn = function(ctx)
+		ctx.cue("creature_repelled", ctx.train.built.root.Position + Vector3.new(0, 8, 0))
+		ctx.resolve("Thrown off by the horn")
+	end,
+	escalate = function(ctx)
+		ctx.cue("creature_attack", ctx.train.built.root.Position + Vector3.new(0, 8, 0))
+		ctx.notify("danger", "It is trying the doors", "")
+	end,
+	fail = function(ctx)
+		-- It gives up only if the train stayed sealed and lit.
+		if ctx.train.doorsOpen or not ctx.train.interiorLights or ctx.isActive("door_jam") then
+			ctx.train.condition = math.max(5, ctx.train.condition - 8)
+			ctx.chain("door_jam")
+			ctx.notify("danger", "It forced a door", "")
+		else
+			ctx.notify("info", "It has gone", "A sealed, lit train was not worth the effort.")
+		end
+	end,
+	cleanup = function(_ctx) end,
+}
+
+-- 8. Unscheduled inspection (station) ---------------------------------------
+Events.inspection = {
+	start = function(ctx)
+		local spots = ctx.stationFixtures()
+		if #spots == 0 then
+			return false
+		end
+		-- A valid spot: next to one of the station's own fixtures, picked by
+		-- the seed, so it is somewhere the crew goes anyway.
+		local at = spots[ctx.rng:NextInteger(1, #spots)]
+		local book = prop("InspectorsLog", Vector3.new(1.4, 0.3, 1.0), at.CFrame * CFrame.new(0, at.Size.Y * 0.5 + 0.4, 0), C(120, 30, 30), Enum.Material.Fabric, ctx.expedition.lane.dropContainer)
+		local glow = Instance.new("PointLight")
+		glow.Color = C(255, 220, 160)
+		glow.Range = 8
+		glow.Brightness = 1
+		glow.Parent = book
+		makeTask(book, "Sign the inspector's log", "Unscheduled inspection", 2)
+		ctx.state.book = book
+		ctx.radio("dispatch", "Dispatch", "Control. Inspection notice for this station: the inspector's log is here somewhere. Sign it before you leave and I will see you are refuelled for it.", 7)
+		ctx.notify("info", "Unscheduled inspection", "Find and sign the inspector's log at this station. Optional: fuel and credits if you do.")
+		return true
+	end,
+	onTask = function(ctx, part)
+		if part == ctx.state.book then
+			ctx.award(150, 20)
+			ctx.resolve("Log signed: +20 fuel, +150 credits")
+		end
+	end,
+	cleanup = function(ctx)
+		if ctx.state.book then
+			ctx.state.book:Destroy()
+		end
+	end,
+}
+
+return Events
+]]></string>
+          </Properties>
+        </Item>
+      </Item>
+      <Item class="Folder" referent="42">
         <Properties>
           <string name="Name">Services</string>
         </Properties>
-        <Item class="ModuleScript" referent="40">
+        <Item class="ModuleScript" referent="43">
           <Properties>
             <string name="Name">AdminService</string>
             <string name="Source"><![CDATA[--!strict
@@ -8948,7 +9832,7 @@ return AdminService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="41">
+        <Item class="ModuleScript" referent="44">
           <Properties>
             <string name="Name">AnalyticsService</string>
             <string name="Source"><![CDATA[--!strict
@@ -9266,7 +10150,7 @@ return AnalyticsService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="42">
+        <Item class="ModuleScript" referent="45">
           <Properties>
             <string name="Name">AppearanceService</string>
             <string name="Source"><![CDATA[--!strict
@@ -9498,7 +10382,7 @@ return AppearanceService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="43">
+        <Item class="ModuleScript" referent="46">
           <Properties>
             <string name="Name">CombatService</string>
             <string name="Source"><![CDATA[--!strict
@@ -10228,7 +11112,7 @@ return CombatService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="44">
+        <Item class="ModuleScript" referent="47">
           <Properties>
             <string name="Name">CreatureService</string>
             <string name="Source"><![CDATA[--!strict
@@ -10966,7 +11850,7 @@ return CreatureService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="45">
+        <Item class="ModuleScript" referent="48">
           <Properties>
             <string name="Name">CrewService</string>
             <string name="Source"><![CDATA[--!strict
@@ -11751,7 +12635,7 @@ return CrewService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="46">
+        <Item class="ModuleScript" referent="49">
           <Properties>
             <string name="Name">DataService</string>
             <string name="Source"><![CDATA[--!strict
@@ -12321,7 +13205,7 @@ return DataService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="47">
+        <Item class="ModuleScript" referent="50">
           <Properties>
             <string name="Name">DepartureService</string>
             <string name="Source"><![CDATA[--!strict
@@ -12781,7 +13665,7 @@ return DepartureService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="48">
+        <Item class="ModuleScript" referent="51">
           <Properties>
             <string name="Name">EventService</string>
             <string name="Source"><![CDATA[--!strict
@@ -13416,7 +14300,7 @@ return EventService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="49">
+        <Item class="ModuleScript" referent="52">
           <Properties>
             <string name="Name">ExpeditionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -13542,6 +14426,12 @@ export type Expedition = {
 
 	maid: Maid.Maid,
 	members: { number }, -- user ids
+
+	-- The stations this run stops at, in order. The story runs all five; a
+	-- night run can take the Ninety-Three cut-off (JourneyService).
+	route: { number },
+	-- "story" or "nightrun". Set by JourneyService before the train leaves.
+	mode: string,
 }
 
 local expeditions: { [string]: Expedition } = {}
@@ -13556,6 +14446,9 @@ ExpeditionService.ThreatEvent = Signal.new() :: Signal.Signal<Expedition, string
 -- Fired after a retry has reset the expedition to its checkpoint, for the
 -- services that own vitals, creatures and threat.
 ExpeditionService.Retried = Signal.new() :: Signal.Signal<Expedition>
+-- Set by JourneyService: adds the night-run report to each player's results.
+-- A hook rather than a require, because JourneyService depends on this file.
+ExpeditionService.resultsExtra = nil :: ((Expedition, Player, boolean) -> any)?
 
 --------------------------------------------------------------------------
 -- Helpers
@@ -13580,6 +14473,26 @@ end
 
 local function notify(expedition: Expedition, kind: string, title: string, body: string, duration: number?)
 	broadcast(expedition, "Notify", { kind = kind, title = title, body = body, duration = duration or 5 })
+end
+
+--- The next station on this run's route after the current one, if any.
+function ExpeditionService.nextStationIndex(expedition: Expedition): number?
+	local route = expedition.route
+	if expedition.stationIndex <= 0 then
+		return route[1]
+	end
+	for i, index in route do
+		if index == expedition.stationIndex then
+			return route[i + 1]
+		end
+	end
+	-- Not on the route (should not happen): carry on in registry order.
+	for _, index in route do
+		if index > expedition.stationIndex then
+			return index
+		end
+	end
+	return nil
 end
 
 local function currentStation(expedition: Expedition): StationRegistry.StationDef?
@@ -13968,8 +14881,9 @@ function ExpeditionService.completeStation(expedition: Expedition)
 	ExpeditionService.fireRadio(expedition, "station_complete", { station = station.id })
 	notify(expedition, "objective", station.name .. " clear", "Board the train and continue.", 7)
 
-	-- The train is released to run to the next station.
-	local nextStation = StationRegistry.byIndex(expedition.stationIndex + 1)
+	-- The train is released to run to the next station on the route.
+	local nextIndex = ExpeditionService.nextStationIndex(expedition)
+	local nextStation = if nextIndex then StationRegistry.byIndex(nextIndex) else nil
 	if nextStation then
 		TrainService.setStopDistance(expedition.train, nextStation.distance)
 		setState(expedition, "travelling")
@@ -14165,7 +15079,7 @@ local function describe(expedition: Expedition): { [string]: any }
 		id = expedition.id,
 		state = expedition.state,
 		stationIndex = expedition.stationIndex,
-		stationCount = StationRegistry.count(),
+		stationCount = #expedition.route,
 		stationName = if station then station.name else nil,
 		stationSubtitle = if station then station.subtitle else nil,
 		difficulty = expedition.difficulty,
@@ -14337,6 +15251,8 @@ function ExpeditionService.begin(crew: CrewService.Crew, members: { Player })
 		failedAt = nil,
 		maid = Maid.new(),
 		members = memberIds,
+		route = { 1, 2, 3, 4, 5 },
+		mode = "story",
 	}
 
 	expeditions[id] = expedition
@@ -14579,7 +15495,7 @@ function ExpeditionService.finish(expedition: Expedition, success: boolean)
 		local stats: { [string]: number } = {}
 		if success then
 			stats.expeditions_completed = 1
-			if expedition.stationsCleared >= StationRegistry.count() then
+			if expedition.stationsCleared >= StationRegistry.count() and #expedition.route >= StationRegistry.count() then
 				stats.full_line_runs = 1
 			end
 			if expedition.difficulty == "blackout" then
@@ -14617,7 +15533,7 @@ function ExpeditionService.finish(expedition: Expedition, success: boolean)
 			success = success,
 			elapsed = elapsed,
 			stationsCleared = expedition.stationsCleared,
-			stationCount = StationRegistry.count(),
+			stationCount = #expedition.route,
 			optionalCleared = expedition.optionalCleared,
 			revives = expedition.revives,
 			downs = expedition.downs,
@@ -14635,6 +15551,7 @@ function ExpeditionService.finish(expedition: Expedition, success: boolean)
 			level = result.newLevel,
 			levelsGained = result.levelsGained,
 			difficulty = expedition.difficulty,
+			journey = if ExpeditionService.resultsExtra then ExpeditionService.resultsExtra(expedition, player, success) else nil,
 		})
 	end
 
@@ -14806,7 +15723,9 @@ function ExpeditionService.start()
 		for _, expedition in expeditions do
 			if expedition.train == train then
 				for index, station in StationRegistry.Stations do
-					if math.abs(station.distance - distance) < 2 and index ~= expedition.stationIndex then
+					-- Only stations on this run's route are stops; the cut-off
+					-- runs straight past Ninety-Three.
+					if math.abs(station.distance - distance) < 2 and index ~= expedition.stationIndex and table.find(expedition.route, index) then
 						arriveAtStation(expedition, index)
 						break
 					end
@@ -14951,7 +15870,7 @@ return ExpeditionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="50">
+        <Item class="ModuleScript" referent="53">
           <Properties>
             <string name="Name">HorrorDirector</string>
             <string name="Source"><![CDATA[--!strict
@@ -15700,7 +16619,7 @@ return HorrorDirector
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="51">
+        <Item class="ModuleScript" referent="54">
           <Properties>
             <string name="Name">InteractionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -15753,6 +16672,11 @@ local InteractionService = {}
 
 InteractionService.FixtureOperated = Signal.new() :: Signal.Signal<string, Player, BasePart>
 InteractionService.NoiseMade = Signal.new() :: Signal.Signal<Vector3, number, Player?>
+-- A RunTask hold finished: the player, the part, and whether a consumable
+-- was spent to do it faster.
+InteractionService.RunTaskDone = Signal.new() :: Signal.Signal<Player, BasePart, boolean>
+-- Set by JourneyService: the earned Lineman's toolkit shortens night-run tasks.
+InteractionService.holdScale = nil :: ((Player) -> number)?
 
 local MAX_REACH = 12
 
@@ -15806,7 +16730,10 @@ local function completeHold(player: Player, target: Instance, action: string): b
 		return false
 	end
 	local root = Guard.aliveRoot(player)
-	if not root or not Guard.withinDistance(root.Position, entry.position, MAX_REACH + 4) then
+	-- Against where the target is now: a job on a moving train moves with
+	-- the player, and the position at the start of the hold is left behind.
+	local position = if entry.target:IsA("BasePart") then (entry.target :: BasePart).Position else entry.position
+	if not root or not Guard.withinDistance(root.Position, position, MAX_REACH + 4) then
 		return false
 	end
 	held[player.UserId] = nil
@@ -16245,6 +17172,7 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		"discover",
 		"lobby",
 		"sit",
+		"run_task",
 		"cancel",
 	})
 	if not action then
@@ -16542,6 +17470,52 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		return
 	end
 
+	if action == "run_task" then
+		-- A night-run task (JourneyService): a held job on a part tagged
+		-- RunTask, described entirely by its attributes, so an event can add
+		-- one without this file knowing what the event is.
+		if not part:HasTag("RunTask") then
+			return
+		end
+		local blocked = part:GetAttribute("TaskBlocked")
+		if type(blocked) == "string" and blocked ~= "" then
+			Net.fireClient("InteractResult", player, { ok = false, error = "SAY:" .. blocked })
+			return
+		end
+		local needs = part:GetAttribute("TaskNeeds")
+		if type(needs) == "string" and needs ~= "" and not InventoryService.has(player, needs, 1) then
+			Net.fireClient("InteractResult", player, { ok = false, error = "NEEDS:" .. ItemRegistry.getOrFallback(needs).name })
+			return
+		end
+		local seconds = tonumber(part:GetAttribute("TaskSeconds")) or 3
+		local fastItem = part:GetAttribute("TaskFastItem")
+		if type(fastItem) == "string" and InventoryService.has(player, fastItem, 1) then
+			seconds = tonumber(part:GetAttribute("TaskFastSeconds")) or seconds * 0.5
+		end
+		if InteractionService.holdScale then
+			seconds *= InteractionService.holdScale(player)
+		end
+		local entry = held[player.UserId]
+		if not entry or entry.target ~= part then
+			beginHold(player, part, "run_task", seconds, part.Position)
+			return
+		end
+		if not completeHold(player, part, "run_task") then
+			return
+		end
+		local usedFast = type(fastItem) == "string" and part:GetAttribute("TaskFastConsumes") == true and InventoryService.has(player, fastItem, 1)
+		if usedFast then
+			InventoryService.remove(player, fastItem :: string, 1)
+		end
+		local noise = tonumber(part:GetAttribute("TaskNoise"))
+		if noise then
+			InteractionService.NoiseMade:Fire(part.Position, noise, player)
+		end
+		Net.fireClient("InteractResult", player, { ok = true, action = "run_task" })
+		InteractionService.RunTaskDone:Fire(player, part, usedFast)
+		return
+	end
+
 	if action == "repair_train" then
 		if not part:HasTag("TrainRepairPoint") then
 			return
@@ -16746,6 +17720,7 @@ function InteractionService.start()
 	wire("DoorLeaf", "Door", "")
 	wire("TrainSeat", "Sit", "")
 	wire("DriverSeat", "Drive", "")
+	wire("RunTask", "Use", "")
 
 	-- Lobby fixtures. Without these the crew board is scenery and the only way
 	-- to start an expedition is to guess a keyboard shortcut, which is how the
@@ -16763,7 +17738,7 @@ return InteractionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="52">
+        <Item class="ModuleScript" referent="55">
           <Properties>
             <string name="Name">InventoryService</string>
             <string name="Source"><![CDATA[--!strict
@@ -17349,7 +18324,943 @@ return InventoryService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="53">
+        <Item class="ModuleScript" referent="56">
+          <Properties>
+            <string name="Name">JourneyService</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	JourneyService
+	--------------
+	Night runs: planning a seeded set of emergencies, running them, the route
+	decision at Tolbridge, the report, and what a crew earns.
+
+	Story runs are untouched: with mode "story" nothing here does anything.
+
+	PLANNING is a pure function of (seed, tier, crew size, last headline), so
+	a seed reproduces its night exactly. See JourneyRegistry for the rules it
+	follows. If it cannot find a valid plan it uses the fallback plan, and
+	says so in the report.
+
+	RUNNING. Travel events start when the train passes their distance in the
+	right segment, if the simultaneous cap and the one-hold rule allow; if not
+	they slide forward, and if the segment runs out they are recorded as "no
+	room tonight". Station events start on arrival. An event that cannot start
+	(no carriage, no door, station not on the route) is recorded as skipped
+	with the reason, and the run carries on: the runtime fallback.
+
+	RESET. A retry cleans up every active event and re-arms everything after
+	the checkpoint. The end of a run cleans up everything. Leaving or dying
+	never strands a task: every task is a part on the train or the line that
+	anyone in the crew can finish, and nothing needs two players at once.
+
+	Nothing here is essential to the core journey. If the profile cannot be
+	read, the run still plays and the report says progress was not saved.
+]]
+
+local HttpService = game:GetService("HttpService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage.LastSignal
+
+local Balance = require(Shared.Config.Balance)
+local Guard = require(Shared.Core.Guard)
+local JourneyRegistry = require(Shared.Registry.JourneyRegistry)
+local Logger = require(Shared.Core.Logger)
+local Net = require(Shared.Core.Net)
+local Protect = require(Shared.Core.Protect)
+local StationRegistry = require(Shared.Registry.StationRegistry)
+
+local DataService = require(script.Parent.DataService)
+local ExpeditionService = require(script.Parent.ExpeditionService)
+local HorrorDirector = require(script.Parent.HorrorDirector)
+local CreatureService = require(script.Parent.CreatureService)
+local InteractionService = require(script.Parent.InteractionService)
+local ProgressionService = require(script.Parent.ProgressionService)
+local TrainService = require(script.Parent.TrainService)
+local JourneyEvents = require(script.Parent.Parent.Journey.JourneyEvents)
+
+local log = Logger.new("JourneyService")
+
+local JourneyService = {}
+
+export type Entry = {
+	template: string,
+	segment: number,
+	at: number,
+	status: string, -- pending | active | resolved | failed | skipped
+	outcome: string?,
+	startedAt: number?,
+	escalated: boolean,
+	chainedFrom: string?,
+	ctx: any?,
+}
+
+export type Plan = {
+	entries: { Entry },
+	fallback: boolean,
+	attempts: number,
+	headline: string,
+}
+
+type Journey = {
+	guid: string,
+	seed: number,
+	tier: string,
+	crewSize: number,
+	plan: Plan,
+	route: string,
+	routeChosenBy: string,
+	choiceOpen: boolean,
+	choiceDeadline: number,
+	quietUntil: number,
+	inspectionCredits: number,
+	rng: Random,
+}
+
+local journeys: { [string]: Journey } = {}
+
+-- Per-player choices for their next run, set from the crew panel.
+type Prefs = { mode: string, tier: string, seed: number? }
+local prefs: { [number]: Prefs } = {}
+
+local function prefsFor(userId: number): Prefs
+	local p = prefs[userId]
+	if not p then
+		p = { mode = "story", tier = "night", seed = nil }
+		prefs[userId] = p
+	end
+	return p
+end
+
+--------------------------------------------------------------------------
+-- Geometry
+--------------------------------------------------------------------------
+
+local function segmentBounds(segment: number): (number, number)
+	local finish = StationRegistry.byIndex(segment)
+	local start = if segment > 1 then StationRegistry.byIndex(segment - 1) else nil
+	return (if start then start.distance else 0), (if finish then finish.distance else 0)
+end
+
+local function segmentOf(distance: number): number
+	for index, station in StationRegistry.Stations do
+		if distance <= station.distance + 1 then
+			return index
+		end
+	end
+	return StationRegistry.count() + 1
+end
+
+--------------------------------------------------------------------------
+-- Planning
+--------------------------------------------------------------------------
+
+local function templateIds(): { string }
+	local ids = {}
+	for id in JourneyRegistry.Templates do
+		table.insert(ids, id)
+	end
+	-- Dictionary order is not stable; the seed must be.
+	table.sort(ids)
+	return ids
+end
+
+local function headlineOf(entries: { Entry }): string
+	local best, bestTension = "", -1
+	for _, e in entries do
+		local t = JourneyRegistry.Templates[e.template]
+		if t and (t.tension > bestTension or (t.tension == bestTension and e.template < best)) then
+			best, bestTension = e.template, t.tension
+		end
+	end
+	return best
+end
+
+local function capFor(tierId: string, crewSize: number): number
+	return JourneyRegistry.tier(tierId).maxSimultaneous + (if crewSize >= 3 then 1 else 0)
+end
+
+--- Checks a plan against every rule. Returns false and the first broken one.
+function JourneyService.validate(entries: { Entry }, tierId: string, crewSize: number, lastHeadline: string?): (boolean, string?)
+	local tier = JourneyRegistry.tier(tierId)
+	local cap = capFor(tierId, crewSize)
+	local seen: { [string]: boolean } = {}
+	local tension = 0
+	local perSegment: { [number]: { Entry } } = {}
+	for _, e in entries do
+		local t = JourneyRegistry.Templates[e.template]
+		if not t then
+			return false, "unknown template " .. e.template
+		end
+		if seen[e.template] then
+			return false, "duplicate " .. e.template
+		end
+		seen[e.template] = true
+		if not table.find(t.segments, e.segment) then
+			return false, e.template .. " not allowed in segment " .. e.segment
+		end
+		tension += t.tension
+		perSegment[e.segment] = perSegment[e.segment] or {}
+		table.insert(perSegment[e.segment], e)
+	end
+	if tension > tier.tensionBudget then
+		return false, "over tension budget"
+	end
+	for segment, list in perSegment do
+		local holds, travel = 0, 0
+		for i, a in list do
+			local ta = JourneyRegistry.Templates[a.template]
+			if ta.holdsTrain then
+				holds += 1
+			end
+			if ta.category ~= "station" then
+				travel += 1
+				local s0, s1 = segmentBounds(segment)
+				if a.at < s0 + JourneyRegistry.quietStuds or a.at > s1 - 500 then
+					return false, a.template .. " outside its window"
+				end
+			end
+			for j = i + 1, #list do
+				local b = list[j]
+				if JourneyRegistry.incompatible(a.template, b.template) then
+					return false, a.template .. " incompatible with " .. b.template
+				end
+				local tb = JourneyRegistry.Templates[b.template]
+				if ta.category ~= "station" and tb.category ~= "station" and math.abs(a.at - b.at) < JourneyRegistry.spacingStuds then
+					return false, "too close together"
+				end
+			end
+		end
+		if holds > 1 then
+			return false, "two holds in segment " .. segment
+		end
+		if travel > cap then
+			return false, "too many in segment " .. segment
+		end
+	end
+	if lastHeadline and lastHeadline ~= "" and #entries > 1 and headlineOf(entries) == lastHeadline then
+		return false, "same headline as last run"
+	end
+	return true, nil
+end
+
+--- The night's emergencies for a seed. Pure: same inputs, same plan.
+function JourneyService.plan(seed: number, tierId: string, crewSize: number, lastHeadline: string?): Plan
+	local tier = JourneyRegistry.tier(tierId)
+	local rng = Random.new(seed)
+	local ids = templateIds()
+	for attempt = 1, 25 do
+		local entries: { Entry } = {}
+		local used: { [string]: boolean } = {}
+		local tension = 0
+		for _ = 1, tier.events do
+			-- Weighted pick among templates that still fit the budget.
+			local total = 0
+			local candidates = {}
+			for _, id in ids do
+				local t = JourneyRegistry.Templates[id]
+				if not used[id] and tension + t.tension <= tier.tensionBudget then
+					table.insert(candidates, t)
+					total += t.weight
+				end
+			end
+			if total <= 0 then
+				break
+			end
+			local roll = rng:NextNumber() * total
+			local pick = candidates[#candidates]
+			for _, t in candidates do
+				roll -= t.weight
+				if roll <= 0 then
+					pick = t
+					break
+				end
+			end
+			used[pick.id] = true
+			tension += pick.tension
+			local segment = pick.segments[rng:NextInteger(1, #pick.segments)]
+			local s0, s1 = segmentBounds(segment)
+			local window = (s1 - 500) - (s0 + JourneyRegistry.quietStuds)
+			local at = s0 + JourneyRegistry.quietStuds + rng:NextNumber() * window
+			table.insert(entries, {
+				template = pick.id,
+				segment = segment,
+				at = math.floor(at),
+				status = "pending",
+				escalated = false,
+			})
+		end
+		table.sort(entries, function(a, b)
+			if a.segment ~= b.segment then
+				return a.segment < b.segment
+			end
+			return a.at < b.at
+		end)
+		local ok = JourneyService.validate(entries, tierId, crewSize, lastHeadline)
+		if ok then
+			return { entries = entries, fallback = false, attempts = attempt, headline = headlineOf(entries) }
+		end
+	end
+	-- The fallback: small, safe, known to work.
+	local entries: { Entry } = {}
+	for _, f in JourneyRegistry.FallbackPlan do
+		local s0, s1 = segmentBounds(f.segment)
+		table.insert(entries, { template = f.template, segment = f.segment, at = math.floor((s0 + s1) / 2), status = "pending", escalated = false })
+	end
+	return { entries = entries, fallback = true, attempts = 25, headline = headlineOf(entries) }
+end
+
+--------------------------------------------------------------------------
+-- Running
+--------------------------------------------------------------------------
+
+local startEntry: (any, Journey, Entry) -> ()
+
+local function endEntry(expedition: any, journey: Journey, entry: Entry, status: string, outcome: string)
+	if entry.status ~= "active" then
+		return
+	end
+	local impl = JourneyEvents[entry.template]
+	if status == "failed" and impl.fail then
+		Protect.call(impl.fail, entry.ctx)
+	end
+	entry.status = status
+	entry.outcome = outcome
+	Protect.call(impl.cleanup, entry.ctx)
+	-- A recovery interval after a travel emergency; a station event ending as
+	-- the train leaves needs none.
+	if JourneyRegistry.Templates[entry.template].category ~= "station" then
+		journey.quietUntil = os.clock() + 25
+	end
+	log.info(string.format("%s: %s %s (%s)", expedition.id, entry.template, status, outcome))
+	ExpeditionService.push(expedition)
+end
+
+local function activeCount(journey: Journey): (number, boolean)
+	local n, hold = 0, false
+	for _, e in journey.plan.entries do
+		if e.status == "active" then
+			local t = JourneyRegistry.Templates[e.template]
+			if t.category ~= "station" then
+				n += 1
+			end
+			if t.holdsTrain then
+				hold = true
+			end
+		end
+	end
+	return n, hold
+end
+
+local function isActive(journey: Journey, templateId: string): boolean
+	for _, e in journey.plan.entries do
+		if e.template == templateId and e.status == "active" then
+			return true
+		end
+	end
+	return false
+end
+
+local function makeCtx(expedition: any, journey: Journey, entry: Entry): any
+	local train = expedition.train
+	local players = function()
+		return ExpeditionService.playersOf(expedition)
+	end
+	local ctx = {
+		expedition = expedition,
+		train = train,
+		state = {},
+		elapsed = 0,
+		rng = Random.new(journey.seed + entry.at),
+	}
+	ctx.notify = function(kind: string, title: string, body: string)
+		Net.fireClients("Notify", players(), { kind = kind, title = title, body = body, duration = 7 })
+	end
+	ctx.radio = function(source: string, attribution: string, text: string, duration: number)
+		Net.fireClients("RadioMessage", players(), { id = "journey", source = source, text = text, duration = duration, attribution = attribution, isFalse = false })
+	end
+	ctx.cue = function(name: string, position: Vector3?)
+		Net.fireClients("HorrorCue", players(), { cue = name, position = position or train.built.root.Position })
+	end
+	ctx.threat = function(amount: number)
+		HorrorDirector.addThreat(expedition.id, amount)
+	end
+	ctx.noise = function(position: Vector3, loudness: number)
+		CreatureService.hearNoise(expedition.id, position, loudness)
+	end
+	ctx.holdTrain = function(studsAhead: number): number
+		local holdAt = train.distance + studsAhead
+		local nextIndex = ExpeditionService.nextStationIndex(expedition)
+		local nextStation = if nextIndex then StationRegistry.byIndex(nextIndex) else nil
+		if nextStation then
+			holdAt = math.min(holdAt, nextStation.distance - 120)
+		end
+		TrainService.setStopDistance(train, holdAt)
+		return holdAt
+	end
+	ctx.releaseTrain = function()
+		local nextIndex = ExpeditionService.nextStationIndex(expedition)
+		local nextStation = if nextIndex then StationRegistry.byIndex(nextIndex) else nil
+		if expedition.state == "travelling" and nextStation then
+			TrainService.setStopDistance(train, nextStation.distance)
+		end
+	end
+	ctx.applyLights = function()
+		TrainService.applyLights(train)
+	end
+	ctx.setDoor = function(door: any, angle: number)
+		TrainService.setDoorAngle(door, angle)
+	end
+	ctx.chain = function(templateId: string)
+		if isActive(journey, templateId) then
+			return
+		end
+		local chained: Entry = {
+			template = templateId,
+			segment = segmentOf(train.distance),
+			at = math.floor(train.distance),
+			status = "pending",
+			escalated = false,
+			chainedFrom = entry.template,
+		}
+		table.insert(journey.plan.entries, chained)
+		startEntry(expedition, journey, chained)
+	end
+	ctx.isActive = function(templateId: string): boolean
+		return isActive(journey, templateId)
+	end
+	ctx.award = function(credits: number, fuel: number)
+		TrainService.addFuel(train, fuel)
+		journey.inspectionCredits += credits
+		for _, player in players() do
+			ProgressionService.award(player, { credits = credits, source = "journey:inspection" }, expedition.crewSize)
+		end
+	end
+	ctx.stationFixtures = function(): { BasePart }
+		local out = {}
+		local built = expedition.lane.stations[entry.segment]
+		if built then
+			for _, part in built.fixtures do
+				table.insert(out, part)
+			end
+		end
+		table.sort(out, function(a, b)
+			return a.Name < b.Name
+		end)
+		return out
+	end
+	ctx.resolve = function(outcome: string)
+		endEntry(expedition, journey, entry, "resolved", outcome)
+	end
+	ctx.fail = function(outcome: string)
+		endEntry(expedition, journey, entry, "failed", outcome)
+	end
+	return ctx
+end
+
+function startEntry(expedition: any, journey: Journey, entry: Entry)
+	local impl = JourneyEvents[entry.template]
+	if not impl then
+		entry.status = "skipped"
+		entry.outcome = "Not available in this build"
+		return
+	end
+	entry.ctx = makeCtx(expedition, journey, entry)
+	entry.status = "active"
+	entry.startedAt = os.clock()
+	entry.escalated = false
+	local ok, started = Protect.call(impl.start, entry.ctx)
+	if not ok or not started then
+		-- The runtime fallback: record it, put anything back, carry on.
+		entry.status = "skipped"
+		entry.outcome = if ok then "Could not start here" else "Could not start (error)"
+		Protect.call(impl.cleanup, entry.ctx)
+		log.warn(string.format("%s: %s could not start: %s", expedition.id, entry.template, tostring(started)))
+		return
+	end
+	log.info(string.format("%s: %s started at %.0f", expedition.id, entry.template, expedition.train.distance))
+	ExpeditionService.push(expedition)
+end
+
+local function step(expedition: any, journey: Journey, dt: number)
+	local now = os.clock()
+	local train = expedition.train
+	-- Active events: timers.
+	for _, entry in journey.plan.entries do
+		if entry.status ~= "active" then
+			continue
+		end
+		local impl = JourneyEvents[entry.template]
+		local t = JourneyRegistry.Templates[entry.template]
+		local elapsed = now - (entry.startedAt or now)
+		local ctx: any = entry.ctx
+		ctx.elapsed = elapsed
+		if impl.tick then
+			Protect.call(impl.tick, entry.ctx, dt)
+		end
+		if entry.status ~= "active" then
+			continue
+		end
+		if not entry.escalated and elapsed >= t.escalateAfter then
+			entry.escalated = true
+			if impl.escalate then
+				Protect.call(impl.escalate, entry.ctx)
+			end
+		end
+		if elapsed >= t.failAfter then
+			endEntry(expedition, journey, entry, "failed", "Ignored too long")
+		end
+	end
+
+	-- Pending travel events.
+	if expedition.state ~= "travelling" then
+		return
+	end
+	local here = segmentOf(train.distance)
+	local cap = capFor(journey.tier, journey.crewSize)
+	for _, entry in journey.plan.entries do
+		if entry.status ~= "pending" then
+			continue
+		end
+		local t = JourneyRegistry.Templates[entry.template]
+		if t.category == "station" then
+			continue
+		end
+		if here > entry.segment then
+			entry.status = "skipped"
+			entry.outcome = "The train was past it"
+			log.info(string.format("%s: %s skipped (passed)", expedition.id, entry.template))
+			continue
+		end
+		if here < entry.segment or train.distance < entry.at then
+			continue
+		end
+		local count, hold = activeCount(journey)
+		if count >= cap or (t.holdsTrain and hold) or now < journey.quietUntil then
+			-- No room yet: move it a little ahead of the train, within its
+			-- segment. Relative to the train, so a long wait does not push it
+			-- off the end of the segment while the train is standing still.
+			local _, s1 = segmentBounds(entry.segment)
+			entry.at = math.max(entry.at, train.distance) + 150
+			if entry.at > s1 - 300 then
+				entry.status = "skipped"
+				entry.outcome = "No room tonight"
+				log.info(string.format("%s: %s skipped (no room)", expedition.id, entry.template))
+			end
+			continue
+		end
+		startEntry(expedition, journey, entry)
+	end
+end
+
+--------------------------------------------------------------------------
+-- Report and progression
+--------------------------------------------------------------------------
+
+local TIER_BONUS: { [string]: number } = { night = 300, hard = 600, last = 1000 }
+
+local function report(expedition: any, player: Player, success: boolean): any
+	local journey = journeys[expedition.id]
+	if not journey then
+		return nil
+	end
+	local tier = JourneyRegistry.tier(journey.tier)
+	local route = JourneyRegistry.Routes[journey.route]
+	local events = {}
+	for _, e in journey.plan.entries do
+		local t = JourneyRegistry.Templates[e.template]
+		table.insert(events, {
+			name = t.name,
+			status = if e.status == "active" then "unresolved" else e.status,
+			outcome = e.outcome or (if e.status == "pending" then "Never reached" else ""),
+			chainedFrom = if e.chainedFrom then JourneyRegistry.Templates[e.chainedFrom].name else nil,
+		})
+	end
+	local out: { [string]: any } = {
+		mode = "nightrun",
+		seed = journey.seed,
+		tier = tier.name,
+		route = route.name,
+		routeChosenBy = journey.routeChosenBy,
+		events = events,
+		fallback = journey.plan.fallback,
+		inspectionCredits = journey.inspectionCredits,
+		bonus = 0,
+		unlocked = {},
+		saved = false,
+		alreadyCredited = false,
+	}
+
+	local profile = DataService.getProfile(player)
+	if not profile then
+		-- Progress is optional; the run still counts as played.
+		return out
+	end
+	local j = profile.journeys
+	if table.find(j.rewarded, journey.guid) then
+		out.alreadyCredited = true
+		out.saved = DataService.isWritable(player)
+		return out
+	end
+	local completedBefore = j.completed
+	local ok = DataService.update(player, function(p)
+		local pj = p.journeys
+		if success then
+			pj.completed += 1
+		else
+			pj.failed += 1
+		end
+		for _, e in journey.plan.entries do
+			if e.status == "resolved" or e.status == "failed" then
+				pj.eventsSeen[e.template] = (pj.eventsSeen[e.template] or 0) + 1
+			end
+		end
+		pj.lastHeadline = journey.plan.headline
+		table.insert(pj.rewarded, journey.guid)
+		while #pj.rewarded > 20 do
+			table.remove(pj.rewarded, 1)
+		end
+		table.insert(pj.history, { seed = journey.seed, tier = journey.tier, route = journey.route, success = success, at = os.time() })
+		while #pj.history > 10 do
+			table.remove(pj.history, 1)
+		end
+	end)
+	if ok and success then
+		local bonus = TIER_BONUS[journey.tier] or 0
+		ProgressionService.award(player, { credits = bonus, xp = bonus, source = "journey:" .. journey.tier }, expedition.crewSize)
+		out.bonus = bonus
+		for _, unlock in JourneyRegistry.Unlocks do
+			if completedBefore < unlock.after and j.completed >= unlock.after then
+				if unlock.cosmetic then
+					ProgressionService.grantUnlock(player, "cosmetic", unlock.cosmetic)
+				else
+					DataService.update(player, function(p)
+						p.journeys.utility[unlock.id] = true
+					end)
+				end
+				table.insert(out.unlocked, unlock.name)
+			end
+		end
+	end
+	out.saved = ok and DataService.isWritable(player)
+	ProgressionService.pushToClient(player)
+	return out
+end
+
+--------------------------------------------------------------------------
+-- Setup at departure
+--------------------------------------------------------------------------
+
+local function begin(expedition: any)
+	if journeys[expedition.id] then
+		return
+	end
+	local leaderId = expedition.members[1]
+	local p = if leaderId then prefsFor(leaderId) else nil
+	if not p or p.mode ~= "nightrun" then
+		return
+	end
+	local leader = game:GetService("Players"):GetPlayerByUserId(leaderId)
+	local profile = if leader then DataService.getProfile(leader) else nil
+	local completed = if profile then profile.journeys.completed else 0
+	-- A tier the leader has not unlocked falls back to the first.
+	local tier = JourneyRegistry.tier(p.tier)
+	if completed < tier.unlockAfter then
+		tier = JourneyRegistry.Tiers[1]
+	end
+	local seed = p.seed or Random.new():NextInteger(1, 99999)
+	local lastHeadline = if profile then profile.journeys.lastHeadline else nil
+	local plan = JourneyService.plan(seed, tier.id, expedition.crewSize, lastHeadline)
+	-- Studio test hook: a server-set "JourneyForce" attribute on the leader,
+	-- "template@segment,template@segment", forces a plan so each template can
+	-- be exercised on its own. Does nothing outside Studio.
+	local forced = if leader and game:GetService("RunService"):IsStudio() then leader:GetAttribute("JourneyForce") else nil
+	if type(forced) == "string" and forced ~= "" then
+		local entries: { Entry } = {}
+		for _, item in string.split(forced, ",") do
+			local parts = string.split(item, "@")
+			local segment = tonumber(parts[2]) or 2
+			local s0 = segmentBounds(segment)
+			local inSegment = 0
+			for _, e in entries do
+				if e.segment == segment then
+					inSegment += 1
+				end
+			end
+			table.insert(entries, { template = parts[1], segment = segment, at = s0 + JourneyRegistry.quietStuds + 50 + inSegment * 900, status = "pending", escalated = false })
+		end
+		plan = { entries = entries, fallback = false, attempts = 0, headline = headlineOf(entries) }
+		log.warn("FORCED night-run plan (Studio test): " .. forced)
+	end
+
+	local journey: Journey = {
+		guid = HttpService:GenerateGUID(false),
+		seed = seed,
+		tier = tier.id,
+		crewSize = expedition.crewSize,
+		plan = plan,
+		route = "main",
+		routeChosenBy = "default",
+		choiceOpen = false,
+		choiceDeadline = 0,
+		quietUntil = 0,
+		inspectionCredits = 0,
+		rng = Random.new(seed),
+	}
+	journeys[expedition.id] = journey
+	expedition.mode = "nightrun"
+	expedition.train.fuel = Balance.Train.maxFuel * tier.startFuel
+
+	local names = {}
+	for _, e in plan.entries do
+		table.insert(names, JourneyRegistry.Templates[e.template].name)
+	end
+	local briefing = if tier.briefed
+		then "Tonight: " .. table.concat(names, ", ") .. "."
+		else string.format("%d emergencies expected. Control will not say which.", #plan.entries)
+	Net.fireClients("Notify", ExpeditionService.playersOf(expedition), {
+		kind = "info",
+		title = string.format("%s, seed %d", tier.name, seed),
+		body = briefing,
+		duration = 12,
+	})
+	log.info(string.format("%s: night run seed %d tier %s, %d events%s: %s", expedition.id, seed, tier.id, #plan.entries, if plan.fallback then " (FALLBACK)" else "", table.concat(names, ", ")))
+end
+
+--------------------------------------------------------------------------
+
+function JourneyService.forExpedition(id: string): Journey?
+	return journeys[id]
+end
+
+function JourneyService.start()
+	ExpeditionService.resultsExtra = report
+	InteractionService.holdScale = function(player: Player): number
+		local profile = DataService.getProfile(player)
+		if profile and profile.journeys.utility.linemans_toolkit and ExpeditionService.forPlayer(player) then
+			local expedition = ExpeditionService.forPlayer(player)
+			if expedition and expedition.mode == "nightrun" then
+				return 0.8
+			end
+		end
+		return 1
+	end
+
+	ExpeditionService.StateChanged:Connect(function(expedition, state)
+		if state == "cinematic" then
+			Protect.call(begin, expedition)
+		end
+		local journey = journeys[expedition.id]
+		if journey and state == "travelling" and journey.choiceOpen then
+			-- Left Tolbridge without choosing: the main line.
+			journey.choiceOpen = false
+			Net.fireClients("JourneyChoice", ExpeditionService.playersOf(expedition), { id = "route", closed = true })
+		end
+		if journey and state == "travelling" then
+			-- An inspection not signed before leaving is simply missed.
+			for _, entry in journey.plan.entries do
+				if entry.template == "inspection" and entry.status == "active" then
+					endEntry(expedition, journey, entry, "skipped", "Left without signing")
+				end
+			end
+		end
+	end)
+
+	ExpeditionService.StationReached:Connect(function(expedition, index)
+		local journey = journeys[expedition.id]
+		if not journey then
+			return
+		end
+		for _, entry in journey.plan.entries do
+			if entry.status == "pending" and entry.template == "inspection" and entry.segment == index then
+				startEntry(expedition, journey, entry)
+			elseif entry.status == "pending" and entry.template == "inspection" and entry.segment < index then
+				entry.status = "skipped"
+				entry.outcome = "Not on this route"
+			end
+		end
+		if index == 2 then
+			journey.choiceOpen = true
+			journey.choiceDeadline = os.clock() + 240
+			local options = {}
+			for _, id in { "main", "cutoff" } do
+				local r = JourneyRegistry.Routes[id]
+				table.insert(options, { id = id, name = r.name, summary = r.summary })
+			end
+			Net.fireClients("JourneyChoice", ExpeditionService.playersOf(expedition), {
+				id = "route",
+				title = "The junction after Tolbridge",
+				body = "Control can set the points either way. Choose before you leave the station; if nobody chooses, it is the main line.",
+				options = options,
+			})
+		end
+	end)
+
+	ExpeditionService.Retried:Connect(function(expedition)
+		local journey = journeys[expedition.id]
+		if not journey then
+			return
+		end
+		local back = expedition.stationIndex
+		for i = #journey.plan.entries, 1, -1 do
+			local entry = journey.plan.entries[i]
+			if entry.status == "active" then
+				Protect.call(JourneyEvents[entry.template].cleanup, entry.ctx)
+			end
+			if entry.chainedFrom and entry.segment > back then
+				table.remove(journey.plan.entries, i)
+			elseif entry.segment > back or (entry.template == "inspection" and entry.segment == back) then
+				-- After the checkpoint: it happens again.
+				entry.status = "pending"
+				entry.outcome = nil
+				entry.ctx = nil
+			elseif entry.status == "active" then
+				entry.status = "skipped"
+				entry.outcome = "Interrupted by the retry"
+			end
+		end
+		expedition.train.speedCap = nil
+		expedition.train.fuelMultiplier = nil
+		journey.quietUntil = os.clock() + 20
+		for _, entry in journey.plan.entries do
+			if entry.status == "pending" and entry.template == "inspection" and entry.segment == back then
+				startEntry(expedition, journey, entry)
+			end
+		end
+	end)
+
+	ExpeditionService.Ended:Connect(function(expedition)
+		local journey = journeys[expedition.id]
+		if not journey then
+			return
+		end
+		for _, entry in journey.plan.entries do
+			if entry.status == "active" then
+				Protect.call(JourneyEvents[entry.template].cleanup, entry.ctx)
+			end
+		end
+		expedition.train.speedCap = nil
+		expedition.train.fuelMultiplier = nil
+		journeys[expedition.id] = nil
+	end)
+
+	InteractionService.RunTaskDone:Connect(function(player, part, usedFast)
+		local expedition = ExpeditionService.forPlayer(player)
+		local journey = if expedition then journeys[expedition.id] else nil
+		if not journey then
+			return
+		end
+		for _, entry in journey.plan.entries do
+			local impl = JourneyEvents[entry.template]
+			if entry.status == "active" and impl.onTask then
+				Protect.call(impl.onTask, entry.ctx, part, usedFast)
+			end
+		end
+	end)
+
+	TrainService.HornSounded:Connect(function(train)
+		for id, journey in journeys do
+			local expedition = ExpeditionService.byId(id)
+			if expedition and expedition.train == train then
+				for _, entry in journey.plan.entries do
+					local impl = JourneyEvents[entry.template]
+					if entry.status == "active" and impl.onHorn then
+						Protect.call(impl.onHorn, entry.ctx)
+					end
+				end
+			end
+		end
+	end)
+
+	Net.onServerInvoke("JourneyCommand", function(player, rawCommand, rawA, rawB)
+		local command = Guard.enum(rawCommand, { "get", "set", "choose" })
+		if command == "get" then
+			local profile = DataService.getProfile(player)
+			local completed = if profile then profile.journeys.completed else 0
+			local tiers = {}
+			for _, tier in JourneyRegistry.Tiers do
+				table.insert(tiers, { id = tier.id, name = tier.name, summary = tier.summary, unlocked = completed >= tier.unlockAfter, unlockAfter = tier.unlockAfter })
+			end
+			local history = if profile then profile.journeys.history else {}
+			return {
+				ok = true,
+				prefs = prefsFor(player.UserId),
+				completed = completed,
+				failed = if profile then profile.journeys.failed else 0,
+				tiers = tiers,
+				lastSeed = if #history > 0 then history[#history].seed else nil,
+				utility = if profile then profile.journeys.utility else {},
+				saved = DataService.isWritable(player),
+			}
+		elseif command == "set" then
+			local p = prefsFor(player.UserId)
+			local field = Guard.enum(rawA, { "mode", "tier", "seed" })
+			if field == "mode" then
+				p.mode = Guard.enum(rawB, { "story", "nightrun" }) or p.mode
+			elseif field == "tier" then
+				local id = Guard.enum(rawB, { "night", "hard", "last" })
+				local profile = DataService.getProfile(player)
+				local completed = if profile then profile.journeys.completed else 0
+				if id and completed >= JourneyRegistry.tier(id).unlockAfter then
+					p.tier = id
+				else
+					return { ok = false, error = "LOCKED" }
+				end
+			elseif field == "seed" then
+				local n = tonumber(rawB)
+				p.seed = if n and n >= 1 and n <= 99999 then math.floor(n) else nil
+			end
+			return { ok = true, prefs = p }
+		elseif command == "choose" then
+			local expedition = ExpeditionService.forPlayer(player)
+			local journey = if expedition then journeys[expedition.id] else nil
+			local option = Guard.enum(rawB, { "main", "cutoff" })
+			if not expedition or not journey or not journey.choiceOpen or rawA ~= "route" or not option then
+				return { ok = false, error = "NO_CHOICE" }
+			end
+			journey.choiceOpen = false
+			journey.route = option
+			journey.routeChosenBy = player.DisplayName
+			expedition.route = table.clone(JourneyRegistry.Routes[option].stations)
+			Net.fireClients("JourneyChoice", ExpeditionService.playersOf(expedition), { id = "route", closed = true })
+			Net.fireClients("Notify", ExpeditionService.playersOf(expedition), {
+				kind = "info",
+				title = JourneyRegistry.Routes[option].name,
+				body = player.DisplayName .. " set the points. " .. JourneyRegistry.Routes[option].summary,
+				duration = 8,
+			})
+			ExpeditionService.push(expedition)
+			return { ok = true }
+		end
+		return { ok = false, error = "BAD_COMMAND" }
+	end)
+
+	task.spawn(function()
+		local last = os.clock()
+		while true do
+			task.wait(0.5)
+			local now = os.clock()
+			local dt = now - last
+			last = now
+			for id, journey in journeys do
+				local expedition = ExpeditionService.byId(id)
+				if expedition then
+					local ok, err = Protect.call(step, expedition, journey, dt)
+					if not ok then
+						log.error("journey step failed: " .. tostring(err))
+					end
+				end
+			end
+		end
+	end)
+
+	log.info(string.format("started with %d event templates", #templateIds()))
+end
+
+return JourneyService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="57">
           <Properties>
             <string name="Name">LeaderboardService</string>
             <string name="Source"><![CDATA[--!strict
@@ -17646,7 +19557,7 @@ return LeaderboardService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="54">
+        <Item class="ModuleScript" referent="58">
           <Properties>
             <string name="Name">LoadoutService</string>
             <string name="Source"><![CDATA[--!strict
@@ -17774,7 +19685,7 @@ return LoadoutService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="55">
+        <Item class="ModuleScript" referent="59">
           <Properties>
             <string name="Name">ProfileSchema</string>
             <string name="Source"><![CDATA[--!strict
@@ -17820,6 +19731,18 @@ export type Profile = {
 	interiors: { [string]: boolean },
 	cosmetics: { [string]: boolean },
 	weapons: { [string]: boolean },
+
+	-- Night runs (JourneyService): earned only by playing.
+	journeys: {
+		completed: number,
+		failed: number,
+		eventsSeen: { [string]: number },
+		lastHeadline: string,
+		-- Run GUIDs already rewarded, so a run is never paid twice.
+		rewarded: { string },
+		history: { { seed: number, tier: string, route: string, success: boolean, at: number } },
+		utility: { [string]: boolean },
+	},
 
 	-- Loadout and appearance ---------------------------------------------
 	loadout: {
@@ -18009,6 +19932,15 @@ function ProfileSchema.template(): Profile
 		interiors = { interior_standard = true },
 		cosmetics = CosmeticRegistry.defaultOwned(),
 		weapons = { wrench = true, crowbar = true, revolver = true },
+		journeys = {
+			completed = 0,
+			failed = 0,
+			eventsSeen = {},
+			lastHeadline = "",
+			rewarded = {},
+			history = {},
+			utility = {},
+		},
 
 		loadout = {
 			train = "warden",
@@ -18203,6 +20135,7 @@ function ProfileSchema.toClient(profile: Profile): { [string]: any }
 		interiors = profile.interiors,
 		cosmetics = profile.cosmetics,
 		weapons = profile.weapons,
+		journeys = profile.journeys,
 		loadout = profile.loadout,
 		settings = profile.settings,
 		stats = profile.stats,
@@ -18222,7 +20155,7 @@ return ProfileSchema
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="56">
+        <Item class="ModuleScript" referent="60">
           <Properties>
             <string name="Name">ProgressionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -18752,7 +20685,7 @@ return ProgressionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="57">
+        <Item class="ModuleScript" referent="61">
           <Properties>
             <string name="Name">PurchaseService</string>
             <string name="Source"><![CDATA[--!strict
@@ -19259,7 +21192,7 @@ return PurchaseService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="58">
+        <Item class="ModuleScript" referent="62">
           <Properties>
             <string name="Name">QuestService</string>
             <string name="Source"><![CDATA[--!strict
@@ -19640,7 +21573,7 @@ return QuestService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="59">
+        <Item class="ModuleScript" referent="63">
           <Properties>
             <string name="Name">RewardService</string>
             <string name="Source"><![CDATA[--!strict
@@ -19946,7 +21879,7 @@ return RewardService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="60">
+        <Item class="ModuleScript" referent="64">
           <Properties>
             <string name="Name">ShopService</string>
             <string name="Source"><![CDATA[--!strict
@@ -20337,7 +22270,7 @@ return ShopService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="61">
+        <Item class="ModuleScript" referent="65">
           <Properties>
             <string name="Name">SignatureMoments</string>
             <string name="Source"><![CDATA[--!strict
@@ -20688,7 +22621,7 @@ return SignatureMoments
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="62">
+        <Item class="ModuleScript" referent="66">
           <Properties>
             <string name="Name">SurvivalService</string>
             <string name="Source"><![CDATA[--!strict
@@ -21592,7 +23525,7 @@ return SurvivalService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="63">
+        <Item class="ModuleScript" referent="67">
           <Properties>
             <string name="Name">TrainService</string>
             <string name="Source"><![CDATA[--!strict
@@ -21660,6 +23593,10 @@ export type TrainState = {
 	-- Resources ----------------------------------------------------------
 	fuel: number,
 	condition: number,
+	-- Night-run faults (JourneyService): a speed ceiling while a door will
+	-- not latch or the brakes drag, and extra fuel burn while they drag.
+	speedCap: number?,
+	fuelMultiplier: number?,
 	overheating: boolean,
 	coolantUntil: number,
 
@@ -21986,11 +23923,15 @@ local function step(state: TrainState, dt: number)
 	if state.doorsOpen then
 		state.speed = math.min(state.speed, Balance.Train.boardingSpeedLimit)
 	end
+	if state.speedCap then
+		state.speed = math.min(state.speed, state.speedCap)
+	end
 
 	-- Fuel. Idle drain plus a distance-proportional burn.
 	if state.engineRunning then
 		local burn = Balance.Train.fuelIdleDrainPerSecond * dt
 		burn += state.speed * dt * Balance.Train.fuelPerStudAtFullSpeed * handling.fuelUseMultiplier
+		burn *= state.fuelMultiplier or 1
 		state.fuel = math.max(0, state.fuel - burn)
 		if state.fuel <= 0 then
 			state.engineRunning = false
@@ -22453,7 +24394,7 @@ return TrainService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="64">
+        <Item class="ModuleScript" referent="68">
           <Properties>
             <string name="Name">WorldService</string>
             <string name="Source"><![CDATA[--!strict
@@ -23027,11 +24968,11 @@ return WorldService
           </Properties>
         </Item>
       </Item>
-      <Item class="Folder" referent="65">
+      <Item class="Folder" referent="69">
         <Properties>
           <string name="Name">World</string>
         </Properties>
-        <Item class="ModuleScript" referent="66">
+        <Item class="ModuleScript" referent="70">
           <Properties>
             <string name="Name">BuildKit</string>
             <string name="Source"><![CDATA[--!strict
@@ -24219,7 +26160,7 @@ return BuildKit
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="67">
+        <Item class="ModuleScript" referent="71">
           <Properties>
             <string name="Name">ForestBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -24773,7 +26714,7 @@ return ForestBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="68">
+        <Item class="ModuleScript" referent="72">
           <Properties>
             <string name="Name">LobbyBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -25947,7 +27888,7 @@ return LobbyBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="69">
+        <Item class="ModuleScript" referent="73">
           <Properties>
             <string name="Name">StationBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -27608,7 +29549,7 @@ return StationBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="70">
+        <Item class="ModuleScript" referent="74">
           <Properties>
             <string name="Name">TrainBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -29922,12 +31863,12 @@ return TrainBuilder
       </Item>
     </Item>
   </Item>
-  <Item class="ServerStorage" referent="71">
+  <Item class="ServerStorage" referent="75">
     <Properties>
       <string name="Name">ServerStorage</string>
     </Properties>
   </Item>
-  <Item class="SoundService" referent="72">
+  <Item class="SoundService" referent="76">
     <Properties>
       <string name="Name">SoundService</string>
       <float name="DistanceFactor">8</float>
@@ -29936,14 +31877,14 @@ return TrainBuilder
       <float name="RolloffScale">1.25</float>
     </Properties>
   </Item>
-  <Item class="StarterGui" referent="73">
+  <Item class="StarterGui" referent="77">
     <Properties>
       <string name="Name">StarterGui</string>
       <bool name="ResetPlayerGuiOnSpawn">false</bool>
       <token name="ScreenOrientation">4</token>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="74">
+  <Item class="StarterPlayer" referent="78">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <bool name="AutoJumpEnabled">false</bool>
@@ -29955,16 +31896,16 @@ return TrainBuilder
       <bool name="EnableMouseLockOption">false</bool>
       <bool name="LoadCharacterAppearance">true</bool>
     </Properties>
-    <Item class="StarterCharacterScripts" referent="75">
+    <Item class="StarterCharacterScripts" referent="79">
       <Properties>
         <string name="Name">StarterCharacterScripts</string>
       </Properties>
     </Item>
-    <Item class="StarterPlayerScripts" referent="76">
+    <Item class="StarterPlayerScripts" referent="80">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="77">
+      <Item class="LocalScript" referent="81">
         <Properties>
           <string name="Name">LastSignalClient</string>
           <string name="Source"><![CDATA[--!strict
@@ -30022,6 +31963,7 @@ local BOOT_ORDER = {
 	{ name = "TrainRideController", module = Controllers.TrainRideController },
 	{ name = "HorrorEffectsController", module = Controllers.HorrorEffectsController },
 	{ name = "LampController", module = Controllers.LampController },
+	{ name = "JourneyController", module = Controllers.JourneyController },
 }
 
 local failures: { string } = {}
@@ -30138,11 +32080,11 @@ else
 end
 ]]></string>
         </Properties>
-        <Item class="Folder" referent="78">
+        <Item class="Folder" referent="82">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="79">
+          <Item class="ModuleScript" referent="83">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--!strict
@@ -30799,7 +32741,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="80">
+          <Item class="ModuleScript" referent="84">
             <Properties>
               <string name="Name">CabController</string>
               <string name="Source"><![CDATA[--!strict
@@ -31356,7 +33298,7 @@ return CabController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="81">
+          <Item class="ModuleScript" referent="85">
             <Properties>
               <string name="Name">CameraController</string>
               <string name="Source"><![CDATA[--!strict
@@ -31861,7 +33803,7 @@ return CameraController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="82">
+          <Item class="ModuleScript" referent="86">
             <Properties>
               <string name="Name">CinematicController</string>
               <string name="Source"><![CDATA[--!strict
@@ -32279,7 +34221,7 @@ return CinematicController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="83">
+          <Item class="ModuleScript" referent="87">
             <Properties>
               <string name="Name">HUDController</string>
               <string name="Source"><![CDATA[--!strict
@@ -33357,7 +35299,7 @@ return HUDController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="84">
+          <Item class="ModuleScript" referent="88">
             <Properties>
               <string name="Name">HorrorEffectsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -33635,7 +35577,7 @@ return HorrorEffectsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="85">
+          <Item class="ModuleScript" referent="89">
             <Properties>
               <string name="Name">InputController</string>
               <string name="Source"><![CDATA[--!strict
@@ -34007,7 +35949,7 @@ return InputController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="86">
+          <Item class="ModuleScript" referent="90">
             <Properties>
               <string name="Name">InteractionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -34203,6 +36145,11 @@ local function actionFor(instance: Instance): (string?, string, string)
 		local kind = instance:GetAttribute("LootKind")
 		local label = if kind == "body" then "Search the remains" else "Search"
 		return "search", label, ""
+	end
+	if instance:HasTag("RunTask") then
+		local label = instance:GetAttribute("TaskLabel")
+		local detail = instance:GetAttribute("TaskDetail")
+		return "run_task", if type(label) == "string" then label else "Use", if type(detail) == "string" then detail else ""
 	end
 	if instance:HasTag("StationFixture") then
 		local kind = instance:GetAttribute("FixtureKind")
@@ -34472,6 +36419,9 @@ function InteractionController.start()
 				Net.fireServer("Analytics", "tutorial_prompt_seen")
 				showPrompt("You need " .. string.sub(message, 7), "", "!")
 				task.delay(2, hidePrompt)
+			elseif string.sub(message, 1, 4) == "SAY:" then
+				showPrompt(string.sub(message, 5), "", "!")
+				task.delay(3, hidePrompt)
 			end
 			cancelHold()
 		end
@@ -34598,7 +36548,92 @@ return InteractionController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="87">
+          <Item class="ModuleScript" referent="91">
+            <Properties>
+              <string name="Name">JourneyController</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	JourneyController
+	-----------------
+	The route decision at Tolbridge: a small card with the two routes and what
+	each costs. Any crew member can choose; the first choice sets the points
+	for everyone, and leaving the station without choosing takes the main line.
+	It never blocks play: the card sits at the side and the station work goes
+	on around it.
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage:WaitForChild("LastSignal")
+
+local Logger = require(Shared.Core.Logger)
+local Net = require(Shared.Core.Net)
+
+local Theme = require(script.Parent.Parent.UI.Theme)
+local Widgets = require(script.Parent.Parent.UI.Widgets)
+
+local log = Logger.new("JourneyController")
+local JourneyController = {}
+
+local card: ScreenGui? = nil
+
+local function close()
+	if card then
+		card:Destroy()
+		card = nil
+	end
+end
+
+local function show(payload: any)
+	close()
+	local gui = Widgets.screen("JourneyChoice", 30, Players.LocalPlayer:WaitForChild("PlayerGui"))
+	card = gui
+	local panel = Widgets.panel({
+		name = "Card",
+		size = UDim2.new(0, 340, 0, 0),
+		position = UDim2.new(1, -16, 0.5, 0),
+		anchor = Vector2.new(1, 0.5),
+		padding = 1.0,
+		background = Theme.colour("surface"),
+		parent = gui,
+	})
+	panel.AutomaticSize = Enum.AutomaticSize.Y
+	local column = Widgets.column(panel, 0.5)
+	Widgets.label({ text = tostring(payload.title), size = "heading", font = Theme.Font.heading, parent = column, layoutOrder = 1 })
+	Widgets.caption(column, tostring(payload.body), 2)
+	for i, option in payload.options or {} do
+		Widgets.button({
+			text = tostring(option.name),
+			subtitle = tostring(option.summary),
+			primary = i == 1,
+			parent = column,
+			layoutOrder = 2 + i,
+			onClick = function()
+				Net.invokeServer("JourneyCommand", "choose", payload.id, option.id)
+			end,
+		})
+	end
+end
+
+function JourneyController.start()
+	Net.onClientEvent("JourneyChoice", function(payload)
+		if type(payload) ~= "table" then
+			return
+		end
+		if payload.closed then
+			close()
+		elseif type(payload.options) == "table" then
+			show(payload)
+		end
+	end)
+	log.info("started")
+end
+
+return JourneyController
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="92">
             <Properties>
               <string name="Name">LampController</string>
               <string name="Source"><![CDATA[--!strict
@@ -34637,7 +36672,7 @@ return LampController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="88">
+          <Item class="ModuleScript" referent="93">
             <Properties>
               <string name="Name">MenuController</string>
               <string name="Source"><![CDATA[--!strict
@@ -34682,6 +36717,7 @@ local CosmeticRegistry = require(Shared.Registry.CosmeticRegistry)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local Widgets = require(script.Parent.Parent.UI.Widgets)
 local ArmoryPanel = require(script.Parent.Parent.UI.ArmoryPanel)
+local JourneyUI = require(script.Parent.Parent.UI.JourneyUI)
 local CameraController = require(script.Parent.CameraController)
 local InputController = require(script.Parent.InputController)
 local StateController = require(script.Parent.StateController)
@@ -34897,6 +36933,11 @@ end
 builders.crew = function(frame: Frame)
 	local column = Widgets.column(frame, 1)
 	local crew = StateController.get("crew")
+	JourneyUI.crewSection(column, 0, function()
+		if rebuild then
+			rebuild()
+		end
+	end)
 
 	if not crew or crew.state == "closed" then
 		Widgets.label({
@@ -36068,7 +38109,7 @@ builders.results = function(frame: Frame)
 		parent = scroll,
 		layoutOrder = 1,
 	})
-	Widgets.caption(scroll, if results.success then "Chapter One complete." else "The expedition ended early.", 2)
+	Widgets.caption(scroll, if results.journey and results.journey.mode == "nightrun" then (if results.success then "Night run complete." else "The night run ended early.") elseif results.success then "Chapter One complete." else "The expedition ended early.", 2)
 
 	Widgets.statRow(scroll, "Time", Format.clock(results.elapsed or 0), 3)
 	Widgets.statRow(scroll, "Stations cleared", string.format("%d of %d", results.stationsCleared or 0, results.stationCount or 5), 4)
@@ -36085,11 +38126,13 @@ builders.results = function(frame: Frame)
 		Widgets.statRow(scroll, "Levels gained", string.format("%d  (now %d)", results.levelsGained, results.level), 14)
 	end
 
+	JourneyUI.results(scroll, 15, results.journey)
+
 	Widgets.button({
 		text = "Back to the yard",
 		primary = true,
 		parent = scroll,
-		layoutOrder = 20,
+		layoutOrder = 30,
 		onClick = function()
 			MenuController.close()
 		end,
@@ -36355,7 +38398,7 @@ return MenuController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="89">
+          <Item class="ModuleScript" referent="94">
             <Properties>
               <string name="Name">StateController</string>
               <string name="Source"><![CDATA[--!strict
@@ -36610,7 +38653,7 @@ return StateController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="90">
+          <Item class="ModuleScript" referent="95">
             <Properties>
               <string name="Name">TrainRideController</string>
               <string name="Source"><![CDATA[--!strict
@@ -37002,7 +39045,7 @@ return TrainRideController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="91">
+          <Item class="ModuleScript" referent="96">
             <Properties>
               <string name="Name">WeaponController</string>
               <string name="Source"><![CDATA[--!strict
@@ -37762,11 +39805,11 @@ return WeaponController
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="92">
+        <Item class="Folder" referent="97">
           <Properties>
             <string name="Name">UI</string>
           </Properties>
-          <Item class="ModuleScript" referent="93">
+          <Item class="ModuleScript" referent="98">
             <Properties>
               <string name="Name">ArmoryPanel</string>
               <string name="Source"><![CDATA[--!strict
@@ -38147,7 +40190,185 @@ return ArmoryPanel
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="94">
+          <Item class="ModuleScript" referent="99">
+            <Properties>
+              <string name="Name">JourneyUI</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	JourneyUI
+	---------
+	Night runs on screen: the choice between the story and a night run on the
+	crew panel, and the night-run report on the results screen.
+
+	The crew panel says plainly what a night run is: the same line and
+	stations as the story, with seeded emergencies and a route decision, for
+	playing again. Tiers show what they change and what unlocks them.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage:WaitForChild("LastSignal")
+
+local JourneyRegistry = require(Shared.Registry.JourneyRegistry)
+local Net = require(Shared.Core.Net)
+
+local Theme = require(script.Parent.Theme)
+local Widgets = require(script.Parent.Widgets)
+
+local JourneyUI = {}
+
+--- The Journey section at the top of the crew panel.
+function JourneyUI.crewSection(parent: Instance, order: number, rebuild: () -> ())
+	local info = Net.invokeServer("JourneyCommand", "get")
+	if type(info) ~= "table" or not info.ok then
+		Widgets.caption(parent, "Night runs are unavailable right now. The story is unaffected.", order)
+		return
+	end
+	local panel = Widgets.panel({
+		name = "Journey",
+		size = UDim2.new(1, 0, 0, 0),
+		padding = 1.0,
+		background = Theme.colour("surface"),
+		parent = parent,
+	})
+	panel.AutomaticSize = Enum.AutomaticSize.Y
+	panel.LayoutOrder = order
+	local column = Widgets.column(panel, 0.5)
+	local prefs = info.prefs
+	local nightrun = prefs.mode == "nightrun"
+
+	Widgets.label({ text = "Journey", size = "heading", font = Theme.Font.heading, parent = column, layoutOrder = 1 })
+	local row = Widgets.row(column, 0.5)
+	row.LayoutOrder = 2
+	for _, mode in { { id = "story", text = "Story" }, { id = "nightrun", text = "Night run" } } do
+		Widgets.button({
+			text = mode.text,
+			primary = prefs.mode == mode.id,
+			width = UDim.new(0.5, -4),
+			parent = row,
+			onClick = function()
+				Net.invokeServer("JourneyCommand", "set", "mode", mode.id)
+				rebuild()
+			end,
+		})
+	end
+	Widgets.caption(
+		column,
+		if nightrun
+			then "Night run: the same line and stations as the story, with a seeded set of emergencies on the way and a route decision at Tolbridge. Built for playing again."
+			else "Story: Chapter One as written. Start here.",
+		3
+	)
+	if not nightrun then
+		return
+	end
+
+	for i, tier in info.tiers do
+		local selected = prefs.tier == tier.id
+		Widgets.button({
+			text = if tier.unlocked then tier.name .. (if selected then "  (selected)" else "") else tier.name .. string.format("  (after %d night runs)", tier.unlockAfter),
+			primary = selected,
+			enabled = tier.unlocked,
+			subtitle = tier.summary,
+			parent = column,
+			layoutOrder = 3 + i,
+			onClick = function()
+				Net.invokeServer("JourneyCommand", "set", "tier", tier.id)
+				rebuild()
+			end,
+		})
+	end
+
+	local seedRow = Widgets.row(column, 0.5)
+	seedRow.LayoutOrder = 10
+	Widgets.button({
+		text = if prefs.seed then "Seed " .. tostring(prefs.seed) else "Random seed",
+		primary = prefs.seed == nil,
+		width = UDim.new(0.5, -4),
+		parent = seedRow,
+		onClick = function()
+			Net.invokeServer("JourneyCommand", "set", "seed", nil)
+			rebuild()
+		end,
+	})
+	if info.lastSeed then
+		Widgets.button({
+			text = "Replay last seed (" .. tostring(info.lastSeed) .. ")",
+			width = UDim.new(0.5, -4),
+			parent = seedRow,
+			onClick = function()
+				Net.invokeServer("JourneyCommand", "set", "seed", info.lastSeed)
+				rebuild()
+			end,
+		})
+	end
+
+	local earned = {}
+	for _, unlock in JourneyRegistry.Unlocks do
+		table.insert(earned, string.format("%s %s (%d)", if (info.completed or 0) >= unlock.after then "[x]" else "[ ]", unlock.name, unlock.after))
+	end
+	Widgets.caption(
+		column,
+		string.format("Night runs completed: %d. Earned by playing, never sold: %s.", info.completed or 0, table.concat(earned, ", ")),
+		11
+	)
+	if not info.saved then
+		Widgets.caption(column, "Your progress cannot be saved this session. Night runs still play.", 12)
+	end
+end
+
+--- The night-run block on the results screen.
+function JourneyUI.results(parent: Instance, order: number, journey: any)
+	if type(journey) ~= "table" or journey.mode ~= "nightrun" then
+		return
+	end
+	Widgets.divider(parent, order)
+	Widgets.label({
+		text = string.format("%s, seed %s", tostring(journey.tier), tostring(journey.seed)),
+		size = "heading",
+		font = Theme.Font.heading,
+		parent = parent,
+		layoutOrder = order + 1,
+	})
+	Widgets.statRow(parent, "Route", string.format("%s (%s)", tostring(journey.route), if journey.routeChosenBy == "default" then "default" else "chosen by " .. tostring(journey.routeChosenBy)), order + 2)
+	local lines = {}
+	for _, e in journey.events or {} do
+		local mark = if e.status == "resolved" then "dealt with" elseif e.status == "failed" then "FAILED" elseif e.status == "skipped" then "did not happen" else tostring(e.status)
+		table.insert(lines, string.format("%s: %s%s%s", e.name, mark, if e.outcome and e.outcome ~= "" then " - " .. e.outcome else "", if e.chainedFrom then " (caused by " .. e.chainedFrom .. ")" else ""))
+	end
+	Widgets.label({ text = table.concat(lines, "\n"), size = "small", wrap = true, parent = parent, layoutOrder = order + 3 })
+	if journey.fallback then
+		Widgets.caption(parent, "This seed could not produce a valid night, so the standard fallback night was used.", order + 4)
+	end
+	if (journey.bonus or 0) > 0 then
+		Widgets.statRow(parent, "Night run bonus", tostring(journey.bonus) .. " credits", order + 5)
+	end
+	if (journey.inspectionCredits or 0) > 0 then
+		Widgets.statRow(parent, "Inspection", tostring(journey.inspectionCredits) .. " credits", order + 6)
+	end
+	if journey.unlocked and #journey.unlocked > 0 then
+		Widgets.statRow(parent, "Earned", table.concat(journey.unlocked, ", "), order + 7)
+	end
+	if journey.alreadyCredited then
+		Widgets.caption(parent, "This run was already credited.", order + 8)
+	elseif not journey.saved then
+		Widgets.caption(parent, "Progress could not be saved this session, so this run is not counted.", order + 8)
+	end
+	Widgets.button({
+		text = "Ride this seed again",
+		parent = parent,
+		layoutOrder = order + 9,
+		onClick = function()
+			Net.invokeServer("JourneyCommand", "set", "mode", "nightrun")
+			Net.invokeServer("JourneyCommand", "set", "seed", journey.seed)
+		end,
+	})
+end
+
+return JourneyUI
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="100">
             <Properties>
               <string name="Name">Theme</string>
               <string name="Source"><![CDATA[--!strict
@@ -38421,7 +40642,7 @@ return Theme
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="95">
+          <Item class="ModuleScript" referent="101">
             <Properties>
               <string name="Name">Widgets</string>
               <string name="Source"><![CDATA[--!strict
@@ -39135,13 +41356,13 @@ return Widgets
       </Item>
     </Item>
   </Item>
-  <Item class="TextChatService" referent="96">
+  <Item class="TextChatService" referent="102">
     <Properties>
       <string name="Name">TextChatService</string>
       <token name="ChatVersion">1</token>
     </Properties>
   </Item>
-  <Item class="Workspace" referent="97">
+  <Item class="Workspace" referent="103">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>
@@ -39153,7 +41374,7 @@ return Widgets
       <int name="StreamingMinRadius">192</int>
       <int name="StreamingTargetRadius">640</int>
     </Properties>
-    <Item class="Terrain" referent="98">
+    <Item class="Terrain" referent="104">
       <Properties>
         <string name="Name">Terrain</string>
       </Properties>

@@ -121,6 +121,12 @@ export type Expedition = {
 
 	maid: Maid.Maid,
 	members: { number }, -- user ids
+
+	-- The stations this run stops at, in order. The story runs all five; a
+	-- night run can take the Ninety-Three cut-off (JourneyService).
+	route: { number },
+	-- "story" or "nightrun". Set by JourneyService before the train leaves.
+	mode: string,
 }
 
 local expeditions: { [string]: Expedition } = {}
@@ -135,6 +141,9 @@ ExpeditionService.ThreatEvent = Signal.new() :: Signal.Signal<Expedition, string
 -- Fired after a retry has reset the expedition to its checkpoint, for the
 -- services that own vitals, creatures and threat.
 ExpeditionService.Retried = Signal.new() :: Signal.Signal<Expedition>
+-- Set by JourneyService: adds the night-run report to each player's results.
+-- A hook rather than a require, because JourneyService depends on this file.
+ExpeditionService.resultsExtra = nil :: ((Expedition, Player, boolean) -> any)?
 
 --------------------------------------------------------------------------
 -- Helpers
@@ -159,6 +168,26 @@ end
 
 local function notify(expedition: Expedition, kind: string, title: string, body: string, duration: number?)
 	broadcast(expedition, "Notify", { kind = kind, title = title, body = body, duration = duration or 5 })
+end
+
+--- The next station on this run's route after the current one, if any.
+function ExpeditionService.nextStationIndex(expedition: Expedition): number?
+	local route = expedition.route
+	if expedition.stationIndex <= 0 then
+		return route[1]
+	end
+	for i, index in route do
+		if index == expedition.stationIndex then
+			return route[i + 1]
+		end
+	end
+	-- Not on the route (should not happen): carry on in registry order.
+	for _, index in route do
+		if index > expedition.stationIndex then
+			return index
+		end
+	end
+	return nil
 end
 
 local function currentStation(expedition: Expedition): StationRegistry.StationDef?
@@ -547,8 +576,9 @@ function ExpeditionService.completeStation(expedition: Expedition)
 	ExpeditionService.fireRadio(expedition, "station_complete", { station = station.id })
 	notify(expedition, "objective", station.name .. " clear", "Board the train and continue.", 7)
 
-	-- The train is released to run to the next station.
-	local nextStation = StationRegistry.byIndex(expedition.stationIndex + 1)
+	-- The train is released to run to the next station on the route.
+	local nextIndex = ExpeditionService.nextStationIndex(expedition)
+	local nextStation = if nextIndex then StationRegistry.byIndex(nextIndex) else nil
 	if nextStation then
 		TrainService.setStopDistance(expedition.train, nextStation.distance)
 		setState(expedition, "travelling")
@@ -744,7 +774,7 @@ local function describe(expedition: Expedition): { [string]: any }
 		id = expedition.id,
 		state = expedition.state,
 		stationIndex = expedition.stationIndex,
-		stationCount = StationRegistry.count(),
+		stationCount = #expedition.route,
 		stationName = if station then station.name else nil,
 		stationSubtitle = if station then station.subtitle else nil,
 		difficulty = expedition.difficulty,
@@ -916,6 +946,8 @@ function ExpeditionService.begin(crew: CrewService.Crew, members: { Player })
 		failedAt = nil,
 		maid = Maid.new(),
 		members = memberIds,
+		route = { 1, 2, 3, 4, 5 },
+		mode = "story",
 	}
 
 	expeditions[id] = expedition
@@ -1158,7 +1190,7 @@ function ExpeditionService.finish(expedition: Expedition, success: boolean)
 		local stats: { [string]: number } = {}
 		if success then
 			stats.expeditions_completed = 1
-			if expedition.stationsCleared >= StationRegistry.count() then
+			if expedition.stationsCleared >= StationRegistry.count() and #expedition.route >= StationRegistry.count() then
 				stats.full_line_runs = 1
 			end
 			if expedition.difficulty == "blackout" then
@@ -1196,7 +1228,7 @@ function ExpeditionService.finish(expedition: Expedition, success: boolean)
 			success = success,
 			elapsed = elapsed,
 			stationsCleared = expedition.stationsCleared,
-			stationCount = StationRegistry.count(),
+			stationCount = #expedition.route,
 			optionalCleared = expedition.optionalCleared,
 			revives = expedition.revives,
 			downs = expedition.downs,
@@ -1214,6 +1246,7 @@ function ExpeditionService.finish(expedition: Expedition, success: boolean)
 			level = result.newLevel,
 			levelsGained = result.levelsGained,
 			difficulty = expedition.difficulty,
+			journey = if ExpeditionService.resultsExtra then ExpeditionService.resultsExtra(expedition, player, success) else nil,
 		})
 	end
 
@@ -1385,7 +1418,9 @@ function ExpeditionService.start()
 		for _, expedition in expeditions do
 			if expedition.train == train then
 				for index, station in StationRegistry.Stations do
-					if math.abs(station.distance - distance) < 2 and index ~= expedition.stationIndex then
+					-- Only stations on this run's route are stops; the cut-off
+					-- runs straight past Ninety-Three.
+					if math.abs(station.distance - distance) < 2 and index ~= expedition.stationIndex and table.find(expedition.route, index) then
 						arriveAtStation(expedition, index)
 						break
 					end

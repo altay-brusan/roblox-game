@@ -192,6 +192,11 @@ local function actionFor(instance: Instance): (string?, string, string)
 		local label = if kind == "body" then "Search the remains" else "Search"
 		return "search", label, ""
 	end
+	if instance:HasTag("RunTask") then
+		local label = instance:GetAttribute("TaskLabel")
+		local detail = instance:GetAttribute("TaskDetail")
+		return "run_task", if type(label) == "string" then label else "Use", if type(detail) == "string" then detail else ""
+	end
 	if instance:HasTag("StationFixture") then
 		local kind = instance:GetAttribute("FixtureKind")
 		local labels: { [string]: string } = {
@@ -460,6 +465,9 @@ function InteractionController.start()
 				Net.fireServer("Analytics", "tutorial_prompt_seen")
 				showPrompt("You need " .. string.sub(message, 7), "", "!")
 				task.delay(2, hidePrompt)
+			elseif string.sub(message, 1, 4) == "SAY:" then
+				showPrompt(string.sub(message, 5), "", "!")
+				task.delay(3, hidePrompt)
 			end
 			cancelHold()
 		end

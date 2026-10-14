@@ -63,6 +63,10 @@ export type TrainState = {
 	-- Resources ----------------------------------------------------------
 	fuel: number,
 	condition: number,
+	-- Night-run faults (JourneyService): a speed ceiling while a door will
+	-- not latch or the brakes drag, and extra fuel burn while they drag.
+	speedCap: number?,
+	fuelMultiplier: number?,
 	overheating: boolean,
 	coolantUntil: number,
 
@@ -389,11 +393,15 @@ local function step(state: TrainState, dt: number)
 	if state.doorsOpen then
 		state.speed = math.min(state.speed, Balance.Train.boardingSpeedLimit)
 	end
+	if state.speedCap then
+		state.speed = math.min(state.speed, state.speedCap)
+	end
 
 	-- Fuel. Idle drain plus a distance-proportional burn.
 	if state.engineRunning then
 		local burn = Balance.Train.fuelIdleDrainPerSecond * dt
 		burn += state.speed * dt * Balance.Train.fuelPerStudAtFullSpeed * handling.fuelUseMultiplier
+		burn *= state.fuelMultiplier or 1
 		state.fuel = math.max(0, state.fuel - burn)
 		if state.fuel <= 0 then
 			state.engineRunning = false

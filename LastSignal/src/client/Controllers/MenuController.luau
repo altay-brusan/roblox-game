@@ -40,6 +40,7 @@ local CosmeticRegistry = require(Shared.Registry.CosmeticRegistry)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local Widgets = require(script.Parent.Parent.UI.Widgets)
 local ArmoryPanel = require(script.Parent.Parent.UI.ArmoryPanel)
+local JourneyUI = require(script.Parent.Parent.UI.JourneyUI)
 local CameraController = require(script.Parent.CameraController)
 local InputController = require(script.Parent.InputController)
 local StateController = require(script.Parent.StateController)
@@ -255,6 +256,11 @@ end
 builders.crew = function(frame: Frame)
 	local column = Widgets.column(frame, 1)
 	local crew = StateController.get("crew")
+	JourneyUI.crewSection(column, 0, function()
+		if rebuild then
+			rebuild()
+		end
+	end)
 
 	if not crew or crew.state == "closed" then
 		Widgets.label({
@@ -1426,7 +1432,7 @@ builders.results = function(frame: Frame)
 		parent = scroll,
 		layoutOrder = 1,
 	})
-	Widgets.caption(scroll, if results.success then "Chapter One complete." else "The expedition ended early.", 2)
+	Widgets.caption(scroll, if results.journey and results.journey.mode == "nightrun" then (if results.success then "Night run complete." else "The night run ended early.") elseif results.success then "Chapter One complete." else "The expedition ended early.", 2)
 
 	Widgets.statRow(scroll, "Time", Format.clock(results.elapsed or 0), 3)
 	Widgets.statRow(scroll, "Stations cleared", string.format("%d of %d", results.stationsCleared or 0, results.stationCount or 5), 4)
@@ -1443,11 +1449,13 @@ builders.results = function(frame: Frame)
 		Widgets.statRow(scroll, "Levels gained", string.format("%d  (now %d)", results.levelsGained, results.level), 14)
 	end
 
+	JourneyUI.results(scroll, 15, results.journey)
+
 	Widgets.button({
 		text = "Back to the yard",
 		primary = true,
 		parent = scroll,
-		layoutOrder = 20,
+		layoutOrder = 30,
 		onClick = function()
 			MenuController.close()
 		end,

@@ -42,6 +42,18 @@ export type Profile = {
 	cosmetics: { [string]: boolean },
 	weapons: { [string]: boolean },
 
+	-- Night runs (JourneyService): earned only by playing.
+	journeys: {
+		completed: number,
+		failed: number,
+		eventsSeen: { [string]: number },
+		lastHeadline: string,
+		-- Run GUIDs already rewarded, so a run is never paid twice.
+		rewarded: { string },
+		history: { { seed: number, tier: string, route: string, success: boolean, at: number } },
+		utility: { [string]: boolean },
+	},
+
 	-- Loadout and appearance ---------------------------------------------
 	loadout: {
 		train: string,
@@ -230,6 +242,15 @@ function ProfileSchema.template(): Profile
 		interiors = { interior_standard = true },
 		cosmetics = CosmeticRegistry.defaultOwned(),
 		weapons = { wrench = true, crowbar = true, revolver = true },
+		journeys = {
+			completed = 0,
+			failed = 0,
+			eventsSeen = {},
+			lastHeadline = "",
+			rewarded = {},
+			history = {},
+			utility = {},
+		},
 
 		loadout = {
 			train = "warden",
@@ -424,6 +445,7 @@ function ProfileSchema.toClient(profile: Profile): { [string]: any }
 		interiors = profile.interiors,
 		cosmetics = profile.cosmetics,
 		weapons = profile.weapons,
+		journeys = profile.journeys,
 		loadout = profile.loadout,
 		settings = profile.settings,
 		stats = profile.stats,
