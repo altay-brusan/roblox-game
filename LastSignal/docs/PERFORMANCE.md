@@ -117,3 +117,39 @@ than per frame, except the bleedout clock which ticks at 10 Hz while downed.
 4. **Memory after five expeditions have started and ended.** This is the test
    that proves the lane reset frees what it should. If memory climbs run over
    run, something is being retained.
+
+---
+
+## Measurements, 2026-10-14 (Studio play test)
+
+Environment: Roblox Studio 0.742 on the development Windows 11 machine, one
+local player, Studio graphics defaults. **Client frame rate could not be
+measured**: Studio throttles an unfocused viewport to a flat 15 fps (66.7 ms)
+whatever the scene, and the test harness cannot keep it focused. No phone,
+tablet or console has been tested.
+
+| Measure | Before | After |
+| --- | --- | --- |
+| Expedition line geometry (excl. train) | 33,521 parts | 28,021 parts |
+| Forest | 25,937 | 20,437 |
+| Sleepers | 4,493 (collidable) | 4,493 (not collidable) |
+| Collidable parts on a line | 7,734 | 3,071 |
+| Line build time (server) | 0.7 s | 0.7 s |
+| Lobby | 3,460 parts | 4,125 parts (Platform 1, tunnel, live yard train added) |
+| Train | 1,479 parts | unchanged |
+| Server heartbeat work / physics step | 0.20 ms / 0.30 ms at 60 Hz with a 39k-part workspace | — |
+| Client parts streamed in at the line start | 10,179 | — |
+
+What changed:
+
+* Trees more than 100 studs from the track are built without root flares and
+  dead branches (the parts nobody walks close enough to see); silhouettes are
+  unchanged. The yard forest keeps full detail.
+* Sleepers no longer collide; the ballast under them is the walking surface.
+
+Repeated runs: two expeditions in one session left one expedition train, one
+yard train and one prompt per fixture; a crew wipe and retry left every audio
+loop playing once and cleared creatures and drops.
+
+Untested: real device frame rates, memory on mobile, multiplayer replication
+load, two simultaneous expeditions.

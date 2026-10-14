@@ -21006,6 +21006,7 @@ local function buildLane(lane: Lane, onProgress: (number, string) -> ())
 			density = GameConfig.ForestDensity,
 			seed = 12000 + lane.index * 1000 + i,
 			parent = forestRoot,
+			detailRadius = 100,
 		})
 		task.wait()
 		onProgress(0.56 + 0.4 * ((i + 1) / slices), "Growing the forest")
@@ -22338,6 +22339,9 @@ function BuildKit.trackSection(originCF: CFrame, length: number, parent: Instanc
 		cf = CFrame.new(),
 		colour = BuildKit.Palette.sleeper,
 		material = Enum.Material.WoodPlanks,
+		-- Sleepers sit on the ballast, which is what the player stands on.
+		-- Thousands of collidable sleepers per line only cost physics time.
+		canCollide = false,
 		canQuery = false,
 		castShadow = false,
 	})
@@ -22967,7 +22971,14 @@ export type ForestOptions = {
 	density: number, -- trees per 10,000 square studs
 	seed: number,
 	parent: Instance,
+	-- Trees further than this from the track (in X) are built without the
+	-- small parts nobody walks close enough to see: root flares and dead
+	-- branches. Their silhouettes are unchanged. Nil keeps full detail.
+	detailRadius: number?,
 }
+
+-- Parts dropped from trees beyond detailRadius.
+local NEAR_ONLY_PARTS = { Root = true, DeadBranch = true }
 
 --- Rejection-sampled placement. Cells are visited in a shuffled order and each
 --- candidate is jittered inside its cell, which removes the grid entirely
@@ -23053,10 +23064,15 @@ function ForestBuilder.populate(options: ForestOptions): Model
 
 			local tree = pickTemplate():Clone()
 			tree:PivotTo(CFrame.new(position) * CFrame.Angles(0, math.rad(rng:NextNumber(0, 360)), 0))
+			local far = options.detailRadius ~= nil and math.abs(x - options.centre.X) > options.detailRadius
 			-- Per-instance colour jitter on top of the template's own.
 			for _, descendant in tree:GetDescendants() do
 				if descendant:IsA("BasePart") then
-					descendant.Color = BuildKit.weather(descendant.Color, 0.02, rng)
+					if far and NEAR_ONLY_PARTS[descendant.Name] then
+						descendant:Destroy()
+					else
+						descendant.Color = BuildKit.weather(descendant.Color, 0.02, rng)
+					end
 				end
 			end
 			tree.Parent = forest

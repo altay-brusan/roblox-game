@@ -183,6 +183,7 @@ local function buildLane(lane: Lane, onProgress: (number, string) -> ())
 			density = GameConfig.ForestDensity,
 			seed = 12000 + lane.index * 1000 + i,
 			parent = forestRoot,
+			detailRadius = 100,
 		})
 		task.wait()
 		onProgress(0.56 + 0.4 * ((i + 1) / slices), "Growing the forest")

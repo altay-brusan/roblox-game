@@ -938,6 +938,9 @@ function BuildKit.trackSection(originCF: CFrame, length: number, parent: Instanc
 		cf = CFrame.new(),
 		colour = BuildKit.Palette.sleeper,
 		material = Enum.Material.WoodPlanks,
+		-- Sleepers sit on the ballast, which is what the player stands on.
+		-- Thousands of collidable sleepers per line only cost physics time.
+		canCollide = false,
 		canQuery = false,
 		castShadow = false,
 	})
