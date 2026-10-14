@@ -146,6 +146,8 @@ ExpeditionService.Retried = Signal.new() :: Signal.Signal<Expedition>
 -- Set by JourneyService: adds the night-run report to each player's results.
 -- A hook rather than a require, because JourneyService depends on this file.
 ExpeditionService.resultsExtra = nil :: ((Expedition, Player, boolean) -> any)?
+-- Called when a player abandons a run (JourneyService: ends an Endless streak).
+ExpeditionService.onAbandon = nil :: ((Expedition, Player) -> ())?
 -- Set by SignalService: the signal calls of the run, for the report.
 ExpeditionService.resultsSignals = nil :: ((Expedition) -> any)?
 
@@ -1590,6 +1592,9 @@ function ExpeditionService.start()
 		end
 		-- Abandoning is per-player: it returns you to the lobby without ending
 		-- the run for everybody else.
+		if ExpeditionService.onAbandon then
+			ExpeditionService.onAbandon(expedition, player)
+		end
 		playerExpedition[player.UserId] = nil
 		InventoryService.destroy(player)
 		local index = table.find(expedition.members, player.UserId)

@@ -203,6 +203,10 @@ export type Tier = {
 	briefed: boolean,
 	-- Night runs completed (on any tier) before this tier opens.
 	unlockAfter: number,
+	-- Opens only once the crew member has reached the story's ending.
+	requiresStory: boolean?,
+	-- Endless: each night survived in a row adds this to the night.
+	perDepth: { events: number, tension: number, fuel: number, maxDepth: number }?,
 }
 
 local TIERS: { Tier } = {
@@ -238,6 +242,19 @@ local TIERS: { Tier } = {
 		startFuel = 0.5,
 		briefed = false,
 		unlockAfter = 3,
+	},
+	{
+		id = "endless",
+		name = "Endless Railway",
+		summary = "After Ward Hill the line does not end. Four unannounced emergencies on the first night; every night survived in a row adds one more, more tension and less fuel. A failure starts the count again.",
+		events = 4,
+		tensionBudget = 7,
+		maxSimultaneous = 2,
+		startFuel = 0.8,
+		briefed = false,
+		unlockAfter = 0,
+		requiresStory = true,
+		perDepth = { events = 1, tension = 2, fuel = 0.08, maxDepth = 4 },
 	},
 }
 

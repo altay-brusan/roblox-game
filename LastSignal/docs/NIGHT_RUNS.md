@@ -2,9 +2,9 @@
 
 A night run is the same line, stations and objectives as the story, with a
 seeded set of emergencies on the way and a route decision at Tolbridge.
-Chosen on the crew panel (Journey: Story or Night run). It is the base for
-the post-campaign Endless Railway in brief V2 §19 (not yet gated behind the
-ending; see "Open").
+Chosen on the crew panel (Journey: Story or Night run). It is also the engine of
+the post-campaign Endless Railway (V2 §19), the fourth tier, which opens at
+the story ending; see docs/DELIVERY.md section 5.
 
 Code: `shared/Registry/JourneyRegistry.luau` (data), `server/Services/JourneyService.luau`
 (planner, runtime, report, progression), `server/Journey/JourneyEvents.luau`
@@ -112,7 +112,6 @@ developer-assisted: harness teleports to each job, real held interactions):
   code: the run plays and the report says progress was not saved), duplicate
   completion (guarded by run GUID and the finish state; not exercised).
 * A run using each premium weapon, and performance with events active.
-* Endless Railway (V2 §19): unlock after the story ending, naming, and
-  increasing risk are not done.
+* Endless Railway: a rising streak after a won night has not been played.
 * `StationRegistry.TravelEvents` (deer crossing, tunnel, long grade, intruder)
   is data that nothing uses; it predates this work.

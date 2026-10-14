@@ -76,6 +76,8 @@ type Journey = {
 	guid: string,
 	seed: number,
 	tier: string,
+	-- Endless only: nights survived in a row when this one began.
+	depth: number,
 	crewSize: number,
 	plan: Plan,
 	route: string,
@@ -148,13 +150,36 @@ local function headlineOf(entries: { Entry }): string
 	return best
 end
 
+--- A tier as played at a given endless depth (0 for every other tier).
+local function shaped(tierId: string, depth: number?): JourneyRegistry.Tier
+	local tier = JourneyRegistry.tier(tierId)
+	local d = math.clamp(depth or 0, 0, if tier.perDepth then tier.perDepth.maxDepth else 0)
+	if d == 0 or not tier.perDepth then
+		return tier
+	end
+	local t = table.clone(tier)
+	t.events += tier.perDepth.events * d
+	t.tensionBudget += tier.perDepth.tension * d
+	t.startFuel = math.max(0.5, tier.startFuel - tier.perDepth.fuel * d)
+	return t
+end
+
+--- Whether a profile has opened a tier.
+local function tierOpen(profile: any, tier: JourneyRegistry.Tier): boolean
+	local j = if profile then profile.journeys else nil
+	if tier.requiresStory and not (j and j.storyEnded) then
+		return false
+	end
+	return (if j then j.completed else 0) >= tier.unlockAfter
+end
+
 local function capFor(tierId: string, crewSize: number): number
 	return JourneyRegistry.tier(tierId).maxSimultaneous + (if crewSize >= 3 then 1 else 0)
 end
 
 --- Checks a plan against every rule. Returns false and the first broken one.
-function JourneyService.validate(entries: { Entry }, tierId: string, crewSize: number, lastHeadline: string?): (boolean, string?)
-	local tier = JourneyRegistry.tier(tierId)
+function JourneyService.validate(entries: { Entry }, tierId: string, crewSize: number, lastHeadline: string?, depth: number?): (boolean, string?)
+	local tier = shaped(tierId, depth)
 	local cap = capFor(tierId, crewSize)
 	local seen: { [string]: boolean } = {}
 	local tension = 0
@@ -217,8 +242,8 @@ function JourneyService.validate(entries: { Entry }, tierId: string, crewSize: n
 end
 
 --- The night's emergencies for a seed. Pure: same inputs, same plan.
-function JourneyService.plan(seed: number, tierId: string, crewSize: number, lastHeadline: string?): Plan
-	local tier = JourneyRegistry.tier(tierId)
+function JourneyService.plan(seed: number, tierId: string, crewSize: number, lastHeadline: string?, depth: number?): Plan
+	local tier = shaped(tierId, depth)
 	local rng = Random.new(seed)
 	local ids = templateIds()
 	for attempt = 1, 25 do
@@ -268,7 +293,7 @@ function JourneyService.plan(seed: number, tierId: string, crewSize: number, las
 			end
 			return a.at < b.at
 		end)
-		local ok = JourneyService.validate(entries, tierId, crewSize, lastHeadline)
+		local ok = JourneyService.validate(entries, tierId, crewSize, lastHeadline, depth)
 		if ok then
 			return { entries = entries, fallback = false, attempts = attempt, headline = headlineOf(entries) }
 		end
@@ -539,11 +564,19 @@ end
 -- Report and progression
 --------------------------------------------------------------------------
 
-local TIER_BONUS: { [string]: number } = { night = 120, hard = 240, last = 400 }
+local TIER_BONUS: { [string]: number } = { night = 120, hard = 240, last = 400, endless = 200 }
 
 local function report(expedition: any, player: Player, success: boolean): any
 	local journey = journeys[expedition.id]
 	if not journey then
+		-- A story run that reached the ending opens the Endless Railway.
+		if success and expedition.mode ~= "nightrun" then
+			DataService.update(player, function(p)
+				p.journeys.storyEnded = true
+			end)
+			ProgressionService.pushToClient(player)
+			return { mode = "story", endlessUnlocked = true }
+		end
 		return nil
 	end
 	local tier = JourneyRegistry.tier(journey.tier)
@@ -602,13 +635,17 @@ local function report(expedition: any, player: Player, success: boolean): any
 		while #pj.rewarded > 20 do
 			table.remove(pj.rewarded, 1)
 		end
+		if tier.perDepth then
+			pj.endlessStreak = if success then pj.endlessStreak + 1 else 0
+			pj.endlessBest = math.max(pj.endlessBest, pj.endlessStreak)
+		end
 		table.insert(pj.history, { seed = journey.seed, tier = journey.tier, route = journey.route, success = success, at = os.time() })
 		while #pj.history > 10 do
 			table.remove(pj.history, 1)
 		end
 	end)
 	if ok and success then
-		local bonus = TIER_BONUS[journey.tier] or 0
+		local bonus = (TIER_BONUS[journey.tier] or 0) + 60 * (journey.depth or 0)
 		ProgressionService.award(player, { credits = bonus, xp = bonus, source = "journey:" .. journey.tier }, expedition.crewSize)
 		out.bonus = bonus
 		for _, unlock in JourneyRegistry.Unlocks do
@@ -623,6 +660,9 @@ local function report(expedition: any, player: Player, success: boolean): any
 				table.insert(out.unlocked, unlock.name)
 			end
 		end
+	end
+	if tier.perDepth then
+		out.endless = { night = (journey.depth or 0) + 1, streak = j.endlessStreak, best = j.endlessBest }
 	end
 	out.saved = ok and DataService.isWritable(player)
 	ProgressionService.pushToClient(player)
@@ -644,15 +684,17 @@ local function begin(expedition: any)
 	end
 	local leader = game:GetService("Players"):GetPlayerByUserId(leaderId)
 	local profile = if leader then DataService.getProfile(leader) else nil
-	local completed = if profile then profile.journeys.completed else 0
 	-- A tier the leader has not unlocked falls back to the first.
 	local tier = JourneyRegistry.tier(p.tier)
-	if completed < tier.unlockAfter then
+	if not tierOpen(profile, tier) then
 		tier = JourneyRegistry.Tiers[1]
 	end
+	-- Endless: the leader's streak sets how deep tonight goes.
+	local depth = if tier.perDepth and profile then math.min(profile.journeys.endlessStreak, tier.perDepth.maxDepth) else 0
+	local played = shaped(tier.id, depth)
 	local seed = p.seed or Random.new():NextInteger(1, 99999)
 	local lastHeadline = if profile then profile.journeys.lastHeadline else nil
-	local plan = JourneyService.plan(seed, tier.id, expedition.crewSize, lastHeadline)
+	local plan = JourneyService.plan(seed, tier.id, expedition.crewSize, lastHeadline, depth)
 	-- Studio test hook: a server-set "JourneyForce" attribute on the leader,
 	-- "template@segment,template@segment", forces a plan so each template can
 	-- be exercised on its own. Does nothing outside Studio.
@@ -679,6 +721,7 @@ local function begin(expedition: any)
 		guid = HttpService:GenerateGUID(false),
 		seed = seed,
 		tier = tier.id,
+		depth = depth,
 		crewSize = expedition.crewSize,
 		plan = plan,
 		route = "main",
@@ -692,7 +735,7 @@ local function begin(expedition: any)
 	}
 	journeys[expedition.id] = journey
 	expedition.mode = "nightrun"
-	expedition.train.fuel = Balance.Train.maxFuel * tier.startFuel
+	expedition.train.fuel = Balance.Train.maxFuel * played.startFuel
 
 	local names = {}
 	for _, e in plan.entries do
@@ -703,7 +746,7 @@ local function begin(expedition: any)
 		else string.format("%d emergencies expected. Control will not say which.", #plan.entries)
 	Net.fireClients("Notify", ExpeditionService.playersOf(expedition), {
 		kind = "info",
-		title = string.format("%s, seed %d", tier.name, seed),
+		title = if tier.perDepth then string.format("%s, night %d, seed %d", tier.name, depth + 1, seed) else string.format("%s, seed %d", tier.name, seed),
 		body = briefing,
 		duration = 12,
 	})
@@ -718,6 +761,15 @@ end
 
 function JourneyService.start()
 	ExpeditionService.resultsExtra = report
+	-- Walking away from an Endless night ends the streak, as failing does.
+	ExpeditionService.onAbandon = function(expedition, player)
+		local journey = journeys[expedition.id]
+		if journey and JourneyRegistry.tier(journey.tier).perDepth then
+			DataService.update(player, function(p)
+				p.journeys.endlessStreak = 0
+			end)
+		end
+	end
 	InteractionService.holdScale = function(player: Player): number
 		local profile = DataService.getProfile(player)
 		if profile and profile.journeys.utility.linemans_toolkit and ExpeditionService.forPlayer(player) then
@@ -862,7 +914,16 @@ function JourneyService.start()
 			local completed = if profile then profile.journeys.completed else 0
 			local tiers = {}
 			for _, tier in JourneyRegistry.Tiers do
-				table.insert(tiers, { id = tier.id, name = tier.name, summary = tier.summary, unlocked = completed >= tier.unlockAfter, unlockAfter = tier.unlockAfter })
+				table.insert(tiers, {
+					id = tier.id,
+					name = tier.name,
+					summary = tier.summary,
+					unlocked = tierOpen(profile, tier),
+					unlockAfter = tier.unlockAfter,
+					requiresStory = tier.requiresStory == true,
+					streak = if tier.perDepth and profile then profile.journeys.endlessStreak else nil,
+					best = if tier.perDepth and profile then profile.journeys.endlessBest else nil,
+				})
 			end
 			local history = if profile then profile.journeys.history else {}
 			return {
@@ -881,10 +942,9 @@ function JourneyService.start()
 			if field == "mode" then
 				p.mode = Guard.enum(rawB, { "story", "nightrun" }) or p.mode
 			elseif field == "tier" then
-				local id = Guard.enum(rawB, { "night", "hard", "last" })
+				local id = Guard.enum(rawB, { "night", "hard", "last", "endless" })
 				local profile = DataService.getProfile(player)
-				local completed = if profile then profile.journeys.completed else 0
-				if id and completed >= JourneyRegistry.tier(id).unlockAfter then
+				if id and tierOpen(profile, JourneyRegistry.tier(id)) then
 					p.tier = id
 				else
 					return { ok = false, error = "LOCKED" }

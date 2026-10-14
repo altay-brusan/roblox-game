@@ -1736,6 +1736,10 @@ function MenuController.start()
 		if type(payload) == "table" and payload.state == "results" then
 			lastResults = payload
 			MenuController.open("results")
+		elseif type(payload) == "table" and payload.state == "boarding" and currentPanel ~= nil then
+			-- The leader departed: a crewmate still in the crew panel (or the
+			-- last results) must not ride out with the camera held by a menu.
+			MenuController.close()
 		elseif type(payload) == "table" and payload.state == "failed" then
 			-- The failed state arrives more than once (the failure itself and
 			-- the routine state push); open() toggles, so only open it once.

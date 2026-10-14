@@ -56,6 +56,10 @@ export type Profile = {
 		rewarded: { string },
 		history: { { seed: number, tier: string, route: string, success: boolean, at: number } },
 		utility: { [string]: boolean },
+		-- The story's ending has been reached: opens the Endless Railway.
+		storyEnded: boolean,
+		endlessStreak: number,
+		endlessBest: number,
 	},
 
 	-- Loadout and appearance ---------------------------------------------
@@ -256,6 +260,9 @@ function ProfileSchema.template(): Profile
 			rewarded = {},
 			history = {},
 			utility = {},
+			storyEnded = false,
+			endlessStreak = 0,
+			endlessBest = 0,
 		},
 
 		loadout = {
