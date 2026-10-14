@@ -233,7 +233,7 @@ function ProfileSchema.template(): Profile
 	return {
 		version = GameConfig.DataVersion,
 
-		credits = 350, -- a small starting float so the shop is not empty on day one
+		credits = 140, -- a small starting float so the shop is not empty on day one
 		xp = 0,
 		level = 1,
 

@@ -145,16 +145,16 @@ function JourneyUI.results(parent: Instance, order: number, journey: any)
 		Widgets.caption(parent, "This seed could not produce a valid night, so the standard fallback night was used.", order + 4)
 	end
 	if (journey.bonus or 0) > 0 then
-		Widgets.statRow(parent, "Night run bonus", tostring(journey.bonus) .. " credits", order + 5)
+		Widgets.statRow(parent, "Night run bonus", tostring(journey.bonus) .. " RIP Coin", order + 5)
 	end
 	if (journey.inspectionCredits or 0) > 0 then
-		Widgets.statRow(parent, "Inspection", tostring(journey.inspectionCredits) .. " credits", order + 6)
+		Widgets.statRow(parent, "Inspection", tostring(journey.inspectionCredits) .. " RIP Coin", order + 6)
 	end
 	if journey.unlocked and #journey.unlocked > 0 then
 		Widgets.statRow(parent, "Earned", table.concat(journey.unlocked, ", "), order + 7)
 	end
 	if journey.alreadyCredited then
-		Widgets.caption(parent, "This run was already credited.", order + 8)
+		Widgets.caption(parent, "This run was already rewarded.", order + 8)
 	elseif not journey.saved then
 		Widgets.caption(parent, "Progress could not be saved this session, so this run is not counted.", order + 8)
 	end

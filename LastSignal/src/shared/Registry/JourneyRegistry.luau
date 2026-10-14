@@ -144,7 +144,7 @@ local TEMPLATES: { [string]: Template } = {
 		id = "inspection",
 		name = "Unscheduled inspection",
 		category = "station",
-		summary = "Control asks for the inspector's log at this station to be signed. It is somewhere on the platform or in the buildings. Signing it earns fuel and credits; skipping it costs nothing but the reward.",
+		summary = "Control asks for the inspector's log at this station to be signed. It is somewhere on the platform or in the buildings. Signing it earns fuel and RIP Coin; skipping it costs nothing but the reward.",
 		weight = 6,
 		tension = 0,
 		-- Station indices: never the first or the last stop.

@@ -499,13 +499,13 @@ Events.inspection = {
 		makeTask(book, "Sign the inspector's log", "Unscheduled inspection", 2)
 		ctx.state.book = book
 		ctx.radio("dispatch", "Dispatch", "Control. Inspection notice for this station: the inspector's log is here somewhere. Sign it before you leave and I will see you are refuelled for it.", 7)
-		ctx.notify("info", "Unscheduled inspection", "Find and sign the inspector's log at this station. Optional: fuel and credits if you do.")
+		ctx.notify("info", "Unscheduled inspection", "Find and sign the inspector's log at this station. Optional: fuel and RIP Coin if you do.")
 		return true
 	end,
 	onTask = function(ctx, part)
 		if part == ctx.state.book then
-			if ctx.award(150, 20) then
-				ctx.resolve("Log signed: +20 fuel, +150 credits")
+			if ctx.award(60, 20) then
+				ctx.resolve("Log signed: +20 fuel, +60 RIP Coin")
 			else
 				ctx.resolve("Log signed again (already rewarded this run)")
 			end

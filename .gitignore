@@ -23,3 +23,6 @@ tools/devsync/append_*.js
 tools/devsync/fix.js
 tools/devsync/silent.js
 tools/devsync/fix_*.js
+tools/devsync/scale_*.js
+tools/devsync/rename_*.js
+tools/devsync/set_prices.js

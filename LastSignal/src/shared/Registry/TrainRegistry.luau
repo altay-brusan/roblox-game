@@ -157,7 +157,7 @@ local TRAINS: { [string]: TrainDef } = {
 		},
 		defaultLivery = "livery_freight",
 		unlockLevel = 10,
-		creditCost = 6500,
+		creditCost = 2600,
 		isStarter = false,
 	}),
 
@@ -194,7 +194,7 @@ local TRAINS: { [string]: TrainDef } = {
 		},
 		defaultLivery = "livery_express",
 		unlockLevel = 18,
-		creditCost = 11000,
+		creditCost = 4400,
 		isStarter = false,
 	}),
 
@@ -233,7 +233,7 @@ local TRAINS: { [string]: TrainDef } = {
 		},
 		defaultLivery = "livery_engineering",
 		unlockLevel = 26,
-		creditCost = 16500,
+		creditCost = 6600,
 		isStarter = false,
 	}),
 }
@@ -326,7 +326,7 @@ local LIVERIES: { [string]: LiveryDef } = {
 		underframe = C(30, 30, 32),
 		lampColour = C(248, 244, 232),
 		source = "credits",
-		creditCost = 3200,
+		creditCost = 1280,
 	}),
 	livery_pinewatch = livery({
 		id = "livery_pinewatch",
@@ -339,7 +339,7 @@ local LIVERIES: { [string]: LiveryDef } = {
 		stripe = C(186, 168, 128),
 		lampColour = C(255, 238, 204),
 		source = "credits",
-		creditCost = 4800,
+		creditCost = 1920,
 	}),
 
 	-- Robux liveries. productKey must match Config.Monetization, and the shop
@@ -447,7 +447,7 @@ local INTERIORS: { [string]: InteriorDef } = {
 		lampColour = C(226, 238, 255),
 		lampBrightness = 0.85,
 		source = "credits",
-		creditCost = 2200,
+		creditCost = 880,
 	},
 	interior_brass = {
 		id = "interior_brass",

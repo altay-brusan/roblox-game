@@ -134,7 +134,7 @@ local function creditEntries(player: Player): { Entry }
 			reason = string.format("Unlocks at level %d", unlockLevel)
 		elseif not owned and profile.credits < cost then
 			purchasable = false
-			reason = "Not enough credits"
+			reason = "Not enough RIP Coin"
 		end
 		table.insert(out, {
 			key = key,
@@ -153,6 +153,10 @@ local function creditEntries(player: Player): { Entry }
 	end
 
 	for _, def in CosmeticRegistry.creditPurchasable() do
+		-- Outfits are not drawn on characters yet, so they are not sold.
+		if def.slot == "outfit" then
+			continue
+		end
 		add("cosmetic:" .. def.id, def.name, def.description, def.creditCost or 0, profile.cosmetics[def.id] == true, nil, { slot = def.slot })
 	end
 	for _, def in TrainRegistry.allLiveries() do
@@ -179,7 +183,8 @@ local function creditEntries(player: Player): { Entry }
 		end
 	end
 	for _, def in WeaponRegistry.all() do
-		if def.creditCost > 0 then
+		-- Starting-kit weapons are everyone's already; never sell them.
+		if def.creditCost > 0 and not def.startingLoadout then
 			add(
 				"weapon:" .. def.id,
 				def.name,
@@ -249,7 +254,7 @@ local function buyWithCredits(player: Player, entryKey: string): (boolean, strin
 
 	if kind == "cosmetic" then
 		local def = CosmeticRegistry.get(id)
-		if not def or def.source ~= "credits" then
+		if not def or def.source ~= "credits" or def.slot == "outfit" then
 			return false, "NOT_FOR_SALE"
 		end
 		cost = def.creditCost
@@ -274,7 +279,7 @@ local function buyWithCredits(player: Player, entryKey: string): (boolean, strin
 		unlockLevel = def.unlockLevel
 	elseif kind == "weapon" then
 		local def = WeaponRegistry.get(id)
-		if not def or def.creditCost <= 0 then
+		if not def or def.creditCost <= 0 or def.startingLoadout then
 			return false, "NOT_FOR_SALE"
 		end
 		cost = def.creditCost
@@ -313,6 +318,54 @@ end
 
 local lastPassRefresh: { [number]: number } = {}
 
+--------------------------------------------------------------------------
+-- The Broker
+--------------------------------------------------------------------------
+
+-- The Phantom Exchange has no shopkeeper. A voice answers on the terminal's
+-- intercom: cryptic, but it never lies about a price and never pushes. Lines
+-- go out on the radio subtitle channel, attributed to "The Broker". Text
+-- only: there is no recorded voice yet (see docs/AUDIO.md).
+local BROKER: { [string]: { string } } = {
+	open = {
+		"Exchange open. You carry %d RIP Coin. I take nothing you cannot spare.",
+		"Fares taken. You have %d RIP Coin. Look as long as you like; the line is not going anywhere.",
+		"%d RIP Coin. Enough for something. Not enough for everything. Choose.",
+	},
+	bought = {
+		"Done. It was always yours; I only kept it warm.",
+		"Taken. Check the rack before you leave. It is there.",
+	},
+	short = {
+		"You are short. The line pays those who ride it. Come back after.",
+	},
+	robux = {
+		"That one is settled outside the line. Roblox will ask you, not me.",
+	},
+	blocked = {
+		"Not now. Something is listening. Come back when it is quiet.",
+	},
+}
+local brokerSpokeAt: { [number]: number } = {}
+
+local function broker(player: Player, kind: string, ...: any)
+	local now = os.clock()
+	if kind == "open" and brokerSpokeAt[player.UserId] and now - brokerSpokeAt[player.UserId] < 30 then
+		return
+	end
+	brokerSpokeAt[player.UserId] = now
+	local lines = BROKER[kind]
+	local text = string.format(lines[math.random(1, #lines)], ...)
+	Net.fireClient("RadioMessage", player, {
+		id = "broker",
+		source = "other",
+		text = text,
+		duration = 5,
+		attribution = "The Broker",
+		isFalse = false,
+	})
+end
+
 function ShopService.start()
 	Net.onServerInvoke("ShopCommand", function(player, rawCommand, rawArg)
 		local command = Guard.enum(rawCommand, { "catalogue", "buy_credits", "prompt_robux", "refresh_passes" })
@@ -321,7 +374,11 @@ function ShopService.start()
 		end
 
 		if command == "catalogue" then
-			return { ok = true, catalogue = ShopService.catalogue(player) }
+			local catalogue = ShopService.catalogue(player)
+			if rawArg == "open" then
+				broker(player, "open", catalogue.credits or 0)
+			end
+			return { ok = true, catalogue = catalogue }
 		end
 
 		if command == "buy_credits" then
@@ -330,6 +387,11 @@ function ShopService.start()
 				return { ok = false, error = "BAD_ENTRY" }
 			end
 			local ok, err = buyWithCredits(player, entryKey)
+			if ok then
+				broker(player, "bought")
+			elseif err == "INSUFFICIENT_CREDITS" then
+				broker(player, "short")
+			end
 			return { ok = ok, error = err, catalogue = ShopService.catalogue(player) }
 		end
 
@@ -353,9 +415,13 @@ function ShopService.start()
 		local blocked = ShopService.blockedReason(player)
 		if blocked then
 			ShopService.PromptBlocked:Fire(player, blocked)
+			broker(player, "blocked")
 			return { ok = false, error = "BLOCKED", blockedBy = blocked }
 		end
 		local ok, err = PurchaseService.prompt(player, productKey, nil)
+		if ok then
+			broker(player, "robux")
+		end
 		return { ok = ok, error = err }
 	end)
 

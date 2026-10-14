@@ -238,11 +238,11 @@ Balance.Creature = {
 Balance.Economy = {
 	-- Credits are the free currency. Everything cosmetic can eventually be
 	-- earned with them; Robux buys time and a few exclusive finishes.
-	creditsPerStationCleared = 120,
-	creditsPerOptionalObjective = 65,
-	creditsPerExpeditionComplete = 400,
-	creditsPerRescue = 45,
-	creditsPerCollectible = 30,
+	creditsPerStationCleared = 50,
+	creditsPerOptionalObjective = 25,
+	creditsPerExpeditionComplete = 160,
+	creditsPerRescue = 18,
+	creditsPerCollectible = 25,
 	creditsFailurePenaltyFraction = 0.4, -- kept on a failed run, not zero
 
 	xpPerStationCleared = 90,
@@ -254,12 +254,12 @@ Balance.Economy = {
 	crewBonusPerMember = 0.06,
 	maxCrewBonus = 0.30,
 
-	dailyLoginCredits = { 100, 150, 200, 275, 350, 450, 700 },
+	dailyLoginCredits = { 40, 60, 80, 110, 140, 180, 280 },
 	-- Streaks are forgiving: missing a day steps the streak back by one rather
 	-- than resetting it, and nothing is ever taken away.
 	streakGraceDays = 1,
 	playtimeRewardIntervalSeconds = 900,
-	playtimeRewardCredits = 85,
+	playtimeRewardCredits = 35,
 	maxPlaytimeRewardsPerDay = 6,
 }
 

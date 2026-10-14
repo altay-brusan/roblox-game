@@ -148,7 +148,7 @@ Admin.ConfirmRequired = {
 -- Maximum values an admin grant may issue in one command. Prevents a slip of
 -- the keyboard from writing an absurd number into a live profile.
 Admin.GrantLimits = {
-	credits = 1000000,
+	credits = 400000,
 	xp = 500000,
 	itemQuantity = 999,
 }

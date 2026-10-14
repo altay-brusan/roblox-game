@@ -116,14 +116,14 @@ local EVENTS: { [string]: EventDef } = {
 		rewards = {
 			{
 				threshold = 5,
-				credits = 400,
+				credits = 160,
 				xp = 300,
 				title = "First Punch",
 				description = "Five tickets collected.",
 			},
 			{
 				threshold = 15,
-				credits = 900,
+				credits = 360,
 				xp = 700,
 				cosmetic = "patch_conductor",
 				title = "Full Round",
@@ -131,7 +131,7 @@ local EVENTS: { [string]: EventDef } = {
 			},
 			{
 				threshold = 30,
-				credits = 1600,
+				credits = 640,
 				xp = 1200,
 				cosmetic = "lantern_sleeper",
 				title = "Sleeper Service",
@@ -139,7 +139,7 @@ local EVENTS: { [string]: EventDef } = {
 			},
 			{
 				threshold = 50,
-				credits = 2600,
+				credits = 1040,
 				xp = 2000,
 				livery = "livery_lostconductor",
 				title = "The Whole Service",

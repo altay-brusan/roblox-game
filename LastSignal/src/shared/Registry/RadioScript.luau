@@ -631,7 +631,7 @@ local RECORDINGS: { RecordingDef } = {
 		title = "Marrow Halt, day two",
 		text = "We put everything we had against the waiting room door. Then Ellis said the sensible thing, which is that it was already inside with us, and we went out the window instead.",
 		duration = 11,
-		credits = 30,
+		credits = 12,
 	},
 	{
 		id = "rec_tolbridge",
@@ -639,7 +639,7 @@ local RECORDINGS: { RecordingDef } = {
 		title = "Camp office tape",
 		text = "It copies the saw. Not the sound of the saw, the pattern of it. Three cuts and a pause, three cuts and a pause. We stopped cutting on the second day and it kept going for a week.",
 		duration = 13,
-		credits = 30,
+		credits = 12,
 	},
 	{
 		id = "rec_93",
@@ -647,7 +647,7 @@ local RECORDINGS: { RecordingDef } = {
 		title = "Tower cabin tape",
 		text = "It has learned the callsign. It has not learned that Control signs off at the end, not the start. That is the only thing keeping me sat in this chair.",
 		duration = 12,
-		credits = 35,
+		credits = 14,
 	},
 	{
 		id = "rec_bridge",
@@ -655,7 +655,7 @@ local RECORDINGS: { RecordingDef } = {
 		title = "Pump house tape",
 		text = "The span has been up for two years. The gearing is fine. The valve is fine. Somebody took the valve out and put it in the stores, deliberately, and I would like to know who and I would like to know why.",
 		duration = 14,
-		credits = 35,
+		credits = 14,
 	},
 	{
 		id = "rec_ward_1",
@@ -663,7 +663,7 @@ local RECORDINGS: { RecordingDef } = {
 		title = "Operator, day one",
 		text = "Regional says evacuate. I am not leaving a transmitter this size unattended. Someone has to hold the frequency open or none of them can find each other.",
 		duration = 12,
-		credits = 40,
+		credits = 16,
 	},
 	{
 		id = "rec_ward_2",
@@ -671,7 +671,7 @@ local RECORDINGS: { RecordingDef } = {
 		title = "Operator, day six",
 		text = "It sits outside the hall and it says my own callsign back at me in my own voice. I have stopped answering. The carrier stays up. That is the job.",
 		duration = 13,
-		credits = 40,
+		credits = 16,
 	},
 	{
 		id = "rec_ward_3",
@@ -679,7 +679,7 @@ local RECORDINGS: { RecordingDef } = {
 		title = "Operator, day eleven",
 		text = "Valve has gone in the transmitter. There is a spare in the cabinet. I am going to fit it, and if I do not come back from that room, the spare is in the cabinet. Whoever you are. The spare is in the cabinet.",
 		duration = 15,
-		credits = 50,
+		credits = 20,
 	},
 	{
 		id = "rec_ward_4",
@@ -687,7 +687,7 @@ local RECORDINGS: { RecordingDef } = {
 		title = "Unmarked tape",
 		text = "Control, to zero two seventeen. Control, to zero two seventeen. Control, to zero two seventeen.",
 		duration = 10,
-		credits = 60,
+		credits = 25,
 	},
 }
 

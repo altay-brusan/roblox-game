@@ -539,7 +539,7 @@ end
 -- Report and progression
 --------------------------------------------------------------------------
 
-local TIER_BONUS: { [string]: number } = { night = 300, hard = 600, last = 1000 }
+local TIER_BONUS: { [string]: number } = { night = 120, hard = 240, last = 400 }
 
 local function report(expedition: any, player: Player, success: boolean): any
 	local journey = journeys[expedition.id]
