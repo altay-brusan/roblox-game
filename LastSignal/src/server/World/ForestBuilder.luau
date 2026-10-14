@@ -389,7 +389,7 @@ export type ForestOptions = {
 }
 
 -- Parts dropped from trees beyond detailRadius.
-local NEAR_ONLY_PARTS = { Root = true, DeadBranch = true }
+local NEAR_ONLY_PARTS = { Root = true, DeadBranch = true, Branch = true, Bramble = true }
 
 --- Rejection-sampled placement. Cells are visited in a shuffled order and each
 --- candidate is jittered inside its cell, which removes the grid entirely

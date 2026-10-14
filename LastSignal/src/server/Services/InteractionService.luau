@@ -1103,7 +1103,7 @@ function InteractionService.start()
 	-- first build shipped and why nobody could find the train.
 	wire("CrewBoard", "Form a crew", "Crew board", true)
 	wire("NoticeBoard", "Read", "Notice board", true)
-	wire("StoresCounter", "Browse", "Stores", true)
+	wire("StoresCounter", "Use", "Phantom Exchange", true)
 	wire("WorkshopBench", "Open loadout", "Workshop bench", true)
 	wire("ArmoryRack", "Open armory", "Armory", true)
 

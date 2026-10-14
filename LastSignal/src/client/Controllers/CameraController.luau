@@ -231,10 +231,12 @@ end
 --   train   relative to the moving train, so the camera travels with it
 --
 -- Offsets are in the train's own frame: -Z is ahead, +X is the platform side.
+--   carriage  inside the first carriage, from its floor at the centre;
+--           Z is in half-lengths of the carriage (1 is its rear end)
 type Shot = {
 	t0: number,
 	t1: number,
-	space: "world" | "train",
+	space: "world" | "train" | "carriage",
 	fromA: Vector3,
 	lookA: Vector3,
 	fromB: Vector3,
@@ -245,36 +247,48 @@ local SHOTS: { Shot } = {
 	-- Low on the platform ahead of the train as it begins to move.
 	{
 		t0 = 0,
-		t1 = 6,
+		t1 = 3.5,
 		space = "world",
 		fromA = Vector3.new(16, 6, -60),
 		lookA = Vector3.new(0, 7, 10),
 		fromB = Vector3.new(16, 6.5, -57),
 		lookB = Vector3.new(0, 7, 2),
 	},
-	-- Running alongside the cab.
+	-- Inside, from the front of the first carriage, facing the passengers:
+	-- people in the seats, warm light, an ordinary night.
 	{
-		t0 = 6,
-		t1 = 11,
-		space = "train",
-		fromA = Vector3.new(15, 8, 6),
-		lookA = Vector3.new(0, 7, -25),
-		fromB = Vector3.new(15, 8, -6),
-		lookB = Vector3.new(0, 7, -36),
+		t0 = 3.5,
+		t1 = 6.8,
+		space = "carriage",
+		fromA = Vector3.new(0, 5.6, -0.88),
+		lookA = Vector3.new(0, 4.2, 0.9),
+		fromB = Vector3.new(0, 5.4, -0.8),
+		lookB = Vector3.new(0.2, 4.0, 0.9),
 	},
-	-- High and ahead, looking back down the length of the train.
+	-- The bang: pushing in down the aisle towards the rear door.
 	{
-		t0 = 11,
-		t1 = 16,
-		space = "train",
-		fromA = Vector3.new(8, 24, -50),
-		lookA = Vector3.new(0, 6, 50),
-		fromB = Vector3.new(-8, 22, -46),
-		lookB = Vector3.new(0, 6, 60),
+		t0 = 6.8,
+		t1 = 8.4,
+		space = "carriage",
+		fromA = Vector3.new(0, 5.2, -0.4),
+		lookA = Vector3.new(0, 5.0, 1),
+		fromB = Vector3.new(0, 5.2, -0.2),
+		lookB = Vector3.new(0, 5.0, 1),
+	},
+	-- The same framing as before the bang: every seat empty, bags and hats
+	-- left behind.
+	{
+		t0 = 8.4,
+		t1 = 12,
+		space = "carriage",
+		fromA = Vector3.new(0, 5.6, -0.88),
+		lookA = Vector3.new(0, 4.2, 0.9),
+		fromB = Vector3.new(0, 5.4, -0.82),
+		lookB = Vector3.new(-0.2, 4.0, 0.9),
 	},
 	-- Beside the tunnel mouth as the train runs into the dark.
 	{
-		t0 = 16,
+		t0 = 12,
 		t1 = 30,
 		space = "world",
 		fromA = Vector3.new(24, 16, -230),
@@ -284,10 +298,13 @@ local SHOTS: { Shot } = {
 	},
 }
 
+local cinematicCarriage: Model? = nil
+
 local cinematicAnchor: CFrame? = nil
 local cinematicModel: Model? = nil
 
-function CameraController.startCinematic(duration: number, anchor: CFrame?, model: Model?)
+function CameraController.startCinematic(duration: number, anchor: CFrame?, model: Model?, carriage: Model?)
+	cinematicCarriage = carriage
 	cinematicStartedAt = os.clock()
 	cinematicDuration = duration
 	cinematicAnchor = anchor
@@ -313,7 +330,32 @@ local function cinematicCFrame(elapsed: number): CFrame
 	end
 
 	local anchor = start
-	if shot.space == "train" then
+	local fromA, lookA, fromB, lookB = shot.fromA, shot.lookA, shot.fromB, shot.lookB
+	if shot.space == "carriage" then
+		local carriage = cinematicCarriage
+		if carriage and carriage.Parent then
+			local cf, size = carriage:GetBoundingBox()
+			-- The floor, found by looking down inside the carriage: its box
+			-- includes the running gear, so the box's base is below the floor.
+			local params = RaycastParams.new()
+			params.FilterType = Enum.RaycastFilterType.Include
+			params.FilterDescendantsInstances = { carriage }
+			local hit = Workspace:Raycast(cf.Position + cf.UpVector * (size.Y * 0.3), -cf.UpVector * size.Y, params)
+			local floorY = if hit then cf:PointToObjectSpace(hit.Position).Y else -size.Y * 0.5
+			anchor = cf * CFrame.new(0, floorY, 0)
+			local half = size.Z * 0.5
+			local function scale(v: Vector3): Vector3
+				return Vector3.new(v.X, v.Y, v.Z * half)
+			end
+			fromA, lookA, fromB, lookB = scale(fromA), scale(lookA), scale(fromB), scale(lookB)
+		else
+			-- No carriage streamed in yet: hold the exterior framing instead.
+			local model = cinematicModel
+			local root = if model then model.PrimaryPart else nil
+			anchor = if root and root.Parent then root.CFrame else start
+			fromA, lookA, fromB, lookB = Vector3.new(15, 8, 6), Vector3.new(0, 7, -25), Vector3.new(15, 8, -6), Vector3.new(0, 7, -36)
+		end
+	elseif shot.space == "train" then
 		local model = cinematicModel
 		local root = if model then model.PrimaryPart else nil
 		if root and root.Parent then
@@ -329,8 +371,8 @@ local function cinematicCFrame(elapsed: number): CFrame
 		-- Smoothstep, so each move eases rather than starting and stopping hard.
 		alpha = alpha * alpha * (3 - 2 * alpha)
 	end
-	local from = anchor:PointToWorldSpace(shot.fromA:Lerp(shot.fromB, alpha))
-	local look = anchor:PointToWorldSpace(shot.lookA:Lerp(shot.lookB, alpha))
+	local from = anchor:PointToWorldSpace(fromA:Lerp(fromB, alpha))
+	local look = anchor:PointToWorldSpace(lookA:Lerp(lookB, alpha))
 	return CFrame.lookAt(from, look)
 end
 

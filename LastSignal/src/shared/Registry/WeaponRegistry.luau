@@ -229,7 +229,7 @@ local WEAPONS: { [string]: WeaponDef } = {
 		},
 		startingLoadout = false,
 		unlockLevel = 4,
-		creditCost = 900,
+		creditCost = 360,
 	}),
 
 	--------------------------------------------------------------------
@@ -320,7 +320,7 @@ local WEAPONS: { [string]: WeaponDef } = {
 		},
 		startingLoadout = false,
 		unlockLevel = 8,
-		creditCost = 2400,
+		creditCost = 960,
 	}),
 	rifle = weapon({
 		id = "rifle",
@@ -363,7 +363,7 @@ local WEAPONS: { [string]: WeaponDef } = {
 		},
 		startingLoadout = false,
 		unlockLevel = 16,
-		creditCost = 4200,
+		creditCost = 1680,
 	}),
 	flare_gun = weapon({
 		id = "flare_gun",
@@ -406,7 +406,7 @@ local WEAPONS: { [string]: WeaponDef } = {
 		},
 		startingLoadout = true,
 		unlockLevel = 2,
-		creditCost = 650,
+		creditCost = 260,
 	}),
 
 	--------------------------------------------------------------------

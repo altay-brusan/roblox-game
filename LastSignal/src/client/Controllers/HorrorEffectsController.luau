@@ -17,6 +17,7 @@
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("LastSignal")
@@ -25,6 +26,7 @@ local Logger = require(Shared.Core.Logger)
 local Net = require(Shared.Core.Net)
 
 local log = Logger.new("HorrorEffectsController")
+local C = Color3.fromRGB
 local player = Players.LocalPlayer
 
 local HorrorEffectsController = {}
@@ -241,6 +243,88 @@ local function flicker(seconds: number)
 end
 
 --------------------------------------------------------------------------
+-- The Window Passenger
+--------------------------------------------------------------------------
+
+-- A long pale face pressed to the outside of a carriage window. It is only
+-- ever where you are not looking: if its window is on screen when it comes,
+-- it waits until you look away. When you do look at it, you get a quarter of
+-- a second, and it is gone, and the server is told it was seen.
+local windowFigures: { [string]: Model } = {}
+
+local function windowPassenger(token: string, carriage: Model, offset: Vector3)
+	local model = Instance.new("Model")
+	model.Name = "WindowPassenger"
+	local pale = C(206, 204, 196)
+	local face = piece("Face", Vector3.new(1.3, 2.6, 0.3), CFrame.new(), pale, model)
+	local eyes = piece("Eyes", Vector3.new(0.9, 0.18, 0.32), CFrame.new(), C(10, 10, 12), model)
+	local mouth = piece("Mouth", Vector3.new(0.3, 0.9, 0.32), CFrame.new(), C(30, 20, 20), model)
+	local hands = {
+		piece("Hand", Vector3.new(0.35, 2.4, 0.2), CFrame.new(), pale, model),
+		piece("Hand", Vector3.new(0.35, 2.4, 0.2), CFrame.new(), pale, model),
+	}
+	for _, p in model:GetChildren() do
+		if p:IsA("BasePart") then
+			p.Transparency = 1
+		end
+	end
+	model.Parent = folder()
+	windowFigures[token] = model
+	local placed = false
+	local seenFor = 0
+	local connection: RBXScriptConnection? = nil
+	connection = RunService.RenderStepped:Connect(function(dt)
+		if not model.Parent or not carriage.Parent then
+			if connection then
+				connection:Disconnect()
+			end
+			model:Destroy()
+			windowFigures[token] = nil
+			return
+		end
+		local camera = Workspace.CurrentCamera
+		if not camera then
+			return
+		end
+		local cf = carriage:GetBoundingBox()
+		local side = if offset.X > 0 then 1 else -1
+		local spot = cf * CFrame.new(offset) * CFrame.Angles(0, math.rad(if side > 0 then 90 else -90), 0)
+		face.CFrame = spot
+		eyes.CFrame = spot * CFrame.new(0, 0.55, -0.05)
+		mouth.CFrame = spot * CFrame.new(0, -0.6, -0.05)
+		hands[1].CFrame = spot * CFrame.new(-1.2, -0.4, 0) * CFrame.Angles(0, 0, math.rad(12))
+		hands[2].CFrame = spot * CFrame.new(1.2, -0.4, 0) * CFrame.Angles(0, 0, math.rad(-12))
+		local screen, onScreen = camera:WorldToViewportPoint(face.Position)
+		local viewport = camera.ViewportSize
+		local central = onScreen and screen.Z > 0 and math.abs(screen.X - viewport.X / 2) < viewport.X * 0.35 and math.abs(screen.Y - viewport.Y / 2) < viewport.Y * 0.4
+		local close = (face.Position - camera.CFrame.Position).Magnitude < 70
+		if not placed then
+			-- Only appear while unwatched.
+			if not onScreen then
+				placed = true
+				for _, p in model:GetChildren() do
+					if p:IsA("BasePart") then
+						p.Transparency = 0
+					end
+				end
+			end
+			return
+		end
+		if central and close then
+			seenFor += dt
+			if seenFor > 0.25 then
+				Net.fireServer("EntitySeen", token)
+				if connection then
+					connection:Disconnect()
+				end
+				fadeOut(model, 0.08)
+				windowFigures[token] = nil
+			end
+		else
+			seenFor = 0
+		end
+	end)
+end
 
 function HorrorEffectsController.start()
 	Net.onClientEvent("HorrorCue", function(payload)
@@ -253,6 +337,14 @@ function HorrorEffectsController.start()
 		elseif payload.cue == "evidence" and position then
 			if payload.variant ~= "scratches" or not scratches(position) then
 				footprints(position)
+			end
+		elseif payload.cue == "window_passenger" and typeof(payload.carriage) == "Instance" and payload.carriage:IsA("Model") and typeof(payload.offset) == "Vector3" and type(payload.token) == "string" then
+			windowPassenger(payload.token, payload.carriage, payload.offset)
+		elseif payload.cue == "window_passenger_gone" and type(payload.token) == "string" then
+			local model = windowFigures[payload.token]
+			if model then
+				model:Destroy()
+				windowFigures[payload.token] = nil
 			end
 		elseif payload.cue == "lights_flicker" then
 			flicker(if type(payload.seconds) == "number" then math.clamp(payload.seconds, 0.5, 8) else 3)

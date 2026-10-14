@@ -63,6 +63,7 @@ local ACTIONS: { ActionDef } = {
 	{ id = "sprint", label = "Sprint", description = "Run, while you have the stamina.", key = Enum.KeyCode.LeftShift, gamepad = Enum.KeyCode.ButtonL3, touch = "primary", held = true },
 	{ id = "crouch", label = "Crouch", description = "Move slowly and quietly.", key = Enum.KeyCode.C, gamepad = Enum.KeyCode.ButtonB, touch = "secondary", held = true },
 	{ id = "flashlight", label = "Lamp", description = "Toggle your lamp.", key = Enum.KeyCode.F, gamepad = Enum.KeyCode.DPadUp, touch = "primary" },
+	{ id = "analyzer", label = "Analyzer", description = "Open the Signal Integrity Analyzer.", key = Enum.KeyCode.V, gamepad = Enum.KeyCode.ButtonR3 },
 	{ id = "fire", label = "Attack", description = "Fire or swing your equipped weapon.", gamepad = Enum.KeyCode.ButtonR2, touch = "primary", held = true },
 	{ id = "aim", label = "Aim", description = "Steady your aim.", gamepad = Enum.KeyCode.ButtonL2, touch = "secondary", held = true },
 	{ id = "reload", label = "Reload", description = "Reload the equipped firearm.", key = Enum.KeyCode.R, gamepad = Enum.KeyCode.ButtonY, touch = "secondary" },

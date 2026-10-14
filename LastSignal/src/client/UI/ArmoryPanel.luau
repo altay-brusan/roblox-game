@@ -253,7 +253,7 @@ function ArmoryPanel.build(frame: Frame, rebuild: () -> ())
 			local buy = Widgets.button({ text = "Buy pass", primary = true, enabled = false, parent = body, layoutOrder = 8 })
 			passUis[def.passKey] = { status = status, buy = buy }
 		else
-			status.Text = "Buy with credits in the Stores"
+			status.Text = "Buy with RIP Coin at the Phantom Exchange"
 			status.TextColor3 = Theme.colour("textMuted")
 		end
 	end

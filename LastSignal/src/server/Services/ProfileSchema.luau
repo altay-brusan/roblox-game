@@ -42,6 +42,10 @@ export type Profile = {
 	cosmetics: { [string]: boolean },
 	weapons: { [string]: boolean },
 
+	-- Workshop (UpgradeRegistry): parts salvaged, upgrades bought.
+	parts: number,
+	upgrades: { [string]: boolean },
+
 	-- Night runs (JourneyService): earned only by playing.
 	journeys: {
 		completed: number,
@@ -52,6 +56,10 @@ export type Profile = {
 		rewarded: { string },
 		history: { { seed: number, tier: string, route: string, success: boolean, at: number } },
 		utility: { [string]: boolean },
+		-- The story's ending has been reached: opens the Endless Railway.
+		storyEnded: boolean,
+		endlessStreak: number,
+		endlessBest: number,
 	},
 
 	-- Loadout and appearance ---------------------------------------------
@@ -233,7 +241,7 @@ function ProfileSchema.template(): Profile
 	return {
 		version = GameConfig.DataVersion,
 
-		credits = 350, -- a small starting float so the shop is not empty on day one
+		credits = 140, -- a small starting float so the shop is not empty on day one
 		xp = 0,
 		level = 1,
 
@@ -242,6 +250,8 @@ function ProfileSchema.template(): Profile
 		interiors = { interior_standard = true },
 		cosmetics = CosmeticRegistry.defaultOwned(),
 		weapons = { wrench = true, crowbar = true, revolver = true },
+		parts = 0,
+		upgrades = {},
 		journeys = {
 			completed = 0,
 			failed = 0,
@@ -250,6 +260,9 @@ function ProfileSchema.template(): Profile
 			rewarded = {},
 			history = {},
 			utility = {},
+			storyEnded = false,
+			endlessStreak = 0,
+			endlessBest = 0,
 		},
 
 		loadout = {
@@ -446,6 +459,8 @@ function ProfileSchema.toClient(profile: Profile): { [string]: any }
 		cosmetics = profile.cosmetics,
 		weapons = profile.weapons,
 		journeys = profile.journeys,
+		parts = profile.parts,
+		upgrades = profile.upgrades,
 		loadout = profile.loadout,
 		settings = profile.settings,
 		stats = profile.stats,

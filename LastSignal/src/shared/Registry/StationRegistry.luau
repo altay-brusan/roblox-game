@@ -2,7 +2,7 @@
 --[[
 	StationRegistry
 	---------------
-	Chapter One: The Long Grade. Five stops, in order, each with its own layout,
+	Chapter One: The Long Grade. Eight stops, in order, each with its own layout,
 	objective shape, environmental story and threat profile.
 
 	The rule that shaped this file: no two stops ask for the same verb. Fetching
@@ -211,7 +211,7 @@ local STATIONS: { StationDef } = {
 						{ id = "throw_breaker", text = "Throw the main breaker", kind = "operate", fixture = "breaker", seconds = 2 },
 					} :: { StepDef },
 				},
-				credits = 120,
+				credits = 50,
 				xp = 90,
 			},
 			{
@@ -221,7 +221,7 @@ local STATIONS: { StationDef } = {
 				detail = "The fuel point only works once the halt has power.",
 				optional = false,
 				params = { fixture = "fuel_point", targetFuel = 85, requiresPower = true },
-				credits = 90,
+				credits = 35,
 				xp = 70,
 				requires = { "restore_power" },
 			},
@@ -232,7 +232,7 @@ local STATIONS: { StationDef } = {
 				detail = "Anything you leave behind stays behind.",
 				optional = true,
 				params = { anyItems = true, quantity = 6 },
-				credits = 65,
+				credits = 25,
 				xp = 45,
 			},
 		},
@@ -312,7 +312,7 @@ local STATIONS: { StationDef } = {
 					thenFixture = "loader_controls",
 					thenSeconds = 8,
 				},
-				credits = 150,
+				credits = 60,
 				xp = 110,
 			},
 			{
@@ -322,7 +322,7 @@ local STATIONS: { StationDef } = {
 				detail = "Two cans are in the fuel store by the south gate.",
 				optional = false,
 				params = { item = "fuel_can", quantity = 2, deliverTo = "train_fuel_point" },
-				credits = 100,
+				credits = 40,
 				xp = 75,
 			},
 			{
@@ -332,7 +332,7 @@ local STATIONS: { StationDef } = {
 				detail = "The crews left in a hurry. Their kit is still here.",
 				optional = true,
 				params = { anyItems = true, quantity = 4, area = "bunkhouse" },
-				credits = 65,
+				credits = 25,
 				xp = 45,
 			},
 		},
@@ -403,7 +403,7 @@ local STATIONS: { StationDef } = {
 				detail = "The relay room is across the running line. Look both ways; the line is not as dead as it looks.",
 				optional = false,
 				params = { item = "relay", fixture = "relay_bay", seconds = 6 },
-				credits = 120,
+				credits = 50,
 				xp = 95,
 			},
 			{
@@ -423,7 +423,7 @@ local STATIONS: { StationDef } = {
 					-- Wrong combinations are recoverable, but they make noise.
 					wrongAttemptNoise = 12,
 				},
-				credits = 180,
+				credits = 70,
 				xp = 140,
 				requires = { "replace_relay" },
 			},
@@ -434,7 +434,7 @@ local STATIONS: { StationDef } = {
 				detail = "Three logbooks, one on each floor.",
 				optional = true,
 				params = { item = "dispatch_log", quantity = 3, area = "tower" },
-				credits = 70,
+				credits = 30,
 				xp = 55,
 			},
 		},
@@ -513,7 +513,7 @@ local STATIONS: { StationDef } = {
 						{ id = "lower_span", text = "Lower the span", kind = "operate", fixture = "span_control", seconds = 6 },
 					} :: { StepDef },
 				},
-				credits = 240,
+				credits = 95,
 				xp = 190,
 			},
 			{
@@ -523,7 +523,7 @@ local STATIONS: { StationDef } = {
 				detail = "This is the last real depot before the relay.",
 				optional = true,
 				params = { anyItems = true, quantity = 8, area = "depot" },
-				credits = 80,
+				credits = 30,
 				xp = 60,
 			},
 			{
@@ -533,7 +533,7 @@ local STATIONS: { StationDef } = {
 				detail = "There is a way across without lowering the span. It is not a good way.",
 				optional = true,
 				params = { fixture = "bank_walkway", seconds = 0, risk = "fall" },
-				credits = 90,
+				credits = 35,
 				xp = 70,
 			},
 		},
@@ -545,14 +545,290 @@ local STATIONS: { StationDef } = {
 	}),
 
 	----------------------------------------------------------------------
-	-- 5. WARD HILL RELAY
+	-- 5. CALDER EXCHANGE (the Empty Exchange)
+	----------------------------------------------------------------------
+	station({
+		id = "calder_exchange",
+		index = 5,
+		name = "Calder Exchange",
+		subtitle = "Junction station, booking hall and left luggage",
+		distance = 13500,
+		platformSide = "left",
+		story = "The junction where the branch lines met the main. The booking hall is full of luggage: cases, trunks, prams, coats over chairs, as if a whole queue put their things down at once and stepped away. The departures board still shows the 02:17, on time. The junction points are set for a branch that is not on any map.",
+		approachLine = "Calder Exchange. The junction is set against you, for a line I do not have. The points are worked from the box, and the box needs power from the hall. Mind the luggage. Do not open anything that is ticking.",
+		threat = {
+			baseline = 50,
+			escalation = 3,
+			creatureActive = true,
+			mimicryEnabled = true,
+			scriptedBeat = "left_luggage",
+		},
+		layout = {
+			radius = 360,
+			buildings = {
+				{ id = "booking_hall", kind = "station_building", position = V(-58, 0, -10), rotation = 0, size = V(40, 18, 64), interior = true, entrances = 3 },
+				{ id = "left_luggage", kind = "shed", position = V(-60, 0, 78), rotation = 0, size = V(26, 13, 30), interior = true, entrances = 2 },
+				{ id = "junction_box", kind = "signal_tower", position = V(42, 0, -96), rotation = 180, size = V(20, 40, 22), interior = true, entrances = 1, storey = 2 },
+				{ id = "platform", kind = "platform", position = V(-20, 0, 0), rotation = 0, size = V(12, 3, 170), interior = false, entrances = 0 },
+				{ id = "island", kind = "platform", position = V(22, 0, 20), rotation = 0, size = V(10, 3, 120), interior = false, entrances = 0 },
+				{ id = "hall_luggage", kind = "luggage_heap", position = V(-50, 0, -10), rotation = 0, size = V(16, 2, 36), interior = false, entrances = 0 },
+				{ id = "platform_luggage", kind = "luggage_heap", position = V(-24, 3, 30), rotation = 0, size = V(6, 2, 40), interior = false, entrances = 0 },
+				{ id = "water_tower", kind = "water_tower", position = V(70, 0, 90), rotation = 0, size = V(14, 30, 14), interior = false, entrances = 0 },
+			},
+			fixtures = {
+				{ id = "hall_fusebox", kind = "fusebox", position = V(-74, 0, -30), rotation = 90, objective = "set_junction", step = "fit_fuse" },
+				{ id = "box_breaker", kind = "breaker", position = V(42, 26, -96), rotation = 180, objective = "set_junction", step = "power_box" },
+				{ id = "points_lever", kind = "lever", position = V(42, 26, -90), rotation = 180, objective = "set_junction", step = "set_points" },
+				{ id = "fuel_point", kind = "fuel_point", position = V(-16, 0, -70), rotation = 0, objective = "calder_fuel", step = "draw" },
+			},
+			lootNodes = {
+				{ kind = "locker", position = V(-64, 0, 70), rotation = 0, tier = 2, rolls = 3, guaranteed = { "fusebox_fuse" } },
+				{ kind = "crate", position = V(-54, 0, 86), rotation = 20, tier = 2, rolls = 3 },
+				{ kind = "shelf", position = V(-70, 0, 80), rotation = 90, tier = 1, rolls = 3, guaranteed = { "bandage" } },
+				{ kind = "cabinet", position = V(-74, 0, 10), rotation = 90, tier = 2, rolls = 2, guaranteed = { "battery" } },
+				{ kind = "body", position = V(-30, 0, -40), rotation = 40, tier = 2, rolls = 2, guaranteed = { "ammo_rifle" } },
+				{ kind = "crate", position = V(30, 3, 40), rotation = 0, tier = 1, rolls = 2 },
+				{ kind = "toolboard", position = V(48, 0, -84), rotation = 180, tier = 2, rolls = 2, guaranteed = { "repair_kit" } },
+			},
+			landmarks = {
+				{ id = "booking_hall", name = "the booking hall", position = V(-58, 0, -10) },
+				{ id = "left_luggage", name = "the left luggage office", position = V(-60, 0, 78) },
+				{ id = "junction_box", name = "the junction box", position = V(42, 0, -96) },
+				{ id = "island", name = "the island platform", position = V(22, 0, 20) },
+				{ id = "water_tower", name = "the water tower", position = V(70, 0, 90) },
+			},
+		},
+		objectives = {
+			{
+				id = "set_junction",
+				kind = "sequence",
+				title = "Set the junction for the main line",
+				detail = "Fuse for the hall, power to the box, then the points.",
+				optional = false,
+				params = {
+					steps = {
+						{ id = "find_fuse", text = "Find a fuse in the left luggage office", kind = "collect", item = "fusebox_fuse", quantity = 1 },
+						{ id = "fit_fuse", text = "Fit the fuse in the booking hall", kind = "operate", fixture = "hall_fusebox", seconds = 4 },
+						{ id = "power_box", text = "Throw the breaker in the junction box", kind = "operate", fixture = "box_breaker", seconds = 3 },
+						{ id = "set_points", text = "Pull the points over to the main", kind = "operate", fixture = "points_lever", seconds = 5 },
+					} :: { StepDef },
+				},
+				credits = 50,
+				xp = 160,
+			},
+			{
+				id = "calder_fuel",
+				kind = "deliver",
+				title = "Take on fuel at the platform",
+				detail = "The junction's fuel point still has pressure.",
+				optional = false,
+				params = { fixture = "fuel_point", targetFuel = 80 },
+				credits = 20,
+				xp = 70,
+			},
+			{
+				id = "whose_luggage",
+				kind = "collect",
+				title = "Go through the left luggage",
+				detail = "Somebody here was expecting to come back.",
+				optional = true,
+				params = { anyItems = true, quantity = 4, area = "left_luggage" },
+				credits = 15,
+				xp = 50,
+			},
+		},
+		discoveries = {
+			{ id = "departures_board", name = "The departures board", position = V(-58, 0, -40), hint = "The 02:17 to Ward Hill, on time. Platform 0." },
+			{ id = "ticket_stubs", name = "Ticket stubs", position = V(-50, 0, -10), hint = "Hundreds, all punched, all for the same train." },
+			{ id = "branch_diagram", name = "The branch diagram", position = V(42, 26, -96), hint = "A branch drawn in pencil, to a station marked 0." },
+		},
+		expectedSeconds = 480,
+	}),
+
+	----------------------------------------------------------------------
+	-- 6. BLACKGLASS
+	----------------------------------------------------------------------
+	station({
+		id = "blackglass",
+		index = 6,
+		name = "Blackglass",
+		subtitle = "Glass-fronted halt, dark since it was built",
+		distance = 16400,
+		platformSide = "right",
+		story = "A modern halt of black glass that never opened. Every wall is a mirror at night, and the reflections are not exact: in the glass there is someone on the bench who is not on the bench, a light in the office that is not lit. The section code for the line ahead is written backwards on the wall of the office, meant to be read in the glass.",
+		approachLine = "Blackglass. The section ahead is locked and the code is posted in the halt office. It is posted backwards; read it in the glass. Do not look at the glass longer than you have to.",
+		threat = {
+			baseline = 56,
+			escalation = 3,
+			creatureActive = true,
+			mimicryEnabled = true,
+			scriptedBeat = "reflections",
+		},
+		layout = {
+			radius = 340,
+			buildings = {
+				{ id = "glass_hall", kind = "glass_hall", position = V(46, 0, 0), rotation = 0, size = V(30, 16, 90), interior = true, entrances = 3 },
+				{ id = "halt_office", kind = "glass_hall", position = V(50, 0, -86), rotation = 0, size = V(20, 12, 22), interior = true, entrances = 1 },
+				{ id = "platform", kind = "platform", position = V(20, 0, 0), rotation = 0, size = V(12, 3, 170), interior = false, entrances = 0 },
+				{ id = "plant_shed", kind = "shed", position = V(-48, 0, 60), rotation = 0, size = V(22, 12, 26), interior = true, entrances = 2 },
+				{ id = "far_shelter", kind = "shelter", position = V(-34, 0, -60), rotation = 180, size = V(14, 10, 18), interior = true, entrances = 1 },
+			},
+			fixtures = {
+				{ id = "plant_generator", kind = "generator", position = V(-48, 0, 56), rotation = 0, objective = "light_halt", step = "start" },
+				{ id = "glass_breaker", kind = "breaker", position = V(40, 0, -10), rotation = 0, objective = "light_halt", step = "lights" },
+				{ id = "office_code", kind = "interlocking_frame", position = V(50, 0, -86), rotation = 0, objective = "read_glass", step = "read_frame" },
+				{ id = "glass_lever_1", kind = "lever", position = V(-6, 0, -70), rotation = 0, objective = "read_glass", step = "set_levers" },
+				{ id = "glass_lever_2", kind = "lever", position = V(-6, 0, 0), rotation = 0, objective = "read_glass", step = "set_levers" },
+				{ id = "glass_lever_3", kind = "lever", position = V(-6, 0, 70), rotation = 0, objective = "read_glass", step = "set_levers" },
+			},
+			lootNodes = {
+				{ kind = "crate", position = V(-44, 0, 66), rotation = 0, tier = 2, rolls = 2, guaranteed = { "fuel_can" } },
+				{ kind = "locker", position = V(56, 0, 20), rotation = 90, tier = 2, rolls = 3, guaranteed = { "medkit" } },
+				{ kind = "cabinet", position = V(54, 0, -82), rotation = 90, tier = 2, rolls = 2, guaranteed = { "flare_shell" } },
+				{ kind = "body", position = V(-30, 0, -56), rotation = 10, tier = 3, rolls = 2, guaranteed = { "ammo_shell" } },
+				{ kind = "shelf", position = V(-52, 0, 54), rotation = 0, tier = 1, rolls = 3 },
+			},
+			landmarks = {
+				{ id = "glass_hall", name = "the glass hall", position = V(46, 0, 0) },
+				{ id = "halt_office", name = "the halt office", position = V(50, 0, -86) },
+				{ id = "plant_shed", name = "the plant shed", position = V(-48, 0, 60) },
+				{ id = "far_shelter", name = "the far shelter", position = V(-34, 0, -60) },
+			},
+		},
+		objectives = {
+			{
+				id = "light_halt",
+				kind = "sequence",
+				title = "Light the halt",
+				detail = "Start the plant across the line, then the hall lights.",
+				optional = false,
+				params = {
+					steps = {
+						{ id = "start", text = "Start the generator in the plant shed", kind = "operate", fixture = "plant_generator", seconds = 6 },
+						{ id = "lights", text = "Throw the hall breaker", kind = "operate", fixture = "glass_breaker", seconds = 3 },
+					} :: { StepDef },
+				},
+				credits = 40,
+				xp = 120,
+			},
+			{
+				id = "read_glass",
+				kind = "relay",
+				title = "Read the code in the glass",
+				detail = "The code in the halt office is written backwards. Set the three levers to match.",
+				optional = false,
+				params = {
+					readerFixture = "office_code",
+					leverFixtures = { "glass_lever_1", "glass_lever_2", "glass_lever_3" },
+					positions = 3,
+					soloPrintsSlip = true,
+					wrongAttemptNoise = 14,
+				},
+				credits = 60,
+				xp = 160,
+				requires = { "light_halt" },
+			},
+		},
+		discoveries = {
+			{ id = "bench_reflection", name = "The bench in the glass", position = V(30, 0, 10), hint = "In the reflection, someone is sitting on it." },
+			{ id = "office_light", name = "The office in the glass", position = V(50, 0, -86), hint = "The reflection has its light on. The office does not." },
+			{ id = "construction_sign", name = "Construction board", position = V(-34, 0, -60), hint = "Opening date: the night the line went quiet." },
+		},
+		expectedSeconds = 420,
+	}),
+
+	----------------------------------------------------------------------
+	-- 7. STATION ZERO
+	----------------------------------------------------------------------
+	station({
+		id = "station_zero",
+		index = 7,
+		name = "Station Zero",
+		subtitle = "Not on any map",
+		distance = 19300,
+		platformSide = "left",
+		story = "The station on the pencilled branch. It is not on any map and it is in perfect order: swept, lit, every clock at 02:17. In its office are reels of tape, labelled in handwriting the crew recognises as their own, recorded on journeys they do not remember making. The last reel is labelled WARD HILL. PLAY IT TO THEM.",
+		approachLine = "...this is not on my board. Zero two seventeen, I have nothing for you here. If you can hear me, there is no Station Zero.",
+		threat = {
+			baseline = 62,
+			escalation = 4,
+			creatureActive = true,
+			mimicryEnabled = true,
+			scriptedBeat = "station_zero",
+		},
+		layout = {
+			radius = 320,
+			buildings = {
+				{ id = "zero_office", kind = "station_building", position = V(-50, 0, -20), rotation = 0, size = V(30, 16, 44), interior = true, entrances = 2 },
+				{ id = "archive", kind = "facility", position = V(-56, 0, 64), rotation = 0, size = V(28, 14, 34), interior = true, entrances = 2 },
+				{ id = "platform", kind = "platform", position = V(-20, 0, 0), rotation = 0, size = V(12, 3, 150), interior = false, entrances = 0 },
+				{ id = "zero_box", kind = "signal_tower", position = V(40, 0, 60), rotation = 180, size = V(18, 36, 20), interior = true, entrances = 1, storey = 2 },
+				{ id = "zero_shelter", kind = "shelter", position = V(-24, 3, -50), rotation = 0, size = V(10, 9, 16), interior = true, entrances = 1 },
+			},
+			fixtures = {
+				{ id = "zero_breaker", kind = "breaker", position = V(-62, 0, -30), rotation = 90, objective = "wake_station", step = "breaker" },
+				{ id = "zero_controls", kind = "controls", position = V(40, 22, 60), rotation = 180, objective = "wake_station", step = "board" },
+				{ id = "zero_frame", kind = "lever", position = V(36, 0, 40), rotation = 180, objective = "wake_station", step = "hold" },
+			},
+			lootNodes = {
+				{ kind = "cabinet", position = V(-60, 0, 58), rotation = 90, tier = 3, rolls = 2, guaranteed = { "recorder" } },
+				{ kind = "shelf", position = V(-50, 0, 70), rotation = 0, tier = 3, rolls = 2, guaranteed = { "recorder" } },
+				{ kind = "locker", position = V(-58, 0, -10), rotation = 90, tier = 2, rolls = 3, guaranteed = { "medkit" } },
+				{ kind = "crate", position = V(-30, 0, -70), rotation = 0, tier = 2, rolls = 3, guaranteed = { "fuel_can" } },
+				{ kind = "toolboard", position = V(44, 0, 50), rotation = 180, tier = 2, rolls = 2, guaranteed = { "repair_kit" } },
+			},
+			landmarks = {
+				{ id = "zero_office", name = "the station office", position = V(-50, 0, -20) },
+				{ id = "archive", name = "the archive", position = V(-56, 0, 64) },
+				{ id = "zero_box", name = "the signal box", position = V(40, 0, 60) },
+				{ id = "zero_shelter", name = "the platform shelter", position = V(-24, 3, -50) },
+			},
+		},
+		objectives = {
+			{
+				id = "wake_station",
+				kind = "sequence",
+				title = "Get the train out of Station Zero",
+				detail = "Power, the board, then hold the frame while the route sets.",
+				optional = false,
+				params = {
+					steps = {
+						{ id = "breaker", text = "Throw the breaker in the station office", kind = "operate", fixture = "zero_breaker", seconds = 3 },
+						{ id = "board", text = "Wake the board in the signal box", kind = "operate", fixture = "zero_controls", seconds = 6 },
+						{ id = "hold", text = "Hold the frame while the route sets", kind = "defend", fixture = "zero_frame", seconds = 90, allowAbandon = true },
+					} :: { StepDef },
+				},
+				credits = 70,
+				xp = 220,
+			},
+			{
+				id = "our_reels",
+				kind = "collect",
+				title = "Take the reels from the archive",
+				detail = "They are labelled in your handwriting.",
+				optional = true,
+				params = { item = "recorder", quantity = 2, area = "archive" },
+				credits = 25,
+				xp = 80,
+			},
+		},
+		discoveries = {
+			{ id = "clocks", name = "The clocks", position = V(-50, 0, -20), hint = "Every clock in the station says 02:17." },
+			{ id = "reel_label", name = "The last reel", position = V(-56, 0, 64), hint = "WARD HILL. PLAY IT TO THEM. In your handwriting." },
+			{ id = "not_on_map", name = "The station map", position = V(-24, 3, -50), hint = "This station is not on it. Neither is the line you came in on." },
+		},
+		expectedSeconds = 480,
+	}),
+
+	----------------------------------------------------------------------
+	-- 8. WARD HILL RELAY
 	----------------------------------------------------------------------
 	station({
 		id = "ward_hill",
-		index = 5,
+		index = 8,
 		name = "Ward Hill Relay",
 		subtitle = "Regional communications facility",
-		distance = 13500,
+		distance = 22200,
 		platformSide = "right",
 		story = "The reason the line exists. A hilltop relay that carried every signal in the region, including the one that told everybody to leave. It is still transmitting. Nobody has been here to transmit anything for eleven days.",
 		approachLine = "Ward Hill. This is the last one. Get the transmitter running and we can put out a real signal. And listen to me carefully: whatever answers you up there, it is not me.",
@@ -609,7 +885,7 @@ local STATIONS: { StationDef } = {
 						{ id = "close_board", text = "Close the main board", kind = "operate", fixture = "main_board", seconds = 4 },
 					} :: { StepDef },
 				},
-				credits = 160,
+				credits = 65,
 				xp = 130,
 			},
 			{
@@ -625,7 +901,7 @@ local STATIONS: { StationDef } = {
 						{ id = "raise_power", text = "Raise mast power", kind = "defend", fixture = "mast_switch", seconds = 150 },
 					} :: { StepDef },
 				},
-				credits = 400,
+				credits = 160,
 				xp = 320,
 				requires = { "power_relay" },
 			},
@@ -636,7 +912,7 @@ local STATIONS: { StationDef } = {
 				detail = "Four recordings, spread across the facility.",
 				optional = true,
 				params = { item = "recorder", quantity = 4 },
-				credits = 140,
+				credits = 55,
 				xp = 110,
 			},
 		},

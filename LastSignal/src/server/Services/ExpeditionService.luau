@@ -51,6 +51,8 @@ local StationRegistry = require(Shared.Registry.StationRegistry)
 
 local CrewService = require(script.Parent.CrewService)
 local DepartureService = require(script.Parent.DepartureService)
+local Prologue = require(script.Parent.Parent.World.Prologue)
+local UpgradeRegistry = require(Shared.Registry.UpgradeRegistry)
 local DataService = require(script.Parent.DataService)
 local InventoryService = require(script.Parent.InventoryService)
 local ProgressionService = require(script.Parent.ProgressionService)
@@ -144,6 +146,10 @@ ExpeditionService.Retried = Signal.new() :: Signal.Signal<Expedition>
 -- Set by JourneyService: adds the night-run report to each player's results.
 -- A hook rather than a require, because JourneyService depends on this file.
 ExpeditionService.resultsExtra = nil :: ((Expedition, Player, boolean) -> any)?
+-- Called when a player abandons a run (JourneyService: ends an Endless streak).
+ExpeditionService.onAbandon = nil :: ((Expedition, Player) -> ())?
+-- Set by SignalService: the signal calls of the run, for the report.
+ExpeditionService.resultsSignals = nil :: ((Expedition) -> any)?
 
 --------------------------------------------------------------------------
 -- Helpers
@@ -897,7 +903,12 @@ function ExpeditionService.begin(crew: CrewService.Crew, members: { Player })
 		for _, player in members do
 			Net.fireClient("Notify", player, { kind = "info", title = "Platform 1", body = message, duration = 8 })
 		end
-	end)
+	end, members)
+	if service then
+		-- The 02:17 is an ordinary service until the rear carriage: people
+		-- in the seats, visible from the platform and on the way aboard.
+		Prologue.seatPassengers(service.train)
+	end
 	if not service then
 		WorldService.releaseLane(lane)
 		abandonStart(
@@ -922,6 +933,27 @@ function ExpeditionService.begin(crew: CrewService.Crew, members: { Player })
 	local train = TrainService.spawn(crew.id, yard.trainId, yard.liveryId, yard.interiorId, trainOrigin, lane.trainContainer, {
 		doorsOpen = false,
 	})
+	-- The leader's workshop upgrades, fitted to this train for this run.
+	local upgradeProfile = if members[1] then DataService.getProfile(members[1]) else nil
+	if upgradeProfile then
+		local fitted: any = nil
+		for _, upgrade in UpgradeRegistry.All do
+			if upgradeProfile.upgrades[upgrade.id] and (upgrade.damageResistance or upgrade.fuelUseMultiplier) then
+				fitted = fitted or table.clone(train.def.handling)
+				if upgrade.damageResistance then
+					fitted.damageResistance *= upgrade.damageResistance
+				end
+				if upgrade.fuelUseMultiplier then
+					fitted.fuelUseMultiplier *= upgrade.fuelUseMultiplier
+				end
+			end
+		end
+		if fitted then
+			local def = table.clone(train.def)
+			def.handling = fitted
+			train.def = def
+		end
+	end
 
 	local expedition: Expedition = {
 		id = id,
@@ -951,7 +983,13 @@ function ExpeditionService.begin(crew: CrewService.Crew, members: { Player })
 		failedAt = nil,
 		maid = Maid.new(),
 		members = memberIds,
-		route = { 1, 2, 3, 4, 5 },
+		route = (function()
+			local all = {}
+			for i = 1, StationRegistry.count() do
+				table.insert(all, i)
+			end
+			return all
+		end)(),
 		mode = "story",
 	}
 
@@ -1030,8 +1068,20 @@ function ExpeditionService.begin(crew: CrewService.Crew, members: { Player })
 		skippableAfter = GameConfig.CinematicSkippableAfter,
 		trainModel = yard.train.built.model,
 		trainCFrame = yard.train.built.root.CFrame,
+		carriageModel = yard.train.built.carriages[1],
+		driverUserId = members[1] and members[1].UserId or 0,
 	})
-	ExpeditionService.fireRadio(expedition, "expedition_start")
+	-- The passengers go between the bang and the look back down the aisle.
+	-- Timed to the shots in CameraController; it happens even if the crew
+	-- skipped the sequence, because it happens to the train, not the camera.
+	task.delay(6.8, function()
+		local rear = yard.train.built.carriages[#yard.train.built.carriages] or yard.train.built.model
+		broadcast(expedition, "HorrorCue", { cue = "train_coupler", position = rear:GetPivot().Position })
+		broadcast(expedition, "HorrorCue", { cue = "lights_flicker", position = yard.train.built.root.Position, seconds = 2.6 })
+	end)
+	task.delay(8.3, function()
+		Prologue.vanish(yard.train)
+	end)
 
 	local platformDistance, tunnelDistance = DepartureService.lobbyGeometry()
 	-- Start streaming the line in for each member while the train is still
@@ -1150,15 +1200,49 @@ function ExpeditionService.arriveOnLine(expedition: Expedition)
 		return
 	end
 	TrainService.setStopDistance(expedition.train, StationRegistry.Stations[1].distance)
+	-- Studio test hook: a server-set "StartAtStation" attribute on the crew
+	-- leader starts the run just short of that station. Inert outside Studio.
+	local leader = Players:GetPlayerByUserId(expedition.members[1] or 0)
+	local startAt = if leader and game:GetService("RunService"):IsStudio() then tonumber(leader:GetAttribute("StartAtStation")) else nil
+	local startStation = if startAt then StationRegistry.byIndex(startAt) else nil
+	if startStation and startAt and startAt > 1 then
+		TrainService.place(expedition.train, startStation.distance - 400)
+		expedition.stationIndex = startAt - 1
+		TrainService.setStopDistance(expedition.train, startStation.distance)
+		log.warn(string.format("TEST: starting %s short of %s", expedition.id, startStation.name))
+	end
 	setState(expedition, "travelling")
 	ExpeditionService.takeCheckpoint(expedition)
+
+	-- The other side of the crossing: what is left, where the yard went,
+	-- and who answers.
+	Prologue.leaveBelongings(expedition.train)
+	Prologue.placeNameboard(expedition.train, expedition.lane.dropContainer)
 	notify(
 		expedition,
 		"info",
 		"02:17, Up Main",
-		"The yard pilot has handed her over. The cab is at the front: take the driver's seat.",
+		"Every passenger is gone. The cab is at the front: take the driver's seat.",
 		8
 	)
+	local function say(attribution: string, text: string, duration: number, source: string?)
+		broadcast(expedition, "RadioMessage", { id = "prologue", source = source or "crew", text = text, duration = duration, attribution = attribution, isFalse = false })
+	end
+	local steps: { { at: number, run: () -> () } } = {
+		{ at = 3, run = function() say("Driver", "Control, this is the zero two seventeen. My passengers are gone. All of them. Control, do you read?", 6) end },
+		{ at = 10, run = function() say("Radio", "[Static. Nothing from Control.]", 4, "recording") end },
+		{ at = 14, run = function() say("Driver", "That's our yard's nameboard. In the trees. Where's the yard?", 5) end },
+		{ at = 20, run = function() ExpeditionService.fireRadio(expedition, "expedition_start") end },
+		{ at = 23, run = function() broadcast(expedition, "Cinematic", { action = "title" }) end },
+		{ at = 40, run = function() say("Driver", "That answered before I'd finished asking. And it said we're the last one out. Out of where?", 7) end },
+	}
+	for _, step in steps do
+		task.delay(step.at, function()
+			if expedition.state ~= "closed" then
+				step.run()
+			end
+		end)
+	end
 end
 
 local cinematicSkipVotes: { [string]: { [number]: boolean } } = {}
@@ -1221,6 +1305,18 @@ function ExpeditionService.finish(expedition: Expedition, success: boolean)
 			else math.floor(Balance.Economy.creditsPerExpeditionComplete * Balance.Economy.creditsFailurePenaltyFraction)
 		local baseXp = if success then Balance.Economy.xpPerExpeditionComplete else math.floor(Balance.Economy.xpPerExpeditionComplete * 0.4)
 
+		-- Salvage carried home becomes workshop parts (UpgradeRegistry).
+		local salvaged = 0
+		for _, itemId in UpgradeRegistry.Salvage do
+			salvaged += InventoryService.countOf(player, itemId)
+		end
+		salvaged = math.min(salvaged, UpgradeRegistry.maxPartsPerRun)
+		if salvaged > 0 then
+			DataService.update(player, function(p)
+				p.parts += salvaged
+			end)
+		end
+
 		local result = ProgressionService.award(player, {
 			credits = math.floor(baseCredits * difficulty.creditMultiplier),
 			xp = math.floor(baseXp * difficulty.xpMultiplier),
@@ -1251,7 +1347,9 @@ function ExpeditionService.finish(expedition: Expedition, success: boolean)
 			level = result.newLevel,
 			levelsGained = result.levelsGained,
 			difficulty = expedition.difficulty,
+			partsSalvaged = salvaged,
 			journey = if ExpeditionService.resultsExtra then ExpeditionService.resultsExtra(expedition, player, success) else nil,
+			signals = if ExpeditionService.resultsSignals then ExpeditionService.resultsSignals(expedition) else nil,
 		})
 	end
 
@@ -1494,6 +1592,9 @@ function ExpeditionService.start()
 		end
 		-- Abandoning is per-player: it returns you to the lobby without ending
 		-- the run for everybody else.
+		if ExpeditionService.onAbandon then
+			ExpeditionService.onAbandon(expedition, player)
+		end
 		playerExpedition[player.UserId] = nil
 		InventoryService.destroy(player)
 		local index = table.find(expedition.members, player.UserId)

@@ -199,7 +199,7 @@ define({
 	name = "credits",
 	capability = "grant_currency",
 	usage = "credits <player> <amount>",
-	description = "Grants credits to a player.",
+	description = "Grants RIP Coin to a player.",
 	run = function(_player, rawTarget, rawAmount)
 		local target = resolveTarget(rawTarget)
 		if not target then
@@ -210,7 +210,7 @@ define({
 			return { ok = false, error = "BAD_AMOUNT" }
 		end
 		ProgressionService.award(target, { credits = amount, source = "admin", exact = true })
-		return { ok = true, message = string.format("%d credits to %s", amount, target.Name) }
+		return { ok = true, message = string.format("%d RIP Coin to %s", amount, target.Name) }
 	end,
 })
 

@@ -443,6 +443,59 @@ local function buildStoresHut(cf: CFrame, parent: Instance, lights: { Light }): 
 		parent = parent,
 	})
 	counter:AddTag("StoresCounter")
+
+	-- The Phantom Exchange terminal: an old platform ticket machine bolted
+	-- beside the hatch. Nobody stands behind the counter; the machine answers.
+	local terminalCF = cf * CFrame.new(size.X * 0.32, 0, -size.Z * 0.5 - 1.6)
+	local terminal = BuildKit.part({
+		name = "ExchangeTerminal",
+		size = Vector3.new(2.6, 6.2, 1.6),
+		cf = terminalCF * CFrame.new(0, 3.1, 0),
+		colour = C(30, 32, 34),
+		material = Enum.Material.Metal,
+		parent = parent,
+	})
+	terminal:AddTag("StoresCounter")
+	local screen = BuildKit.part({
+		name = "ExchangeScreen",
+		size = Vector3.new(1.9, 1.4, 0.1),
+		cf = terminalCF * CFrame.new(0, 4.6, -0.82),
+		colour = C(40, 120, 70),
+		material = Enum.Material.Neon,
+		parent = parent,
+	})
+	screen.Transparency = 0.2
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Front
+	gui.PixelsPerStud = 60
+	gui.LightInfluence = 0
+	gui.Parent = screen
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundColor3 = C(6, 20, 12)
+	label.TextColor3 = C(120, 255, 160)
+	label.Font = Enum.Font.Code
+	label.TextScaled = true
+	label.Text = "PHANTOM EXCHANGE\nFARES TAKEN\nNO CHANGE GIVEN"
+	label.Parent = gui
+	BuildKit.detail({
+		name = "IntercomGrille",
+		size = Vector3.new(1.2, 0.8, 0.1),
+		cf = terminalCF * CFrame.new(0, 3.2, -0.82),
+		colour = C(70, 72, 70),
+		material = Enum.Material.DiamondPlate,
+		parent = parent,
+	})
+	BuildKit.detail({
+		name = "FareSlot",
+		size = Vector3.new(0.9, 0.12, 0.1),
+		cf = terminalCF * CFrame.new(0, 2.2, -0.82),
+		colour = C(176, 142, 74),
+		material = Enum.Material.Metal,
+		parent = parent,
+	})
+	local _, terminalLight = BuildKit.lamp(terminalCF * CFrame.new(0, 6.6, -0.6), "bulkhead", C(255, 70, 50), 0.8, 10, parent)
+	table.insert(lights, terminalLight)
 	BuildKit.part({
 		name = "CounterFront",
 		size = Vector3.new(size.X * 0.4, 4.0, 0.5),
@@ -1111,10 +1164,10 @@ function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): B
 		height = 7,
 		subtitle = "Loadout",
 	})
-	BuildKit.postSign(originCF * CFrame.new(44, 0, 40) * CFrame.Angles(0, math.rad(-90), 0), "STORES", model, {
-		width = 12,
+	BuildKit.postSign(originCF * CFrame.new(44, 0, 40) * CFrame.Angles(0, math.rad(-90), 0), "PHANTOM EXCHANGE", model, {
+		width = 16,
 		height = 7,
-		subtitle = "Liveries and supplies",
+		subtitle = "RIP Coin and Robux",
 	})
 	BuildKit.postSign(originCF * CFrame.new(30, 0, -34) * CFrame.Angles(0, math.rad(-90), 0), "CREW SHELTER", model, {
 		width = 15,

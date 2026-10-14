@@ -562,7 +562,7 @@ function AudioController.start()
 			setBand(payload.band or 0)
 			return
 		end
-		if payload.cue == "lights_flicker" or payload.cue == "silhouette" or payload.cue == "evidence" then
+		if payload.cue == "lights_flicker" or payload.cue == "silhouette" or payload.cue == "evidence" or payload.cue == "window_passenger" or payload.cue == "window_passenger_gone" then
 			-- Handled by the visual effects controller; no audio here.
 			return
 		end

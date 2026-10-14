@@ -70,7 +70,10 @@ function JourneyUI.crewSection(parent: Instance, order: number, rebuild: () -> (
 	for i, tier in info.tiers do
 		local selected = prefs.tier == tier.id
 		Widgets.button({
-			text = if tier.unlocked then tier.name .. (if selected then "  (selected)" else "") else tier.name .. string.format("  (after %d night runs)", tier.unlockAfter),
+			text = if tier.unlocked
+				then tier.name .. (if tier.streak and tier.streak > 0 then string.format("  (night %d, best %d)", math.min(tier.streak, 4) + 1, tier.best or 0) else "") .. (if selected then "  (selected)" else "")
+				elseif tier.requiresStory then tier.name .. "  (reach the end of the story)"
+				else tier.name .. string.format("  (after %d night runs)", tier.unlockAfter),
 			primary = selected,
 			enabled = tier.unlocked,
 			subtitle = tier.summary,
@@ -123,6 +126,10 @@ end
 
 --- The night-run block on the results screen.
 function JourneyUI.results(parent: Instance, order: number, journey: any)
+	if type(journey) == "table" and journey.endlessUnlocked then
+		Widgets.caption(parent, "The line does not end at Ward Hill. Endless Railway is open: Night run, on the crew panel.", order)
+		return
+	end
 	if type(journey) ~= "table" or journey.mode ~= "nightrun" then
 		return
 	end
@@ -134,6 +141,9 @@ function JourneyUI.results(parent: Instance, order: number, journey: any)
 		parent = parent,
 		layoutOrder = order + 1,
 	})
+	if type(journey.endless) == "table" then
+		Widgets.statRow(parent, "Endless", string.format("night %d; %d in a row, best %d", journey.endless.night, journey.endless.streak, journey.endless.best), order + 2)
+	end
 	Widgets.statRow(parent, "Route", string.format("%s (%s)", tostring(journey.route), if journey.routeChosenBy == "default" then "default" else "chosen by " .. tostring(journey.routeChosenBy)), order + 2)
 	local lines = {}
 	for _, e in journey.events or {} do
@@ -145,16 +155,16 @@ function JourneyUI.results(parent: Instance, order: number, journey: any)
 		Widgets.caption(parent, "This seed could not produce a valid night, so the standard fallback night was used.", order + 4)
 	end
 	if (journey.bonus or 0) > 0 then
-		Widgets.statRow(parent, "Night run bonus", tostring(journey.bonus) .. " credits", order + 5)
+		Widgets.statRow(parent, "Night run bonus", tostring(journey.bonus) .. " RIP Coin", order + 5)
 	end
 	if (journey.inspectionCredits or 0) > 0 then
-		Widgets.statRow(parent, "Inspection", tostring(journey.inspectionCredits) .. " credits", order + 6)
+		Widgets.statRow(parent, "Inspection", tostring(journey.inspectionCredits) .. " RIP Coin", order + 6)
 	end
 	if journey.unlocked and #journey.unlocked > 0 then
 		Widgets.statRow(parent, "Earned", table.concat(journey.unlocked, ", "), order + 7)
 	end
 	if journey.alreadyCredited then
-		Widgets.caption(parent, "This run was already credited.", order + 8)
+		Widgets.caption(parent, "This run was already rewarded.", order + 8)
 	elseif not journey.saved then
 		Widgets.caption(parent, "Progress could not be saved this session, so this run is not counted.", order + 8)
 	end

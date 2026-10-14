@@ -1000,7 +1000,7 @@ function HUDController.start()
 		end
 		local parts = {}
 		if (payload.credits or 0) ~= 0 then
-			table.insert(parts, string.format("%+d credits", payload.credits))
+			table.insert(parts, string.format("%+d RIP Coin", payload.credits))
 		end
 		if (payload.xp or 0) > 0 then
 			table.insert(parts, string.format("%+d XP", payload.xp))

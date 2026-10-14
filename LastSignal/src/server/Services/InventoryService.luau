@@ -91,6 +91,10 @@ function InventoryService.limitsFor(player: Player, trainId: string?, crewBonusS
 			slots += trainDef.handling.inventoryBonusSlots
 		end
 	end
+	-- Workshop: extra racks go with the player onto any train.
+	if profile and profile.upgrades.extra_racks then
+		slots += 2
+	end
 
 	slots += crewBonusSlots or 0
 	weight += crewBonusWeight or 0

@@ -73,6 +73,8 @@ export type TrainDef = {
 	-- The starter must always be enough to finish the chapter. Enforced by a
 	-- check in ExpeditionService, not just by intent.
 	isStarter: boolean,
+	-- Game Pass for a premium train; checked on the server at selection.
+	passKey: string?,
 }
 
 local function train(def: TrainDef): TrainDef
@@ -157,7 +159,7 @@ local TRAINS: { [string]: TrainDef } = {
 		},
 		defaultLivery = "livery_freight",
 		unlockLevel = 10,
-		creditCost = 6500,
+		creditCost = 2600,
 		isStarter = false,
 	}),
 
@@ -194,7 +196,7 @@ local TRAINS: { [string]: TrainDef } = {
 		},
 		defaultLivery = "livery_express",
 		unlockLevel = 18,
-		creditCost = 11000,
+		creditCost = 4400,
 		isStarter = false,
 	}),
 
@@ -233,9 +235,134 @@ local TRAINS: { [string]: TrainDef } = {
 		},
 		defaultLivery = "livery_engineering",
 		unlockLevel = 26,
-		creditCost = 16500,
+		creditCost = 6600,
 		isStarter = false,
 	}),
+
+	--------------------------------------------------------------------
+	-- Premium trains (Game Passes). Each is a different way to ride the
+	-- line, with a real weakness; none makes the line safe, and the story
+	-- can be finished with the Warden.
+	--------------------------------------------------------------------
+
+	phantom_express = train({
+		id = "phantom_express",
+		name = "Phantom Express",
+		class = "Night Observation Express",
+		tagline = "Pale, quick, and nobody aboard but you.",
+		description = "A long-nosed express in ghost-grey with an observation carriage of tall windows. Fast and economical, but lightly built and short on storage: a brush with the line costs her more than most.",
+		build = {
+			locoLength = 44,
+			locoWidth = 10,
+			locoHeight = 12,
+			nose = "raked",
+			bogies = 2,
+			axlesPerBogie = 2,
+			wheelRadius = 1.4,
+			cabPosition = "front",
+			exhaustStacks = 0,
+			detailLevel = 3,
+			carriages = {
+				{ kind = "passenger", length = 50, seats = 10, racks = 4, crates = 2, roofHatch = true },
+				{ kind = "supply", length = 40, seats = 2, racks = 3, crates = 6 },
+			},
+		},
+		handling = {
+			maxSpeedMultiplier = 1.22,
+			accelerationMultiplier = 1.15,
+			brakingMultiplier = 1.1,
+			fuelUseMultiplier = 0.85,
+			conditionDriftMultiplier = 1.1,
+			damageResistance = 0.8,
+			inventoryBonusSlots = -2,
+			headlightRangeMultiplier = 1.1,
+		},
+		defaultLivery = "livery_phantom",
+		unlockLevel = 0,
+		creditCost = 0,
+		isStarter = false,
+		passKey = "pass_phantom_express",
+	}),
+
+	eclipse_engine = train({
+		id = "eclipse_engine",
+		name = "Eclipse Engine",
+		class = "Centre-Cab Relay Locomotive",
+		tagline = "Black and gold, and quiet about it.",
+		description = "A centre-cab engine in black and gold with a workshop carriage. Balanced and economical with good storage, but slow to get away: a stop in the wrong place takes longer to leave.",
+		build = {
+			locoLength = 52,
+			locoWidth = 11,
+			locoHeight = 13,
+			nose = "bonnet",
+			bogies = 2,
+			axlesPerBogie = 3,
+			wheelRadius = 1.5,
+			cabPosition = "centre",
+			exhaustStacks = 2,
+			detailLevel = 3,
+			carriages = {
+				{ kind = "passenger", length = 48, seats = 10, racks = 6, crates = 4 },
+				{ kind = "workshop", length = 46, seats = 2, racks = 6, crates = 8, roofHatch = true },
+			},
+		},
+		handling = {
+			maxSpeedMultiplier = 1.08,
+			accelerationMultiplier = 0.8,
+			brakingMultiplier = 1.0,
+			fuelUseMultiplier = 0.9,
+			conditionDriftMultiplier = 0.9,
+			damageResistance = 1.15,
+			inventoryBonusSlots = 3,
+			headlightRangeMultiplier = 1.0,
+		},
+		defaultLivery = "livery_eclipse",
+		unlockLevel = 0,
+		creditCost = 0,
+		isStarter = false,
+		passKey = "pass_eclipse_engine",
+	}),
+
+	wardens_convoy = train({
+		id = "wardens_convoy",
+		name = "Warden's Convoy",
+		class = "Armoured Convoy, Four Vehicles",
+		tagline = "Everything, everyone, and the slowest way home.",
+		description = "An armoured locomotive with a guard van, a passenger carriage and a supply wagon: the most room and the toughest body on the line. It is slow, it is thirsty, and a long train is a long thing to watch.",
+		build = {
+			locoLength = 56,
+			locoWidth = 11,
+			locoHeight = 13,
+			nose = "armoured",
+			bogies = 2,
+			axlesPerBogie = 3,
+			wheelRadius = 1.6,
+			cabPosition = "front",
+			exhaustStacks = 1,
+			detailLevel = 3,
+			carriages = {
+				{ kind = "guard", length = 40, seats = 6, racks = 4, crates = 4 },
+				{ kind = "passenger", length = 50, seats = 12, racks = 6, crates = 4 },
+				{ kind = "supply", length = 50, seats = 0, racks = 8, crates = 14, roofHatch = true },
+			},
+		},
+		handling = {
+			maxSpeedMultiplier = 0.84,
+			accelerationMultiplier = 0.85,
+			brakingMultiplier = 0.9,
+			fuelUseMultiplier = 1.3,
+			conditionDriftMultiplier = 0.85,
+			damageResistance = 1.5,
+			inventoryBonusSlots = 6,
+			headlightRangeMultiplier = 1.15,
+		},
+		defaultLivery = "livery_convoy",
+		unlockLevel = 0,
+		creditCost = 0,
+		isStarter = false,
+		passKey = "pass_wardens_convoy",
+	}),
+
 }
 
 --------------------------------------------------------------------------
@@ -314,6 +441,45 @@ local LIVERIES: { [string]: LiveryDef } = {
 		lampColour = C(255, 236, 190),
 		source = "default",
 	}),
+	livery_phantom = livery({
+		id = "livery_phantom",
+		name = "Phantom Grey",
+		description = "Ghost-grey with a pale blue stripe. Comes with the Phantom Express.",
+		body = C(178, 184, 190),
+		roof = C(70, 76, 84),
+		trim = C(120, 170, 220),
+		underframe = C(40, 42, 46),
+		stripe = C(140, 190, 235),
+		lampColour = C(214, 232, 255),
+		source = "robux",
+		productKey = "pass_phantom_express",
+	}),
+	livery_eclipse = livery({
+		id = "livery_eclipse",
+		name = "Eclipse Black",
+		description = "Gloss black lined in gold. Comes with the Eclipse Engine.",
+		body = C(22, 22, 26),
+		roof = C(16, 16, 18),
+		trim = C(196, 158, 82),
+		underframe = C(20, 20, 22),
+		stripe = C(196, 158, 82),
+		lampColour = C(255, 226, 170),
+		source = "robux",
+		productKey = "pass_eclipse_engine",
+	}),
+	livery_convoy = livery({
+		id = "livery_convoy",
+		name = "Convoy Olive",
+		description = "Olive drab with hazard chevrons. Comes with the Warden's Convoy.",
+		body = C(74, 82, 58),
+		roof = C(46, 50, 40),
+		trim = C(200, 168, 60),
+		underframe = C(30, 32, 28),
+		pattern = "chevron",
+		lampColour = C(255, 236, 190),
+		source = "robux",
+		productKey = "pass_wardens_convoy",
+	}),
 
 	-- Earned with credits
 	livery_ashline = livery({
@@ -326,7 +492,7 @@ local LIVERIES: { [string]: LiveryDef } = {
 		underframe = C(30, 30, 32),
 		lampColour = C(248, 244, 232),
 		source = "credits",
-		creditCost = 3200,
+		creditCost = 1280,
 	}),
 	livery_pinewatch = livery({
 		id = "livery_pinewatch",
@@ -339,7 +505,7 @@ local LIVERIES: { [string]: LiveryDef } = {
 		stripe = C(186, 168, 128),
 		lampColour = C(255, 238, 204),
 		source = "credits",
-		creditCost = 4800,
+		creditCost = 1920,
 	}),
 
 	-- Robux liveries. productKey must match Config.Monetization, and the shop
@@ -447,7 +613,7 @@ local INTERIORS: { [string]: InteriorDef } = {
 		lampColour = C(226, 238, 255),
 		lampBrightness = 0.85,
 		source = "credits",
-		creditCost = 2200,
+		creditCost = 880,
 	},
 	interior_brass = {
 		id = "interior_brass",

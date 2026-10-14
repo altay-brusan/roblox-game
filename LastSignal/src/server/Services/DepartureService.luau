@@ -254,13 +254,17 @@ end
 --- Reserves the service at Platform 1 for a crew, waiting for one if it is
 --- out on a run. The crew's chosen train and livery are honoured when the
 --- waiting train is empty; with passengers already aboard, it is kept.
+--- The crew's own members do not count as passengers: the lobby spawn can
+--- sit inside a long train's footprint, and a crew must always get the
+--- train it chose. They are stepped onto the platform before the rebuild.
 --- Returns nil if no train becomes available in time.
 function DepartureService.reserve(
 	crewId: string,
 	trainId: string,
 	liveryId: string?,
 	interiorId: string?,
-	onWaiting: (string) -> ()
+	onWaiting: (string) -> (),
+	crewMembers: { Player }?
 ): Service?
 	local deadline = os.clock() + DepartureService.ReserveSeconds
 	local told = false
@@ -273,13 +277,24 @@ function DepartureService.reserve(
 			local wantInterior = interiorId or "interior_standard"
 			if service.trainId ~= trainId or service.liveryId ~= wantLivery or service.interiorId ~= wantInterior then
 				local occupied = false
+				local ownAboard = {}
 				for _, player in Players:GetPlayers() do
 					if DepartureService.isAboard(service, player) then
-						occupied = true
-						break
+						if crewMembers and table.find(crewMembers, player) then
+							table.insert(ownAboard, player)
+						else
+							occupied = true
+							break
+						end
 					end
 				end
 				if not occupied then
+					local built = lobby()
+					for _, player in ownAboard do
+						if built and player.Character then
+							player.Character:PivotTo(built.platformCFrame * CFrame.new(math.random(-3, 3), 0, math.random(-8, 8)))
+						end
+					end
 					TrainService.despawn(service.key)
 					local rebuilt = spawnService(trainId, wantLivery, wantInterior, true)
 					if rebuilt then

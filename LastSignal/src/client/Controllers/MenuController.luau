@@ -40,6 +40,7 @@ local CosmeticRegistry = require(Shared.Registry.CosmeticRegistry)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local Widgets = require(script.Parent.Parent.UI.Widgets)
 local ArmoryPanel = require(script.Parent.Parent.UI.ArmoryPanel)
+local UpgradeRegistry = require(Shared.Registry.UpgradeRegistry)
 local JourneyUI = require(script.Parent.Parent.UI.JourneyUI)
 local CameraController = require(script.Parent.CameraController)
 local InputController = require(script.Parent.InputController)
@@ -98,7 +99,7 @@ local PANEL_TITLES: { [string]: string } = {
 	crew = "Crew",
 	loadout = "Loadout",
 	inventory = "Inventory",
-	shop = "Stores",
+	shop = "Phantom Exchange",
 	armory = "Armory",
 	quests = "Orders",
 	rewards = "Rewards",
@@ -187,7 +188,7 @@ builders.main = function(frame: Frame)
 			parent = headerColumn,
 			layoutOrder = 1,
 		})
-		Widgets.statRow(headerColumn, "Credits", Format.groupedNumber(profile.credits or 0), 2)
+		Widgets.statRow(headerColumn, "RIP Coin", Format.groupedNumber(profile.credits or 0), 2)
 		local xpToNext = profile.xpToNext or 0
 		if xpToNext > 0 then
 			Widgets.statRow(headerColumn, "Progress to next level", string.format("%d / %d", profile.xp or 0, xpToNext), 3)
@@ -217,7 +218,7 @@ builders.main = function(frame: Frame)
 	local entries = {
 		{ id = "crew", label = "Crew", detail = "Form a crew and depart." },
 		{ id = "loadout", label = "Loadout", detail = "Train, livery, weapons and appearance." },
-		{ id = "shop", label = "Stores", detail = "Liveries, cosmetics and supplies." },
+		{ id = "shop", label = "Phantom Exchange", detail = "Spend RIP Coin, or buy with Robux." },
 		{ id = "armory", label = "Armory", detail = "Inspect and equip weapons, and the passes." },
 		{ id = "quests", label = "Orders", detail = "Daily and weekly objectives." },
 		{ id = "rewards", label = "Rewards", detail = "Daily login and playtime." },
@@ -569,11 +570,15 @@ builders.loadout = function(frame: Frame)
 	section("Train")
 	for _, def in TrainRegistry.allTrains() do
 		local owned = StateController.owns("train", def.id)
+		local where = ""
+		if not owned then
+			where = if def.passKey then " Robux pass, at the Phantom Exchange." else string.format(" %d RIP Coin at the Phantom Exchange (level %d).", def.creditCost, def.unlockLevel)
+		end
 		choiceRow(
 			def.name,
 			owned,
 			profile.loadout.train == def.id,
-			string.format("%s. %s", def.class, def.tagline),
+			string.format("%s. %s%s", def.class, def.tagline, where),
 			function()
 				Net.invokeServer("CrewCommand", "set_train", def.id)
 				Net.fireServer("SetSetting", "loadout_train", def.id)
@@ -593,6 +598,31 @@ builders.loadout = function(frame: Frame)
 				task.delay(0.2, rebuild)
 			end
 		end)
+	end
+
+	section("Workshop")
+	Widgets.caption(
+		scroll,
+		string.format("Parts: %d. Salvage you still carry when a run ends (fuses, relays, batteries, valves, radio parts) becomes parts. Upgrades are permanent and fit any train you lead.", profile.parts or 0),
+		nextOrder()
+	)
+	for _, upgrade in UpgradeRegistry.All do
+		local have = profile.upgrades and profile.upgrades[upgrade.id] == true
+		choiceRow(
+			upgrade.name,
+			true,
+			have,
+			if have then upgrade.description .. " Fitted." else string.format("%s  %d parts + %d RIP Coin.", upgrade.description, upgrade.parts, upgrade.coin),
+			function()
+				if have then
+					return
+				end
+				Net.invokeServer("ShopCommand", "buy_upgrade", upgrade.id)
+				if rebuild then
+					task.delay(0.3, rebuild)
+				end
+			end
+		)
 	end
 
 	section("Interior")
@@ -802,7 +832,7 @@ end
 local shopCategory = "featured"
 
 builders.shop = function(frame: Frame)
-	local result = Net.invokeServer("ShopCommand", "catalogue")
+	local result = Net.invokeServer("ShopCommand", "catalogue", "open")
 	local catalogue = if type(result) == "table" and result.catalogue then result.catalogue else StateController.get("shop")
 	if not catalogue then
 		Widgets.emptyState(frame, "Loading the stores.")
@@ -812,13 +842,19 @@ builders.shop = function(frame: Frame)
 	local column = Widgets.column(frame, 1)
 
 	Widgets.label({
-		text = string.format("%s credits", Format.groupedNumber(catalogue.credits or 0)),
+		text = string.format("%s RIP Coin", Format.groupedNumber(catalogue.credits or 0)),
 		size = "body",
 		font = Theme.Font.heading,
 		colour = Theme.colour("brass"),
 		parent = column,
 		layoutOrder = 1,
 	})
+
+	Widgets.caption(
+		column,
+		"RIP Coin is earned on the line and spent here. Prices marked R$ are Robux purchases, made through Roblox's own prompt.",
+		2
+	)
 
 	if catalogue.promptBlocked then
 		Widgets.caption(column, "Robux purchases are paused during this part of the expedition.", 2)
@@ -834,7 +870,7 @@ builders.shop = function(frame: Frame)
 		notice.AutomaticSize = Enum.AutomaticSize.Y
 		notice.LayoutOrder = 3
 		Widgets.label({
-			text = "Robux products are not configured on this experience yet, so everything here shows as Unavailable. Credit purchases still work.",
+			text = "Robux products are not configured on this experience yet, so everything here shows as Unavailable. RIP Coin purchases still work.",
 			size = "small",
 			colour = Theme.colour("signalAmber"),
 			parent = notice,
@@ -865,7 +901,9 @@ builders.shop = function(frame: Frame)
 			if categoryId == "featured" then
 				-- Featured shows one of each category, highest value first,
 				-- rather than a separate hand-curated list that could drift.
-				matches = entry.purchasable and (entry.category == "passes" or entry.category == "liveries")
+				-- The passes, and what RIP Coin can buy that you do not own yet, so
+				-- the first tab is never empty even before anything is affordable.
+				matches = entry.category == "passes" or (entry.currency == "credits" and not entry.owned)
 			end
 			if not matches then
 				continue
@@ -902,7 +940,7 @@ builders.shop = function(frame: Frame)
 			if entry.owned then
 				priceText = "Owned"
 			elseif entry.currency == "credits" then
-				priceText = string.format("%s credits", Format.groupedNumber(entry.price or 0))
+				priceText = string.format("%s RIP Coin", Format.groupedNumber(entry.price or 0))
 			else
 				-- The live price from MarketplaceService, or Unavailable. Never
 				-- a hard-coded number and never a guess.
@@ -919,7 +957,7 @@ builders.shop = function(frame: Frame)
 
 			if entry.purchasable then
 				Widgets.button({
-					text = if entry.currency == "credits" then "Buy with credits" else "Buy",
+					text = if entry.currency == "credits" then "Buy with RIP Coin" else "Buy",
 					primary = entry.currency ~= "credits",
 					parent = cardColumn,
 					layoutOrder = 4,
@@ -1013,7 +1051,7 @@ builders.quests = function(frame: Frame)
 			local meter = Widgets.meter(column, Theme.colour("progress"), Theme.space(1))
 			meter.instance.LayoutOrder = 3
 			meter.set((quest.progress or 0) / math.max(1, quest.target or 1))
-			Widgets.caption(column, string.format("%d / %d   -   %d credits, %d XP", quest.progress or 0, quest.target or 0, quest.credits or 0, quest.xp or 0), 4)
+			Widgets.caption(column, string.format("%d / %d   -   %d RIP Coin, %d XP", quest.progress or 0, quest.target or 0, quest.credits or 0, quest.xp or 0), 4)
 
 			if quest.claimed then
 				Widgets.caption(column, "Claimed.", 5)
@@ -1061,7 +1099,7 @@ builders.rewards = function(frame: Frame)
 
 	if login.available then
 		Widgets.button({
-			text = string.format("Claim %d credits", login.credits or 0),
+			text = string.format("Claim %d RIP Coin", login.credits or 0),
 			primary = true,
 			parent = column,
 			layoutOrder = 4,
@@ -1088,7 +1126,7 @@ builders.rewards = function(frame: Frame)
 
 	if playtime.available then
 		Widgets.button({
-			text = string.format("Claim %d credits", Balance.Economy.playtimeRewardCredits),
+			text = string.format("Claim %d RIP Coin", Balance.Economy.playtimeRewardCredits),
 			primary = true,
 			parent = column,
 			layoutOrder = 14,
@@ -1443,13 +1481,26 @@ builders.results = function(frame: Frame)
 	Widgets.statRow(scroll, "False transmissions ignored", tostring(results.falseIgnored or 0), 9)
 	Widgets.statRow(scroll, "False transmissions followed", tostring(results.falseFollowed or 0), 10)
 	Widgets.divider(scroll, 11)
-	Widgets.statRow(scroll, "Credits earned", Format.groupedNumber(results.credits or 0), 12)
+	Widgets.statRow(scroll, "RIP Coin earned", Format.groupedNumber(results.credits or 0), 12)
+	if (results.partsSalvaged or 0) > 0 then
+		Widgets.statRow(scroll, "Parts salvaged", tostring(results.partsSalvaged), 13)
+	end
 	Widgets.statRow(scroll, "XP earned", Format.groupedNumber(results.xp or 0), 13)
 	if (results.levelsGained or 0) > 0 then
 		Widgets.statRow(scroll, "Levels gained", string.format("%d  (now %d)", results.levelsGained, results.level), 14)
 	end
 
 	JourneyUI.results(scroll, 15, results.journey)
+
+	local signals = results.signals
+	if type(signals) == "table" and (signals.calls or 0) > 0 then
+		Widgets.divider(scroll, 25)
+		Widgets.statRow(scroll, "Signal calls", string.format("%d heard, %d acted on, %d judged right", signals.calls, signals.answered or 0, signals.correct or 0), 26)
+		Widgets.statRow(scroll, "Survivors brought aboard", if #(signals.rescued or {}) > 0 then table.concat(signals.rescued, ", ") else "none", 27)
+		if (signals.traps or 0) > 0 then
+			Widgets.statRow(scroll, "Traps walked into", tostring(signals.traps), 28)
+		end
+	end
 
 	Widgets.button({
 		text = "Back to the yard",
@@ -1685,6 +1736,10 @@ function MenuController.start()
 		if type(payload) == "table" and payload.state == "results" then
 			lastResults = payload
 			MenuController.open("results")
+		elseif type(payload) == "table" and payload.state == "boarding" and currentPanel ~= nil then
+			-- The leader departed: a crewmate still in the crew panel (or the
+			-- last results) must not ride out with the camera held by a menu.
+			MenuController.close()
 		elseif type(payload) == "table" and payload.state == "failed" then
 			-- The failed state arrives more than once (the failure itself and
 			-- the routine state push); open() toggles, so only open it once.

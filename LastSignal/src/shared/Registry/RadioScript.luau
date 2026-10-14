@@ -410,6 +410,107 @@ local BEATS: { Beat } = {
 	-- Station 5: Ward Hill, and the ending
 	----------------------------------------------------------------------
 	{
+		id = "approach_calder",
+		trigger = "station_approach",
+		triggerParams = { station = "calder_exchange" },
+		once = true,
+		priority = 80,
+		lines = {
+			line({
+				id = "cal_1",
+				source = "dispatch",
+				text = "Control, to zero two seventeen. Calder Exchange. The junction is set against you, for a line I do not have.",
+				duration = 6.5,
+				cue = "radio_open",
+			}),
+			line({
+				id = "cal_2",
+				source = "dispatch",
+				text = "Points are worked from the box. The box needs power from the hall. Mind the luggage.",
+				duration = 5.5,
+			}),
+		},
+	},
+	{
+		id = "approach_blackglass",
+		trigger = "station_approach",
+		triggerParams = { station = "blackglass" },
+		once = true,
+		priority = 80,
+		lines = {
+			line({
+				id = "blk_1",
+				source = "dispatch",
+				text = "Control. Blackglass. The section code is posted in the halt office, backwards. Read it in the glass.",
+				duration = 6.0,
+				cue = "radio_open",
+			}),
+			line({
+				id = "blk_2",
+				source = "dispatch",
+				text = "Do not look at the glass longer than you have to. I mean that.",
+				duration = 4.5,
+			}),
+		},
+	},
+	{
+		id = "blackglass_false",
+		trigger = "step_start",
+		triggerParams = { station = "blackglass", step = "lights" },
+		once = true,
+		priority = 60,
+		lines = {
+			line({
+				id = "blk_3",
+				source = "other",
+				text = "Leave the lights off. You can see better in the glass with the lights off. Leave them off.",
+				duration = 5.0,
+				cue = "radio_distort",
+				falseInstruction = {
+					action = "lights_off",
+					cost = "In the dark, the reflections are closer than the glass.",
+				},
+			}),
+		},
+	},
+	{
+		id = "approach_zero",
+		trigger = "station_approach",
+		triggerParams = { station = "station_zero" },
+		once = true,
+		priority = 80,
+		lines = {
+			line({
+				id = "zer_1",
+				source = "dispatch",
+				text = "...this is not on my board. Zero two seventeen, I have nothing for you here.",
+				duration = 5.5,
+				cue = "radio_distort",
+			}),
+			line({
+				id = "zer_2",
+				source = "dispatch",
+				text = "If you can hear me: there is no Station Zero. There never was.",
+				duration = 5.0,
+			}),
+		},
+	},
+	{
+		id = "zero_hold",
+		trigger = "step_start",
+		triggerParams = { station = "station_zero", step = "hold" },
+		once = true,
+		priority = 65,
+		lines = {
+			line({
+				id = "zer_3",
+				source = "recording",
+				text = "[A reel, in your own voice] If you are hearing this at Station Zero, we have done this before. Hold the frame. Go on to Ward Hill. Play it to them.",
+				duration = 8.0,
+			}),
+		},
+	},
+	{
 		id = "approach_ward",
 		trigger = "station_approach",
 		triggerParams = { station = "ward_hill" },
@@ -631,7 +732,7 @@ local RECORDINGS: { RecordingDef } = {
 		title = "Marrow Halt, day two",
 		text = "We put everything we had against the waiting room door. Then Ellis said the sensible thing, which is that it was already inside with us, and we went out the window instead.",
 		duration = 11,
-		credits = 30,
+		credits = 12,
 	},
 	{
 		id = "rec_tolbridge",
@@ -639,7 +740,7 @@ local RECORDINGS: { RecordingDef } = {
 		title = "Camp office tape",
 		text = "It copies the saw. Not the sound of the saw, the pattern of it. Three cuts and a pause, three cuts and a pause. We stopped cutting on the second day and it kept going for a week.",
 		duration = 13,
-		credits = 30,
+		credits = 12,
 	},
 	{
 		id = "rec_93",
@@ -647,7 +748,7 @@ local RECORDINGS: { RecordingDef } = {
 		title = "Tower cabin tape",
 		text = "It has learned the callsign. It has not learned that Control signs off at the end, not the start. That is the only thing keeping me sat in this chair.",
 		duration = 12,
-		credits = 35,
+		credits = 14,
 	},
 	{
 		id = "rec_bridge",
@@ -655,7 +756,7 @@ local RECORDINGS: { RecordingDef } = {
 		title = "Pump house tape",
 		text = "The span has been up for two years. The gearing is fine. The valve is fine. Somebody took the valve out and put it in the stores, deliberately, and I would like to know who and I would like to know why.",
 		duration = 14,
-		credits = 35,
+		credits = 14,
 	},
 	{
 		id = "rec_ward_1",
@@ -663,7 +764,7 @@ local RECORDINGS: { RecordingDef } = {
 		title = "Operator, day one",
 		text = "Regional says evacuate. I am not leaving a transmitter this size unattended. Someone has to hold the frequency open or none of them can find each other.",
 		duration = 12,
-		credits = 40,
+		credits = 16,
 	},
 	{
 		id = "rec_ward_2",
@@ -671,7 +772,7 @@ local RECORDINGS: { RecordingDef } = {
 		title = "Operator, day six",
 		text = "It sits outside the hall and it says my own callsign back at me in my own voice. I have stopped answering. The carrier stays up. That is the job.",
 		duration = 13,
-		credits = 40,
+		credits = 16,
 	},
 	{
 		id = "rec_ward_3",
@@ -679,7 +780,7 @@ local RECORDINGS: { RecordingDef } = {
 		title = "Operator, day eleven",
 		text = "Valve has gone in the transmitter. There is a spare in the cabinet. I am going to fit it, and if I do not come back from that room, the spare is in the cabinet. Whoever you are. The spare is in the cabinet.",
 		duration = 15,
-		credits = 50,
+		credits = 20,
 	},
 	{
 		id = "rec_ward_4",
@@ -687,7 +788,7 @@ local RECORDINGS: { RecordingDef } = {
 		title = "Unmarked tape",
 		text = "Control, to zero two seventeen. Control, to zero two seventeen. Control, to zero two seventeen.",
 		duration = 10,
-		credits = 60,
+		credits = 25,
 	},
 }
 

@@ -147,6 +147,8 @@ end
 -- Damage
 --------------------------------------------------------------------------
 
+local NO_BLEED: { [string]: boolean } = { hollow_conductor = true, intrusion = true, dispatcher = true }
+
 function SurvivalService.damage(player: Player, amount: number, source: string): boolean
 	local state = vitals[player.UserId]
 	if not state or state.state ~= "alive" then
@@ -165,7 +167,9 @@ function SurvivalService.damage(player: Player, amount: number, source: string):
 
 	state.health = math.max(0, state.health - applied)
 	state.lastDamageAt = os.clock()
-	if applied >= 12 then
+	-- Rule-based entities (EntityService) hurt but do not open wounds: their
+	-- damage is the whole consequence, so a lesson learnt is not a slow death.
+	if applied >= 12 and not NO_BLEED[source] then
 		state.bleeding = true
 	end
 

@@ -254,7 +254,7 @@ local function actionFor(instance: Instance): (string?, string, string)
 		return "lobby", "Read the notices", "Orders, rewards and events"
 	end
 	if instance:HasTag("StoresCounter") then
-		return "lobby", "Browse the stores", "Liveries, cosmetics and supplies"
+		return "lobby", "Use the Phantom Exchange", "A ticket machine that answers"
 	end
 	if instance:HasTag("ArmoryRack") then
 		return "lobby", "Open the armory", "Premium weapons and the Conductor Collection"
@@ -385,6 +385,10 @@ function InteractionController.start()
 	-- Roblox drives which prompt is shown; we only style it.
 	ProximityPromptService.PromptShown:Connect(function(prompt)
 		if prompt.Style ~= Enum.ProximityPromptStyle.Custom then
+			return
+		end
+		-- Nothing to press during a cutscene.
+		if StateController.ui("cinematic") == true then
 			return
 		end
 		activePrompt = prompt

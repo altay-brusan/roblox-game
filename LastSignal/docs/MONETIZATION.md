@@ -79,10 +79,10 @@ from `MarketplaceService:GetProductInfo`, and the sale state (`IsForSale`).
 
 | Item | Key | Permanent benefit | Limitations | Proposed price | Pass ID | Live sale state | Ownership and equip rules | Verification |
 | --- | --- | --- | --- | ---: | --- | --- | --- | --- |
-| Nightwatch Carbine | `pass_nightwatch_carbine` | The carbine: 10-round magazine, light recoil, 20 damage, fastest drive-off | Loud (threat per shot), uses scarce rifle rounds, 20 to start each run, cannot kill the Signal-Eater | 449 | 0 | not created | Primary slot; one primary per run | Simulated ownership in Studio: equip, fire rate, ammo, reload |
-| Arc Rail Projector | `pass_arc_projector` | The projector: 0.9 s charge, 26-stud cone, stuns the Signal-Eater, no ammunition | Heat 40 per burst, overheats after three quick bursts (7 s lockout); stuns halve within 30 s and cannot be chained | 449 | 0 | not created | Primary slot | Simulated: charge enforcement, heat, overheat; stun maths unit-tested; stun on a live creature untested |
-| Signal Flare Launcher | `pass_flare_launcher` | Airburst flares that hang 20 s, light the ground about 85 studs around, reveal the Signal-Eater to the crew, draw it to the flare, deny the ground beneath | No damage; 6 flares a run plus found flare shells; light gives away your position | 299 | 0 | not created | Primary slot | Simulated: fire, landing, burst, light, ammo; reveal and distract on a live creature untested |
-| Conductor Collection | `pass_conductor` | Conductor finish (black enamel and brass on every weapon), Conductor's Lamp (hip lantern, warm beam), Conductor's Badge (plate above head, crew board mark) | Appearance only | 199 | 0 | not created | Finish, lamp and patch slots; "Wear the collection" sets all three | Simulated: all three render |
+| Nightwatch Carbine | `pass_nightwatch_carbine` | The carbine: 10-round magazine, light recoil, 20 damage, fastest drive-off | Loud (threat per shot), uses scarce rifle rounds, 20 to start each run, cannot kill the Signal-Eater | 149 | 0 | not created | Primary slot; one primary per run | Simulated ownership in Studio: equip, fire rate, ammo, reload |
+| Arc Rail Projector | `pass_arc_projector` | The projector: 0.9 s charge, 26-stud cone, stuns the Signal-Eater, no ammunition | Heat 40 per burst, overheats after three quick bursts (7 s lockout); stuns halve within 30 s and cannot be chained | 249 | 0 | not created | Primary slot | Simulated: charge enforcement, heat, overheat; stun maths unit-tested; stun on a live creature untested |
+| Signal Flare Launcher | `pass_flare_launcher` | Airburst flares that hang 20 s, light the ground about 85 studs around, reveal the Signal-Eater to the crew, draw it to the flare, deny the ground beneath | No damage; 6 flares a run plus found flare shells; light gives away your position | 99 | 0 | not created | Primary slot | Simulated: fire, landing, burst, light, ammo; reveal and distract on a live creature untested |
+| Conductor Collection | `pass_conductor` | Conductor finish (black enamel and brass on every weapon), Conductor's Lamp (hip lantern, warm beam), Conductor's Badge (plate above head, crew board mark) | Appearance only | 129 | 0 | not created | Finish, lamp and patch slots; "Wear the collection" sets all three | Simulated: all three render |
 | Signalman's Pass | `vip_crew` | +25% credits and XP, Signalman lamp and patch, second daily quest slot | | 399 | 0 | not created | | Not re-tested this pass |
 | Cargo Rigging | `cargo_rig` | +6 slots, +18 kg, shared with the crew | | 249 | 0 | not created | | Not re-tested this pass |
 | Workshop Access | `workshop_access` | Three interior kits | | 199 | 0 | not created | Interior slot | Not re-tested this pass |
@@ -139,6 +139,47 @@ Roblox will actually charge. You can price these however you like without
 touching the code.
 
 ---
+
+## RIP Coin: the earned currency
+
+RIP Coin is the free currency, earned only by playing and spent at the
+Phantom Exchange. Internally the field is still called `credits`; every word
+a player reads says RIP Coin. Robux never becomes RIP Coin except through the
+three clearly labelled Robux packs, and no RIP Coin price is shown as Robux.
+
+Rates (2026-10-14, after scaling every amount by 0.4 to V2 §17's targets;
+initial proposals to tune by playtest, not final):
+
+| Source | RIP Coin | V2 target |
+| --- | ---: | --- |
+| Station cleared | 50 | major station goal 35 to 75 |
+| Optional objective | 25 | |
+| Journey completed | 160 (40% of it on a failed run) | 100 to 200 |
+| Night run bonus | 120 / 240 / 400 by tier | |
+| Discovery (first time) | 25 | 20 to 60 |
+| Inspection signed (night run) | 60, once per station per run | |
+| Daily login | 40 to 280 over seven days | |
+| Playtime reward | 35 every 15 minutes, 6 a day | |
+| Verified signal call | not yet (needs the SIA, task 14) | 10 to 25 |
+
+Ledger rules: every award and spend goes through ProgressionService on the
+server; purchases are validated server-side (ownership, level, balance) and
+refunded if the grant fails; journey rewards are recorded by run GUID so a run
+is paid once; a retry cannot pay an inspection twice. Starting balance 140.
+
+Not sold for RIP Coin: starting-kit weapons (everyone has them) and outfits
+(not drawn on characters yet).
+
+## The Phantom Exchange
+
+The shop is the Phantom Exchange: a ticket machine at the hatch of the yard's
+old stores hut, with a green screen and an intercom. Nobody stands behind the
+counter. A voice, the Broker, answers in the radio subtitles when the Exchange
+opens, after a RIP Coin purchase, when a player is short, when a Robux prompt
+opens, and when purchases are paused. Text only; no recorded voice exists yet.
+Purchases are paused during dangerous moments (Monetization.PromptBlockedStates)
+and a prompt only ever follows the player pressing Buy. The armory, beside it,
+is where weapons are inspected and equipped.
 
 ## Where each ID goes
 
