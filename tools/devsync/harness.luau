@@ -34,9 +34,23 @@ R.InteractResult.OnClientEvent:Connect(function(p)
 	end
 end)
 function T.act(part, action, hold)
-	T.hum().Sit = false
-	T.root().CFrame = CFrame.new(part.Position + Vector3.new(0, 3, 0)) * CFrame.new(0, 0, 3)
-	task.wait(0.35)
+	-- A rider on the train is carried with it, which can undo a teleport off
+	-- it. Stand up and repeat the teleport until it sticks.
+	if T.hum().SeatPart then
+		T.hum().Sit = false
+		T.hum():ChangeState(Enum.HumanoidStateType.Jumping)
+		task.wait(1)
+	end
+	for _ = 1, 6 do
+		-- Airborne, the ride controller lets go of the character.
+		T.hum():ChangeState(Enum.HumanoidStateType.Jumping)
+		task.wait(0.15)
+		T.root().CFrame = CFrame.new(part.Position + Vector3.new(0, 3, 0)) * CFrame.new(0, 0, 3)
+		task.wait(0.35)
+		if (T.root().Position - part.Position).Magnitude < 8 then
+			break
+		end
+	end
 	lastResult = {}
 	R.Interact:FireServer(part, action)
 	task.wait(0.4)

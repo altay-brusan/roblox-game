@@ -51,7 +51,7 @@ export type Ctx = {
 	setDoor: (door: any, angle: number) -> (),
 	chain: (templateId: string) -> (),
 	isActive: (templateId: string) -> boolean,
-	award: (credits: number, fuel: number) -> (),
+	award: (credits: number, fuel: number) -> boolean,
 	stationFixtures: () -> { BasePart },
 	rng: Random,
 	resolve: (outcome: string) -> (),
@@ -504,8 +504,11 @@ Events.inspection = {
 	end,
 	onTask = function(ctx, part)
 		if part == ctx.state.book then
-			ctx.award(150, 20)
-			ctx.resolve("Log signed: +20 fuel, +150 credits")
+			if ctx.award(150, 20) then
+				ctx.resolve("Log signed: +20 fuel, +150 credits")
+			else
+				ctx.resolve("Log signed again (already rewarded this run)")
+			end
 		end
 	end,
 	cleanup = function(ctx)

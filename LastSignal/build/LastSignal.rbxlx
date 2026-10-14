@@ -7710,11 +7710,18 @@ function WeaponModels.build(def: WeaponRegistry.WeaponDef, finish: Finish?): Bui
 		muzzle = flash
 	end
 
+	-- Welds with an explicit offset, not WeldConstraints. A WeldConstraint
+	-- records the offset between its parts when it becomes active, so moving
+	-- the root before the model is in the workspace (as the weapon in hand is
+	-- moved to the hand) left every other part behind at the world origin,
+	-- welded to the player from across the map. Root is at the identity here,
+	-- so each part's CFrame is its offset.
 	for _, descendant in model:GetDescendants() do
 		if descendant:IsA("BasePart") and descendant ~= root then
-			local weld = Instance.new("WeldConstraint")
+			local weld = Instance.new("Weld")
 			weld.Part0 = root
 			weld.Part1 = descendant
+			weld.C0 = descendant.CFrame
 			weld.Parent = root
 		end
 	end
@@ -8698,7 +8705,7 @@ export type Ctx = {
 	setDoor: (door: any, angle: number) -> (),
 	chain: (templateId: string) -> (),
 	isActive: (templateId: string) -> boolean,
-	award: (credits: number, fuel: number) -> (),
+	award: (credits: number, fuel: number) -> boolean,
 	stationFixtures: () -> { BasePart },
 	rng: Random,
 	resolve: (outcome: string) -> (),
@@ -9151,8 +9158,11 @@ Events.inspection = {
 	end,
 	onTask = function(ctx, part)
 		if part == ctx.state.book then
-			ctx.award(150, 20)
-			ctx.resolve("Log signed: +20 fuel, +150 credits")
+			if ctx.award(150, 20) then
+				ctx.resolve("Log signed: +20 fuel, +150 credits")
+			else
+				ctx.resolve("Log signed again (already rewarded this run)")
+			end
 		end
 	end,
 	cleanup = function(ctx)
@@ -14997,6 +15007,11 @@ function ExpeditionService.retry(expedition: Expedition)
 	-- The station itself.
 	local index = checkpoint.stationIndex
 	expedition.stationIndex = index
+	-- Stations before the checkpoint stay cleared; the checkpoint station is
+	-- played again, so it must not be counted twice.
+	if index > 0 then
+		expedition.stationsCleared = math.max(0, (table.find(expedition.route, index) or 1) - 1)
+	end
 	if index > 0 then
 		WorldService.resetStation(expedition.lane, index)
 		local station = StationRegistry.byIndex(index)
@@ -18414,6 +18429,8 @@ type Journey = {
 	quietUntil: number,
 	inspectionCredits: number,
 	rng: Random,
+	-- Rewards already paid this run, so a retry cannot pay them twice.
+	paid: { [string]: boolean },
 }
 
 local journeys: { [string]: Journey } = {}
@@ -18702,6 +18719,9 @@ local function makeCtx(expedition: any, journey: Journey, entry: Entry): any
 		local nextStation = if nextIndex then StationRegistry.byIndex(nextIndex) else nil
 		if expedition.state == "travelling" and nextStation then
 			TrainService.setStopDistance(train, nextStation.distance)
+			-- Train protection shut the throttle when it held the train, so
+			-- the driver has to be told to open it again.
+			ctx.notify("info", "Line clear", "Open the throttle and drive on.")
 		end
 	end
 	ctx.applyLights = function()
@@ -18728,12 +18748,19 @@ local function makeCtx(expedition: any, journey: Journey, entry: Entry): any
 	ctx.isActive = function(templateId: string): boolean
 		return isActive(journey, templateId)
 	end
-	ctx.award = function(credits: number, fuel: number)
+	ctx.award = function(credits: number, fuel: number): boolean
+		-- Once per station per run: a retry must not turn a reward into a farm.
+		local key = "award:" .. entry.template .. ":" .. entry.segment
+		if journey.paid[key] then
+			return false
+		end
+		journey.paid[key] = true
 		TrainService.addFuel(train, fuel)
 		journey.inspectionCredits += credits
 		for _, player in players() do
 			ProgressionService.award(player, { credits = credits, source = "journey:inspection" }, expedition.crewSize)
 		end
+		return true
 	end
 	ctx.stationFixtures = function(): { BasePart }
 		local out = {}
@@ -19005,6 +19032,7 @@ local function begin(expedition: any)
 		quietUntil = 0,
 		inspectionCredits = 0,
 		rng = Random.new(seed),
+		paid = {},
 	}
 	journeys[expedition.id] = journey
 	expedition.mode = "nightrun"

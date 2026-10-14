@@ -85,6 +85,8 @@ type Journey = {
 	quietUntil: number,
 	inspectionCredits: number,
 	rng: Random,
+	-- Rewards already paid this run, so a retry cannot pay them twice.
+	paid: { [string]: boolean },
 }
 
 local journeys: { [string]: Journey } = {}
@@ -373,6 +375,9 @@ local function makeCtx(expedition: any, journey: Journey, entry: Entry): any
 		local nextStation = if nextIndex then StationRegistry.byIndex(nextIndex) else nil
 		if expedition.state == "travelling" and nextStation then
 			TrainService.setStopDistance(train, nextStation.distance)
+			-- Train protection shut the throttle when it held the train, so
+			-- the driver has to be told to open it again.
+			ctx.notify("info", "Line clear", "Open the throttle and drive on.")
 		end
 	end
 	ctx.applyLights = function()
@@ -399,12 +404,19 @@ local function makeCtx(expedition: any, journey: Journey, entry: Entry): any
 	ctx.isActive = function(templateId: string): boolean
 		return isActive(journey, templateId)
 	end
-	ctx.award = function(credits: number, fuel: number)
+	ctx.award = function(credits: number, fuel: number): boolean
+		-- Once per station per run: a retry must not turn a reward into a farm.
+		local key = "award:" .. entry.template .. ":" .. entry.segment
+		if journey.paid[key] then
+			return false
+		end
+		journey.paid[key] = true
 		TrainService.addFuel(train, fuel)
 		journey.inspectionCredits += credits
 		for _, player in players() do
 			ProgressionService.award(player, { credits = credits, source = "journey:inspection" }, expedition.crewSize)
 		end
+		return true
 	end
 	ctx.stationFixtures = function(): { BasePart }
 		local out = {}
@@ -676,6 +688,7 @@ local function begin(expedition: any)
 		quietUntil = 0,
 		inspectionCredits = 0,
 		rng = Random.new(seed),
+		paid = {},
 	}
 	journeys[expedition.id] = journey
 	expedition.mode = "nightrun"

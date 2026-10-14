@@ -219,11 +219,18 @@ function WeaponModels.build(def: WeaponRegistry.WeaponDef, finish: Finish?): Bui
 		muzzle = flash
 	end
 
+	-- Welds with an explicit offset, not WeldConstraints. A WeldConstraint
+	-- records the offset between its parts when it becomes active, so moving
+	-- the root before the model is in the workspace (as the weapon in hand is
+	-- moved to the hand) left every other part behind at the world origin,
+	-- welded to the player from across the map. Root is at the identity here,
+	-- so each part's CFrame is its offset.
 	for _, descendant in model:GetDescendants() do
 		if descendant:IsA("BasePart") and descendant ~= root then
-			local weld = Instance.new("WeldConstraint")
+			local weld = Instance.new("Weld")
 			weld.Part0 = root
 			weld.Part1 = descendant
+			weld.C0 = descendant.CFrame
 			weld.Parent = root
 		end
 	end

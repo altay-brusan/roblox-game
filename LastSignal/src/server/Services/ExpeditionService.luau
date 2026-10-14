@@ -692,6 +692,11 @@ function ExpeditionService.retry(expedition: Expedition)
 	-- The station itself.
 	local index = checkpoint.stationIndex
 	expedition.stationIndex = index
+	-- Stations before the checkpoint stay cleared; the checkpoint station is
+	-- played again, so it must not be counted twice.
+	if index > 0 then
+		expedition.stationsCleared = math.max(0, (table.find(expedition.route, index) or 1) - 1)
+	end
 	if index > 0 then
 		WorldService.resetStation(expedition.lane, index)
 		local station = StationRegistry.byIndex(index)
