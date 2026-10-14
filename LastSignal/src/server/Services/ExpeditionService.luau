@@ -959,7 +959,13 @@ function ExpeditionService.begin(crew: CrewService.Crew, members: { Player })
 		failedAt = nil,
 		maid = Maid.new(),
 		members = memberIds,
-		route = { 1, 2, 3, 4, 5 },
+		route = (function()
+			local all = {}
+			for i = 1, StationRegistry.count() do
+				table.insert(all, i)
+			end
+			return all
+		end)(),
 		mode = "story",
 	}
 
@@ -1170,6 +1176,17 @@ function ExpeditionService.arriveOnLine(expedition: Expedition)
 		return
 	end
 	TrainService.setStopDistance(expedition.train, StationRegistry.Stations[1].distance)
+	-- Studio test hook: a server-set "StartAtStation" attribute on the crew
+	-- leader starts the run just short of that station. Inert outside Studio.
+	local leader = Players:GetPlayerByUserId(expedition.members[1] or 0)
+	local startAt = if leader and game:GetService("RunService"):IsStudio() then tonumber(leader:GetAttribute("StartAtStation")) else nil
+	local startStation = if startAt then StationRegistry.byIndex(startAt) else nil
+	if startStation and startAt and startAt > 1 then
+		TrainService.place(expedition.train, startStation.distance - 400)
+		expedition.stationIndex = startAt - 1
+		TrainService.setStopDistance(expedition.train, startStation.distance)
+		log.warn(string.format("TEST: starting %s short of %s", expedition.id, startStation.name))
+	end
 	setState(expedition, "travelling")
 	ExpeditionService.takeCheckpoint(expedition)
 

@@ -1539,6 +1539,27 @@ function StationBuilder.build(def: StationRegistry.StationDef, originCF: CFrame,
 					})
 				end
 			end
+		elseif kind == "luggage_heap" then
+			-- Calder Exchange: what the passengers left. Cases, trunks and
+			-- bags, heaped where a queue used to stand.
+			local colours = { C(92, 60, 40), C(48, 52, 60), C(120, 96, 64), C(70, 40, 38), C(40, 44, 40), C(150, 132, 104) }
+			local count = math.max(6, math.floor(spec.size.X * spec.size.Z / 18))
+			for i = 1, count do
+				local w = 1.6 + rng:NextNumber() * 1.6
+				local h = 0.8 + rng:NextNumber() * 1.0
+				local d = 1.0 + rng:NextNumber() * 0.8
+				local x = (rng:NextNumber() - 0.5) * spec.size.X
+				local z = (rng:NextNumber() - 0.5) * spec.size.Z
+				local stack = if i % 4 == 0 then 1.2 else 0
+				BuildKit.detail({
+					name = "Luggage",
+					size = Vector3.new(w, h, d),
+					cf = cf * CFrame.new(x, h * 0.5 + stack, z) * CFrame.Angles(0, rng:NextNumber() * math.pi, 0),
+					colour = colours[(i % #colours) + 1],
+					material = if i % 3 == 0 then Enum.Material.Leather else Enum.Material.Fabric,
+					parent = model,
+				})
+			end
 		elseif kind == "walkway" then
 			BuildKit.part({
 				name = "WalkwayDeck",
@@ -1565,6 +1586,12 @@ function StationBuilder.build(def: StationRegistry.StationDef, originCF: CFrame,
 			elseif kind == "depot" or kind == "facility" then
 				wallColour = P.weatheredConcrete
 				wallMaterial = Enum.Material.Concrete
+				roofKind = "flat"
+			elseif kind == "glass_hall" then
+				-- Blackglass: dark mirrored glass on a steel frame. What it
+				-- reflects is not always what is standing in front of it.
+				wallColour = C(24, 30, 34)
+				wallMaterial = Enum.Material.Glass
 				roofKind = "flat"
 			else -- station_building
 				wallColour = C(126, 86, 70)

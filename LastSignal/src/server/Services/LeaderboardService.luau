@@ -273,7 +273,7 @@ function LeaderboardService.start()
 		end
 		-- Fastest board: only a full clear of every station counts.
 		local elapsed = math.floor((expedition.endedAt or os.clock()) - expedition.startedAt)
-		if elapsed > 0 and elapsed < TIME_CEILING and expedition.stationsCleared >= 5 then
+		if elapsed > 0 and elapsed < TIME_CEILING and expedition.stationsCleared >= #expedition.route then
 			for _, player in ExpeditionService.playersOf(expedition) do
 				task.spawn(submit, "fastest", player.UserId, TIME_CEILING - elapsed)
 			end

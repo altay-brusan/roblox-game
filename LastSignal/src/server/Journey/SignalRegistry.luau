@@ -347,7 +347,7 @@ local CALLS: { CallDef } = {
 	----------------------------------------------------------------------
 	{
 		id = "wardhill_engineer",
-		station = 5,
+		station = 8,
 		delay = 25,
 		caller = "Woman, accommodation",
 		transcript = {
@@ -372,7 +372,7 @@ local CALLS: { CallDef } = {
 	},
 	{
 		id = "wardhill_crewvoice",
-		station = 5,
+		station = 8,
 		delay = 90,
 		caller = "Your crew, outside",
 		transcript = {

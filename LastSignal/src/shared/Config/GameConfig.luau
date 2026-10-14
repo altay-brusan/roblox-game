@@ -71,7 +71,7 @@ GameConfig.ExpeditionOrigin = Vector3.new(0, 0, -20000)
 -- navigation dramatically more reliable than a curved spline would, and the
 -- forest density hides the geometry.
 GameConfig.TrackDirection = Vector3.new(0, 0, -1)
-GameConfig.TrackLength = 14000
+GameConfig.TrackLength = 23000
 
 --------------------------------------------------------------------------
 -- Crew and session
@@ -202,7 +202,9 @@ GameConfig.ForestStreamRadius = 620
 -- Half-width of the forest corridor either side of the track. Kept just beyond
 -- the fog distance: trees further out are never visible and only cost memory.
 GameConfig.ForestCorridorHalfWidth = 280
-GameConfig.ForestDensity = 3.5
+-- Lowered from 3.5 when the line grew from five stations to eight (14,000 to
+-- 23,000 studs), to keep a lane near its earlier part budget (~32,000).
+GameConfig.ForestDensity = 2.1
 GameConfig.CorpseCleanupSeconds = 45
 GameConfig.DroppedItemLifetimeSeconds = 600
 

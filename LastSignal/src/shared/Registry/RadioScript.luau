@@ -410,6 +410,107 @@ local BEATS: { Beat } = {
 	-- Station 5: Ward Hill, and the ending
 	----------------------------------------------------------------------
 	{
+		id = "approach_calder",
+		trigger = "station_approach",
+		triggerParams = { station = "calder_exchange" },
+		once = true,
+		priority = 80,
+		lines = {
+			line({
+				id = "cal_1",
+				source = "dispatch",
+				text = "Control, to zero two seventeen. Calder Exchange. The junction is set against you, for a line I do not have.",
+				duration = 6.5,
+				cue = "radio_open",
+			}),
+			line({
+				id = "cal_2",
+				source = "dispatch",
+				text = "Points are worked from the box. The box needs power from the hall. Mind the luggage.",
+				duration = 5.5,
+			}),
+		},
+	},
+	{
+		id = "approach_blackglass",
+		trigger = "station_approach",
+		triggerParams = { station = "blackglass" },
+		once = true,
+		priority = 80,
+		lines = {
+			line({
+				id = "blk_1",
+				source = "dispatch",
+				text = "Control. Blackglass. The section code is posted in the halt office, backwards. Read it in the glass.",
+				duration = 6.0,
+				cue = "radio_open",
+			}),
+			line({
+				id = "blk_2",
+				source = "dispatch",
+				text = "Do not look at the glass longer than you have to. I mean that.",
+				duration = 4.5,
+			}),
+		},
+	},
+	{
+		id = "blackglass_false",
+		trigger = "step_start",
+		triggerParams = { station = "blackglass", step = "lights" },
+		once = true,
+		priority = 60,
+		lines = {
+			line({
+				id = "blk_3",
+				source = "other",
+				text = "Leave the lights off. You can see better in the glass with the lights off. Leave them off.",
+				duration = 5.0,
+				cue = "radio_distort",
+				falseInstruction = {
+					action = "lights_off",
+					cost = "In the dark, the reflections are closer than the glass.",
+				},
+			}),
+		},
+	},
+	{
+		id = "approach_zero",
+		trigger = "station_approach",
+		triggerParams = { station = "station_zero" },
+		once = true,
+		priority = 80,
+		lines = {
+			line({
+				id = "zer_1",
+				source = "dispatch",
+				text = "...this is not on my board. Zero two seventeen, I have nothing for you here.",
+				duration = 5.5,
+				cue = "radio_distort",
+			}),
+			line({
+				id = "zer_2",
+				source = "dispatch",
+				text = "If you can hear me: there is no Station Zero. There never was.",
+				duration = 5.0,
+			}),
+		},
+	},
+	{
+		id = "zero_hold",
+		trigger = "step_start",
+		triggerParams = { station = "station_zero", step = "hold" },
+		once = true,
+		priority = 65,
+		lines = {
+			line({
+				id = "zer_3",
+				source = "recording",
+				text = "[A reel, in your own voice] If you are hearing this at Station Zero, we have done this before. Hold the frame. Go on to Ward Hill. Play it to them.",
+				duration = 8.0,
+			}),
+		},
+	},
+	{
 		id = "approach_ward",
 		trigger = "station_approach",
 		triggerParams = { station = "ward_hill" },

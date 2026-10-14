@@ -60,6 +60,9 @@ local SCHEDULE = {
 	{ kind = "window", at = 9300, segment = 4 },
 	{ kind = "intrusion", at = 11300, segment = 5 },
 	{ kind = "conductor", at = 12600, segment = 5 },
+	{ kind = "window", at = 14600, segment = 6 },
+	{ kind = "switchkeeper", at = 17600, segment = 7 },
+	{ kind = "conductor", at = 20400, segment = 8 },
 }
 
 type Active = { kind: string, cleanup: () -> (), tick: ((number) -> ())?, isDone: () -> boolean }
@@ -536,7 +539,11 @@ local function dispatcher(expedition: any): Active?
 	folder.Name = "Dispatcher"
 	folder.Parent = expedition.lane.dropContainer
 	local _, pose = figure("TheDispatcher", folder, C(46, 52, 64), false)
-	local position = mast + Vector3.new(0, 0, -6)
+	-- He starts at the far side of the site, not at the mast where the crew
+	-- must later hold: there is time to reach the tape in the relay hall,
+	-- where the crew goes first anyway. Ignore him and he comes to the mast.
+	local start = built.landmarks.accommodation or mast
+	local position = start + Vector3.new(0, 0, -6)
 	pose(CFrame.new(position))
 	local tape = piece("LoopTape", Vector3.new(2.2, 1.6, 1.4), C(60, 54, 46), Enum.Material.Metal, folder)
 	tape.CFrame = CFrame.new(hall + Vector3.new(0, 3.5, 0))
@@ -547,7 +554,7 @@ local function dispatcher(expedition: any): Active?
 	tape:AddTag("RunTask")
 	local reel = piece("Reel", Vector3.new(0.2, 1.1, 1.1), C(176, 142, 74), Enum.Material.Metal, folder)
 	reel.CFrame = tape.CFrame * CFrame.new(-1.15, 0.2, 0)
-	notify(expedition, "danger", "Someone is walking down from the mast", "He walks while the tape plays. The tape is in the relay hall.")
+	notify(expedition, "danger", "Someone is walking across the site", "He walks while the tape plays. The tape is in the relay hall.")
 	radio(expedition, "Control (recording)", "Control to the zero two seventeen. I have you leaving the yard. You are the last one out.", "recording")
 	local stopped = false
 	local lastHit = 0
@@ -599,8 +606,12 @@ local function dispatcher(expedition: any): Active?
 				if best < 5 and os.clock() - lastHit > 2 then
 					lastHit = os.clock()
 					local player = Players:GetPlayerFromCharacter(target.Parent)
-					if player then
-						SurvivalService.damage(player, 15, "dispatcher")
+					local vitals = if player then SurvivalService.get(player) else nil
+					-- He hurts, but he does not finish anyone: the final hold at
+					-- the mast must stay winnable for a solo crew that forgot
+					-- the tape.
+					if player and vitals and vitals.health > 35 then
+						SurvivalService.damage(player, math.min(15, vitals.health - 35), "dispatcher")
 					end
 				end
 			end
