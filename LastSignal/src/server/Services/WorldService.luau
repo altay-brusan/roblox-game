@@ -41,8 +41,6 @@ local BuildKit = require(script.Parent.Parent.World.BuildKit)
 local ForestBuilder = require(script.Parent.Parent.World.ForestBuilder)
 local LobbyBuilder = require(script.Parent.Parent.World.LobbyBuilder)
 local StationBuilder = require(script.Parent.Parent.World.StationBuilder)
-local TrainBuilder = require(script.Parent.Parent.World.TrainBuilder)
-local TrainRegistry = require(Shared.Registry.TrainRegistry)
 
 local log = Logger.new("WorldService")
 
@@ -66,7 +64,6 @@ export type Lane = {
 
 local lanes: { Lane } = {}
 local lobby: LobbyBuilder.BuiltLobby? = nil
-local previewTrain: TrainBuilder.BuiltTrain? = nil
 local worldRoot: Folder? = nil
 
 WorldService.LaneReady = Signal.new() :: Signal.Signal<Lane>
@@ -96,58 +93,9 @@ function WorldService.buildLobby(): LobbyBuilder.BuiltLobby
 		parent = built.model,
 	})
 
-	-- The preview train on the near siding. The brief asks for a train preview
-	-- in the lobby, and without one the first question every player asks is
-	-- "where is the train", because the expedition train only exists inside a
-	-- lane after departure.
-	--
-	-- It is the real TrainBuilder output, not a mock-up, so what you look at in
-	-- the yard is exactly what you board.
-	local previewOk, preview = pcall(function()
-		return TrainBuilder.build(
-			TrainRegistry.StarterTrainId,
-			"livery_depot",
-			"interior_standard",
-			built.trainPreviewCF,
-			built.model,
-			991
-		)
-	end)
-
-	if previewOk and preview then
-		-- It must not carry the Train tag: the client ride controller resolves
-		-- the train it is riding by that tag, and a stationary lobby train
-		-- would be picked up instead of the real one.
-		preview.model:RemoveTag("Train")
-		preview.model:AddTag("PreviewTrain")
-		preview.model.Name = "PreviewTrain"
-
-		-- Lit, so it reads as a living object in a dark yard rather than a
-		-- silhouette. Marker and tail lamps are already on from the builder.
-		for _, spot in preview.headlights do
-			spot.Enabled = true
-		end
-		for _, light in preview.cabinLights do
-			light.Enabled = true
-		end
-		for _, light in preview.interiorLights do
-			light.Enabled = true
-		end
-		-- Doors open, so a player can walk through it before they ever depart.
-		for _, door in preview.doors do
-			local closed = door.model:GetAttribute("ClosedCFrame")
-			if typeof(closed) ~= "CFrame" then
-				closed = door.hinge.CFrame
-				door.model:SetAttribute("ClosedCFrame", closed)
-			end
-			door.model:PivotTo((closed :: CFrame) * CFrame.Angles(0, math.rad(105), 0))
-		end
-
-		previewTrain = preview
-		log.info(string.format("lobby preview train built (%d parts)", preview.partCount))
-	else
-		log.error("lobby preview train failed to build:", tostring(preview))
-	end
+	-- There is no static preview train any more. The train a player sees on
+	-- arrival is the real yard service waiting at Platform 1, the one they
+	-- board; DepartureService runs it.
 
 	lobby = built
 	log.info(
@@ -158,10 +106,6 @@ function WorldService.buildLobby(): LobbyBuilder.BuiltLobby
 		)
 	)
 	return built
-end
-
-function WorldService.getPreviewTrain(): TrainBuilder.BuiltTrain?
-	return previewTrain
 end
 
 function WorldService.getLobby(): LobbyBuilder.BuiltLobby?
@@ -187,6 +131,12 @@ local function buildLane(lane: Lane, onProgress: (number, string) -> ())
 	-- Track is laid in segments so a 14,000 stud line does not build in one
 	-- uninterrupted burst.
 	local trackModel = BuildKit.model("Track", lane.root)
+	-- Approach road behind the start of the line, where the train stands at
+	-- distance zero. Half of the consist is behind the origin at that point.
+	BuildKit.trackSection(CFrame.new(origin + Vector3.new(0, 0, 400)), 400, trackModel, Random.new(3900 + lane.index)).Name = "TrackApproach"
+	-- The line begins in a tunnel. The crew arrives from the yard inside it,
+	-- carried across in the dark, and emerges onto the line.
+	BuildKit.tunnel(CFrame.new(origin + Vector3.new(0, 0, -100)), 380, lane.root, Random.new(3800 + lane.index))
 	local segmentLength = 1000
 	local segments = math.ceil(GameConfig.TrackLength / segmentLength)
 	local rng = Random.new(4000 + lane.index)
@@ -233,6 +183,7 @@ local function buildLane(lane: Lane, onProgress: (number, string) -> ())
 			density = GameConfig.ForestDensity,
 			seed = 12000 + lane.index * 1000 + i,
 			parent = forestRoot,
+			detailRadius = 100,
 		})
 		task.wait()
 		onProgress(0.56 + 0.4 * ((i + 1) / slices), "Growing the forest")
@@ -260,6 +211,34 @@ end
 --------------------------------------------------------------------------
 -- Lane state reset
 --------------------------------------------------------------------------
+
+--- Returns one station to how the crew found it: loot searchable again,
+--- lights off, doors closed, fixtures idle. Used by a retry.
+function WorldService.resetStation(lane: Lane, index: number)
+	local station = lane.stations[index]
+	if not station then
+		return
+	end
+	for _, node in station.lootNodes do
+		node.part:SetAttribute("Searched", false)
+	end
+	for _, light in station.lights do
+		light.Enabled = false
+	end
+	for _, door in station.doors do
+		local baseCF = door:GetAttribute("ClosedCFrame")
+		if typeof(baseCF) == "CFrame" then
+			door:PivotTo(baseCF)
+		end
+	end
+	for _, fixture in station.fixtures do
+		fixture:SetAttribute("State", "idle")
+		fixture:SetAttribute("Progress", 0)
+		fixture:SetAttribute("Powered", false)
+		fixture:SetAttribute("HeldBy", 0)
+		fixture:SetAttribute("Position", 1)
+	end
+end
 
 --- Returns a lane to its starting condition without rebuilding geometry.
 function WorldService.resetLane(lane: Lane)

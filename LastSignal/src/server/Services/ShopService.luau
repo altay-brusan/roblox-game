@@ -77,20 +77,26 @@ type Entry = {
 local function robuxEntries(player: Player): { Entry }
 	local out: { Entry } = {}
 	for _, def in Monetization.All do
+		if def.offered == false then
+			continue
+		end
 		local owned = def.permanent and PurchaseService.ownsProduct(player, def.key)
-		local price, liveName = PurchaseService.getPrice(def.key)
+		local price, liveName, onSale = PurchaseService.getPrice(def.key)
 
 		local purchasable = true
 		local reason: string? = nil
 		if def.id <= 0 then
 			purchasable = false
 			reason = "This item is not available yet."
-		elseif not price then
-			purchasable = false
-			reason = "Price unavailable. Try again in a moment."
 		elseif owned then
 			purchasable = false
 			reason = "Owned"
+		elseif not price then
+			purchasable = false
+			reason = "Price unavailable. Try again in a moment."
+		elseif onSale == false then
+			purchasable = false
+			reason = "Not on sale right now."
 		end
 
 		table.insert(out, {
@@ -305,9 +311,11 @@ end
 
 --------------------------------------------------------------------------
 
+local lastPassRefresh: { [number]: number } = {}
+
 function ShopService.start()
 	Net.onServerInvoke("ShopCommand", function(player, rawCommand, rawArg)
-		local command = Guard.enum(rawCommand, { "catalogue", "buy_credits", "prompt_robux" })
+		local command = Guard.enum(rawCommand, { "catalogue", "buy_credits", "prompt_robux", "refresh_passes" })
 		if not command then
 			return { ok = false, error = "BAD_COMMAND" }
 		end
@@ -323,6 +331,18 @@ function ShopService.start()
 			end
 			local ok, err = buyWithCredits(player, entryKey)
 			return { ok = ok, error = err, catalogue = ShopService.catalogue(player) }
+		end
+
+		if command == "refresh_passes" then
+			-- The armory's "check again" after a failed ownership check.
+			-- Rate limited: each check is several web calls.
+			local last = lastPassRefresh[player.UserId]
+			if last and os.clock() - last < 15 then
+				return { ok = false, error = "WAIT" }
+			end
+			lastPassRefresh[player.UserId] = os.clock()
+			task.spawn(PurchaseService.refreshPasses, player)
+			return { ok = true }
 		end
 
 		-- prompt_robux

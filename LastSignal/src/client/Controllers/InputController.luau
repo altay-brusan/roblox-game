@@ -114,6 +114,12 @@ local function handle(actionName: string, inputState: Enum.UserInputState): Enum
 	if suppressed and not def.worksInMenu then
 		return Enum.ContextActionResult.Pass
 	end
+	-- Skip shares Space with jumping. It only claims the key while a
+	-- cinematic is actually playing; sinking it all the time meant nobody
+	-- could ever jump or get up out of a seat.
+	if def.id == "skip" and not StateController.ui("cinematic") then
+		return Enum.ContextActionResult.Pass
+	end
 
 	if inputState == Enum.UserInputState.Begin then
 		InputController.Action:Fire(def.id, true)

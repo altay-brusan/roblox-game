@@ -10,3 +10,16 @@ LastSignal/sourcemap.json
 # Roblox lock files
 *.rbxlx.lock
 *.rbxl.lock
+
+# Local place backups taken before large edits (kept on disk, not in git)
+LastSignal/backups/
+
+# Dev-sync scratch: server log and code fragments used while editing
+tools/devsync/devsync.log
+tools/devsync/frag_*.luau
+tools/devsync/patch_*.js
+tools/devsync/frag_*
+tools/devsync/append_*.js
+tools/devsync/fix.js
+tools/devsync/silent.js
+tools/devsync/fix_*.js

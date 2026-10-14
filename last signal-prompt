@@ -1,0 +1,321 @@
+# Last Signal — Claude Pro Brief: Complete Horror Game, Premium Weapons, Replayability, and Verified Delivery
+
+Act as the lead Roblox developer, horror game designer, environment artist, sound designer, and QA owner responsible for repairing and completing my existing game, **Last Signal**. Work on the actual project and deliver a playable `.rbxlx` file. This is an implementation and verification task, not a request for a plan or a description of a game that could exist.
+
+Use the requirements and design decisions available in this conversation and the supplied project files. Preserve the agreed story, scope, and useful existing work. Do not replace the project with a smaller demo, remove agreed features to make tests pass, or silently substitute a different game.
+
+I authorize you to identify and implement missing design details, stronger horror, richer environments, better interactions, clearer storytelling, and improvements to the overall player experience. Make routine creative and implementation decisions independently, consistent with the game's identity and the requirements below. Propose and actually build the improvements you select; do not stop at an ideas list. Use suitable free assets unless paid assets are already authorized.
+
+The ambition is a game that players find memorable, frightening, satisfying, and worth recommending. Translate that ambition into visible improvements and testable behavior. Do not promise universal praise or fabricate player reactions. Depth, coherence, and polish take priority over adding disconnected features or extending the game indefinitely.
+
+My latest additions are **high-quality Robux Game Pass weapons and substantial replayability**, inspired by the appeal of handling emergencies in Land or Die. These are now part of the requested scope, alongside all prior core features. Integrate them into Last Signal's railway horror identity. Maintain a complete, enjoyable path for players who do not buy a pass.
+
+### Working with my Claude Pro account
+
+Verify the capabilities of this actual session. A subscription name does not establish access to my computer or Roblox Studio. If Studio is connected through the official Roblox tools, use it for implementation and testing. If this session only has chat or file tools, perform the project inspection and file work genuinely available, explain the exact missing connection, and mark Studio-dependent tests untested. Do not claim to have opened, played, seen, or heard anything your tools cannot access.
+
+Treat this document as the master specification. Work in saved, testable increments; continue independently while tools and session capacity permit. Keep a concise progress record containing the current build, files changed, implemented features, pending work, test evidence, unresolved asset/pass IDs, and the next concrete action. If a real session or usage limit interrupts the task, provide that record and the latest saved artifacts so the next turn can resume without restarting or losing requirements. Do not stop after each small change merely to ask whether to continue, and do not claim background work will continue after the session stops.
+
+## 1. Mandatory outcome and known problems
+
+The final game must have a complete player journey: entering the game, watching the introduction, exploring the finished lobby, starting a mission, finding and boarding the train, experiencing the intended train journey, completing objectives, handling failure and retry, and reaching the agreed ending.
+
+**The train is a mandatory core feature. A build without an accessible, functional train cannot be accepted as complete.** A train mentioned in dialogue, represented by a button, stored unused in the project, or shown only in a decorative picture does not satisfy this requirement.
+
+Investigate these reported problems as hypotheses to verify in the current build:
+
+- The player cannot find a train, despite train travel being part of the game.
+- Runtime output reports that zero of 83 audio cues are configured.
+- Camera correction messages repeat during gameplay.
+- One generated route reportedly contains more than 32,000 parts.
+- Environment quality, cutscenes, and mission progression may be unfinished.
+
+Do not declare any of these fixed until you have evidence appropriate to that issue.
+
+## 2. Establish the project and audit before editing
+
+1. Identify the actual project file/version and the Roblox Studio session being edited. Verify that your tools can inspect the place, change it, enter Play mode, read runtime output, and inspect the viewport. State any unavailable capabilities.
+2. Save a recoverable backup before substantial edits.
+3. Read the available previous requirements, scripts, configuration, world hierarchy, and relevant logs. Distinguish the editable world from objects created only at runtime.
+4. Produce a requirements checklist with: requirement, source, current status, evidence, required fix, and acceptance test. Use these status labels: **implemented and tested, incomplete, broken, missing, untested**. A script existing is not evidence that its behavior works.
+5. Record which prior requirements are unavailable or ambiguous. Do not invent conversation history or claim that unavailable requirements have been satisfied. Continue independent work; ask only for information that genuinely blocks a required decision.
+6. Capture the baseline player experience and reproduce reported problems where possible.
+
+Then implement the repairs. The checklist is the beginning of the work, not the final deliverable.
+
+Work in this order: restore the complete player journey including the train; establish a polished, representative section of that journey; apply its quality consistently to every required area; integrate horror, story, audio, and usability improvements; implement and balance the premium equipment and repeatable journey systems; then optimize and perform final regression tests. Build the shop around verified equipment rather than using shop screens as a substitute for finishing gameplay. The representative section is a development checkpoint, not a replacement for the full game. Keep a bounded improvement list with acceptance criteria so repeated redesign does not prevent delivery.
+
+## 3. Train: required implementation and acceptance criteria
+
+Trace how the train is supposed to be created, revealed, reached, boarded, moved, and unloaded. Inspect relevant models, storage locations, spawning code, mission gates, coordinates, visibility, streaming, permissions, and errors. Determine whether the train is absent, misplaced, hidden, not spawned, or inaccessible through the normal progression. Explain the verified cause.
+
+Repair or build the train and its supporting station/platform as necessary. All of the following are required:
+
+- A recognizable, visually finished train with an exterior and accessible passenger interior appropriate to the agreed design. Include readable entrances, appropriate materials, windows, wheels/bogies or equivalent train detail, seating, interior lighting, and believable platform/track context. It must not be a collection of undecorated boxes.
+- From the player's first visit to the lobby, clearly communicate where the train is and how to access it. If it is intentionally available only after starting a mission, explain that requirement in the actual game and guide the player to the correct mission interaction and boarding location.
+- The correct train must reliably appear or become accessible when its mission conditions are met. A missing train must not leave the mission silently waiting forever; provide an appropriate recovery or retry path.
+- The player must be able to walk to the platform, use the boarding interaction or doorway, enter the passenger space, and experience the intended ride. Doors, prompts, collisions, and departure timing must support this sequence.
+- Implement an actual in-game train journey with the motion, scenery, sound, and arrival behavior required by the design. Technical approaches may vary, but an unexplained instant teleport or a loading label alone does not count as train travel.
+- Keep the player correctly positioned during the ride. Test for falling through the train, being left behind, camera clipping, blocked exits, and premature departure. If movement is intentionally restricted during part of the ride, make that clear and restore controls reliably.
+- Arrival must lead to a usable exit or intended transition and the next playable objective. Returning to or retrying a mission must not create duplicate trains, stale prompts, or broken boarding state.
+
+Verify the complete boarding–travel–arrival sequence using normal player interactions. Record the exact steps to reach it and capture actual runtime views of the boarding location, occupied interior, and arrival. A train model appearing in the Explorer is not sufficient evidence.
+
+## 4. Complete the lobby and mission progression
+
+Build a coherent, navigable horror lobby with finished architecture, floors, walls, doors, props, lighting, signage, and the agreed facilities. The initial spawn must be safe and make the next action understandable without reading your final report.
+
+For every agreed mission, implement and verify:
+
+- A discoverable start interaction and correct prerequisites.
+- Clear objectives and progress feedback, with usable interaction distances and prompts.
+- Working objective dependencies, mission transitions, and completion conditions.
+- Meaningful failure conditions where required, with clear feedback.
+- Retry and reset behavior that clears stale state and restores necessary objects, controls, and objectives.
+- The intended ending and the appropriate post-ending action, such as returning to the lobby or replaying.
+
+Prevent duplicate mission starts, accidental objective completion, inaccessible interactions, and progression that depends on developer commands. Test death, respawn, leaving the relevant area, and repeated interactions where they can affect progression. Verify multiplayer isolation, synchronization, or persistence only where those features are part of the agreed game; do not silently remove them if they already are.
+
+## 5. Cutscenes, camera, and controls
+
+Implement the agreed opening and mission cutscenes with staged scenes, camera movement, timing, transitions, and required dialogue/subtitles. Frame the actual environment and characters correctly.
+
+Identify the real cause of repeated camera correction messages. Resolve competing camera ownership, lifecycle bugs, or other verified causes; do not merely suppress the messages.
+
+Give cutscenes explicit control of the camera and input, with reliable cleanup. Restore the correct camera target, camera mode, movement, cursor behavior, and interaction state after normal completion, skip where supported, interruption, death, respawn, and retry. Prevent overlapping cutscenes and duplicate event handlers.
+
+Test camera framing, clipping, movement, interaction, and control restoration in gameplay and on the train. A cinematic must never leave the player permanently frozen or looking through an abandoned camera.
+
+## 6. Finish the visible world
+
+Complete every area visible or accessible during the agreed player journey, including the lobby, station, train exterior/interior, mission environments, connecting routes, and ending location.
+
+Use appropriate models, proportions, materials, textures, geometry detail, and environmental dressing. Inspect each area from the player's normal viewpoint and interaction distance. Replace visible temporary geometry, missing textures, floating props, obvious gaps, z-fighting, and unfinished interiors. Basic parts can be components of finished structures, but undecorated blockouts do not satisfy visual completion.
+
+Use supplied visual references and preserve the agreed art direction. If references are unavailable, choose a coherent interpretation and document the assumption; do not let this stop unrelated repairs.
+
+Create a consistent horror atmosphere while keeping objectives, paths, doors, interaction prompts, and hazards readable. Verify exposure and visibility during actual gameplay, rather than relying on an attractive static camera angle.
+
+Use assets with suitable usage rights and project permissions. Actually insert and configure required assets. Descriptions of assets to add later do not count as completed content.
+
+## 7. Configure and verify real audio
+
+Audit the reported 83 cues and their actual purpose. Identify missing IDs, inaccessible assets, loading failures, incorrect trigger paths, inaudible levels, and positioning/rolloff problems.
+
+Configure the intended ambience, train/engine/rail sounds, doors, interactions, mission events, and cutscene audio with valid, appropriate assets. Verify loop behavior, transitions, spatial placement, volume, and cleanup. Avoid duplicating every loop on respawn or retry.
+
+Track cue name, asset ID, trigger, configuration status, runtime loading result, and playback verification. Do not assign the same unrelated sound to every cue, mute required sounds, delete required cues, or alter diagnostics merely to make the count look successful. Explain any legitimately unused entries.
+
+Distinguish **configured**, **loaded**, **playback triggered**, and **audibly verified**. A nonempty SoundId, a loaded asset, or a playback flag alone does not prove that the correct sound was heard. If your tools cannot listen to playback or inspect a recording, mark audible verification as untested while completing the checks you can perform.
+
+## 8. Measure and improve performance
+
+Investigate the route reportedly containing more than 32,000 parts. Record its actual runtime contents and identify the measured loading or rendering/physics problems. Part count alone is not a performance result.
+
+Measure initial loading, mission/route generation, boarding/departure, travel, arrival, and retry. Record the test machine or environment, graphics settings, observed frame rate/frame time, and relevant memory or hitching measurements available to your tools. Do not invent numbers or present Studio measurements as proof of performance on every device.
+
+Optimize demonstrated bottlenecks with appropriate asset reuse, mesh/detail choices, collisions, generation timing, streaming, or other suitable changes. Preserve the required visible detail and gameplay. Do not solve performance by deleting the train, skipping environments, or reverting the world to a blockout.
+
+Check for accumulating objects, connections, loops, and effects after repeated mission runs. Compare before/after measurements under the same conditions when available. Clearly mark devices or runtime conditions that were not tested.
+
+## 9. Make the game memorable, frightening, and polished
+
+### 9.1. A strong opening and a clear identity
+
+Make the railway, the signal, and the central mystery feel connected to the existing story. Establish a coherent visual and sonic identity that continues through the lobby, train, missions, and ending. Preserve established lore; additions must fit it rather than overwrite it.
+
+The first view should be deliberately composed and finished. Unless an agreed opening requires different pacing, aim to communicate the player's immediate goal within the first minute and provide a meaningful interaction or unsettling discovery in the first few minutes. Introduce train access early and clearly. Avoid spending the opening on a long empty walk, unexplained menus, or an extended loss of control.
+
+Create at least three distinct, implemented signature moments across the opening, train journey, and later mission/ending. Give each a setup, a payoff, and a connection to gameplay or the story. Examples to adapt—not mandatory additions if they conflict with the established story—include a disturbing signal interruption, a carriage or passing landmark that has subtly changed, and an arrival that recontextualizes an earlier clue. Each chosen moment must exist in the game and have a repeatable trigger and a tested aftermath.
+
+### 9.2. Horror with pacing and fair rules
+
+Build fear through anticipation, limited information, directional sound, environmental changes, glimpses, and consequences. Alternate exploration, uncertainty, escalation, a significant encounter, and a quieter aftermath. Do not leave maximum music, heavy effects, or constant pursuit running throughout the game.
+
+Use jumpscares selectively, with preparation and an appropriate cooldown. Do not make every door trigger the same loud event. Avoid replacing visibility with complete darkness or making surprise loudness the only source of fear.
+
+Keep an event table containing each scare's location, prerequisites, trigger, visible/audible response, gameplay consequence, cooldown, and reset behavior. Optional variations may change atmosphere, but must not remove required clues, block the route, or randomly make a mission impossible. Check that events cannot accidentally trigger together or continue after failure/retry.
+
+### 9.3. A threat the player can understand and respond to
+
+Give danger understandable warning signs and a useful player response: hide, break line of sight, move carefully, manage noise, resolve an environmental hazard, or perform another mechanic consistent with the agreed design. Teach the response before demanding precise execution. Do not add several shallow survival meters or unrelated combat systems just to increase the feature count.
+
+If the design uses a pursuing entity, give it a finished appearance, suitable animation and sound, and working states for detection, investigation, pursuit, losing the player, and reset. Test navigation around doors and obstacles, attack range, collision, hiding rules, and recovery from a stuck state. If the horror instead uses a scripted or environmental threat, implement its equivalent readable rules and meaningful consequences; do not introduce a generic chasing monster that contradicts the established game.
+
+Avoid unavoidable deaths, enemies spawning directly on the player, detection through arbitrary walls, damage during mandatory loss of control, and failures without enough feedback to understand what happened. Retry must provide a fair opportunity to apply what was learned.
+
+### 9.4. Interesting objectives, story, and payoff
+
+Give each mission a clear purpose, a distinct location or situation, an interesting interaction, escalation, and a payoff. Across a multi-mission game, vary the required activity instead of repeating the same key hunt. Suitable choices may include restoring rail power, tracing or tuning a signal, interpreting environmental clues, and surviving a controlled encounter, where consistent with the existing scope.
+
+Puzzles must contain discoverable clues and provide useful feedback. Add graduated hints when needed, without immediately giving away solutions. Do not require random clicking, guessing an undocumented code, or searching indistinguishable props. Decorative objects should not falsely appear interactive.
+
+Communicate why the player is here, why the train matters, what they are trying to achieve, and why events become more disturbing. Use a small number of purposeful details—announcements, signs, notes, radio messages, or changes in the environment—rather than long exposition dumps. The ending must follow from the actual journey, pay off important established clues, and clearly communicate the outcome. Preserve all agreed endings; do not add empty branching choices merely to advertise multiple endings.
+
+### 9.5. Environmental detail that supports the experience
+
+Give major areas distinct landmarks and believable functions while maintaining a consistent art style, material scale, and level of detail. Add depth to architecture with door frames, trims, panels, recesses, structural supports, and appropriate fittings. Use wear, dust, stains, damaged fixtures, signage, cables, luggage, and other props deliberately rather than covering every surface with random clutter.
+
+Give the train its own visual identity: carriage identifiers, destination/signalling details, believable door and seat proportions, window framing, lighting fixtures, and surfaces appropriate to a railway interior. During travel, use convincing relative movement, exterior landmarks, wheel/rail sound, and restrained vibration where appropriate. Visible moving parts and opening doors should behave plausibly. The player should understand that a journey is happening without relying on a progress bar.
+
+Use lighting to guide attention, distinguish relatively safe and dangerous spaces, reveal silhouettes, and establish depth. Add fog, particles, reflections, or flickering selectively and within measured performance limits. Inspect transitions between spaces so detail and atmosphere do not disappear immediately outside a staged screenshot.
+
+### 9.6. Sound, interface, and comfort
+
+Create a balanced sound mix with room tone, train machinery, environmental cues, threat information, and music that changes with the situation. Leave room for quiet passages. Make important announcements, interaction sounds, and threat cues distinguishable. Prevent abrupt loop cuts and duplicate playback where they undermine the effect.
+
+Finish the menus, mission prompts, objective display, subtitles, loading feedback, failure screen, and ending screen with consistent typography, spacing, contrast, and terminology. Show the correct input for the supported device. Keep gameplay UI focused and avoid exposing debug messages or implementation details to players.
+
+Provide working volume controls and suitable options for subtitles, camera shake, and strong flashing effects where those effects are used. Mandatory clues must remain obtainable without relying solely on a subtle sound or a particular color. Ensure settings and overlays do not leave input blocked when closed. Verify supported screen sizes and devices; clearly identify those not tested rather than claiming universal support.
+
+### 9.7. Respect the player's time and make replay reliable
+
+Use logical checkpoints and quick, clear retry where compatible with the agreed design. A failure should not require repeating a long unskippable introduction or unrelated completed work unless that is an explicit design requirement. Prevent loading and streaming from leaving the player on missing geometry or in an unresponsive scene.
+
+Keep optional discoveries and atmospheric variations purposeful and independent of required story progression. Test that replay does not expose stale clues, duplicate entities, exhausted one-time triggers needed for progression, or an already-completed ending. Preserve and verify existing saved progress. The additional progression explicitly requested in section 11 must also be implemented and tested; do not present an untested persistence system as reliable.
+
+Keep mission state, camera transitions, train behavior, and audio lifecycle manageable and consistent. Validate critical progression and rewards on the appropriate authoritative side. Inspect imported assets and remove unrelated scripts or behavior. Fix observable failures instead of hiding errors behind silent exception handling.
+
+### 9.8. Review the experience, not only the feature list
+
+Review the actual playable build for: first impression, understandable navigation, train quality, visual consistency, pacing, variety of interactions, fair danger, story payoff, audio balance, control comfort, loading, and replay stability. For each dimension, record the observed issue, action taken, evidence, and remaining uncertainty. Where comparison is useful, capture before/after views from equivalent normal gameplay positions.
+
+Inspect ordinary corridors, transition areas, and interiors as carefully as hero shots. Record concrete reactions or observations such as getting lost, waiting without feedback, missing a clue, failing to understand a threat, or finding a repeated scare predictable. Fix high-impact issues and rerun affected tests.
+
+If independent playtesters are available and their participation is authorized, collect their feedback without coaching them through the level. Otherwise explicitly mark independent player testing as not performed. Do not invent quotes, satisfaction scores, or claims that players found the game scary or excellent. Treat subjective quality as something to assess honestly, not something proven by your own description.
+
+## 10. Game Passes and premium weapons worth owning
+
+### 10.1. A focused, finished equipment catalogue
+
+Implement three distinct premium weapon passes, using these concepts or closely related variants that fit established lore:
+
+- **Nightwatch Carbine:** an accurate, controllable defensive weapon with a distinctive railway-security design. Its strength is reliable handling in close encounters; ammunition limits, reload timing, noise, and enemy-specific effectiveness must preserve tension.
+- **Arc Rail Projector:** an industrial electrical weapon with a satisfying charge effect and a short, powerful defensive burst against appropriate threats. Balance range, charge time, heat/cooldown, and resistance so it cannot permanently stun every enemy or bypass encounters.
+- **Signal Flare Launcher:** a signal weapon that illuminates dangerous space and can reveal, distract, or temporarily repel an appropriate threat. Make its actual effects clear, impressive, and useful, with finite charges and readable duration.
+
+Keep each weapon recognizable in silhouette, finish, sound, and play style. Give it a detailed model, correct hand positioning, equip/fire/reload behavior, hit or effect feedback, suitable audio, and restrained camera effects. A renamed default tool or three recolors with identical behavior are insufficient. Test animation and effects in the supported camera mode and on other players' characters if multiplayer is supported.
+
+If the established threats cannot be harmed by ordinary bullets, adapt the weapon effects to that fiction. Provide clear feedback for immunity or resistance. Do not sell a weapon as damaging or repelling a threat if that interaction does not exist.
+
+Include a **Conductor Collection** cosmetic pass with finished, cohesive variants for appropriate equipment and a player identity item such as a badge/nameplate. Its listing must specify the actual included items. Keep the catalogue compact enough to finish every listed benefit.
+
+### 10.2. Strong benefits and a complete free experience
+
+Premium weapons should feel desirable through craftsmanship, satisfying feedback, and useful tactical strengths. Define each item's strengths, weaknesses, ammo/energy rules, affected threats, and role beside the free equipment. Implement credible free defensive/utility options and verify that the full core story can be completed with them.
+
+Keep a shared loadout limit so owning several passes does not let a player equip every advantage simultaneously. Required story puzzles and essential survival tools must not demand a Robux purchase. Threats and difficulty should not secretly become worse for non-buyers. Test that premium equipment does not erase horror by making its owner invulnerable or trivializing every encounter.
+
+A weapon pass unlocks lasting access to the described item. Ammo and temporary round state can follow the documented gameplay rules, but death, round reset, or rejoining must not require buying the pass again. Clearly distinguish permanent ownership from the current round's loadout.
+
+### 10.3. A finished armory and honest purchase flow
+
+Build a polished lobby armory/shop with inspectable weapon previews, readable benefits and tradeoffs, an exact included-items description, ownership state, equip/unequip behavior, and explicit purchase buttons. A safe preview/test area may demonstrate weapons without granting unauthorized use in missions. The shop must be reachable and closable without disrupting mission state.
+
+Fetch the actual pass price and sale information from Roblox instead of hardcoding a potentially incorrect Robux amount in the live UI. Show loading, owned, unavailable, and failure states correctly. Purchase prompts should follow a deliberate player action; do not interrupt a scare, failure, or cutscene with an automatic sale prompt.
+
+Prepare a clear catalogue/configuration table: item, permanent benefit, limitations, suggested price marked as a proposal, actual pass ID, live sale state, ownership/equip rules, and verification status. Finish the models and shop integration even if external pass creation or configuration remains blocked. List the exact missing external action; never invent valid IDs or display fake successful purchases. The `.rbxlx` alone does not create live Roblox passes.
+
+### 10.4. Ownership and transaction reliability
+
+Use Roblox's supported pass APIs and server-side ownership checks, including `UserOwnsGamePassAsync` on join and appropriate handling of `PromptGamePassPurchaseFinished` on the server. Client UI state or a client-reported purchase must not grant ownership. Reapply owned benefits correctly after respawn/rejoin without duplicating tools. Handle failed ownership queries explicitly with bounded retry and useful feedback.
+
+Use Game Passes for these permanent unlocks. If repeatable consumable purchases are separately required, use Developer Products and reliable, idempotent server-side `ProcessReceipt` handling; do not treat closing a purchase prompt as a fulfilled receipt. Do not add consumable purchases merely to expand the shop.
+
+Test owned/unowned states, cancellation, failure, duplicate button presses, ownership restoration, equip restrictions, and client attempts to grant or fire locked weapons. Validate weapon fire rate, ammo, range, hit/effect requests, and cooldowns on the server as appropriate. Separate simulated entitlement tests from verified live purchases. Do not spend real Robux for testing without explicit authorization, and mark unavailable live transaction tests untested.
+
+## 11. Replayability through changing railway emergencies
+
+Use the public Land or Die description as a reference for the appeal of responding to vehicle failures and competing emergencies. Build original railway situations for Last Signal; this is a design direction, not a claim that any particular randomization algorithm in that game has been inspected.
+
+### 11.1. Story continuity plus repeatable journeys
+
+Keep the agreed story and ending intact. Add a clearly presented repeat-journey mode or equivalent mission replay that changes playable situations while preserving essential story dependencies. Make its distinction from the story campaign understandable in the lobby. Establish a manageable target journey duration from the existing map and validate it through timing actual runs, rather than padding the route with waiting.
+
+Build at least **eight finished event templates**, covering technical emergencies, route/environment changes, and horror encounters. Choose combinations such as a carriage blackout, disrupted radio/signal, brake malfunction, blocked track requiring a switch/route decision, a localized electrical fire, a failed carriage door, a threatening tunnel encounter, and an unscheduled station inspection. Adapt these to the established fiction and map; equivalent well-implemented events are acceptable, unfinished event names are not.
+
+Each event needs a clear onset, readable evidence, meaningful player action or choice, escalation, success/failure consequences, cleanup, and a tested reset. Give at least two different types of tasks meaningful cause-and-effect interaction: for example, a signal fault delays arrival while a power failure changes the tools or visibility available to repair it. Avoid a collection of unrelated timed popups.
+
+### 11.2. Controlled variety and meaningful choices
+
+Use reproducible per-run seeds, weighted event selection, prerequisites, cooldowns, compatibility rules, and a tension budget. Vary selected events, timing, valid clue/resource positions, and tested route/station options. Include at least two playable route or station variants; verify the track connections, boarding/arrival logic, and required objectives in both. Do not promise that every run is unique forever.
+
+Offer choices with understandable tradeoffs, such as a longer safer branch versus a shorter riskier route, or whether to spend limited supplies repairing a fault before continuing. Consequences must appear in gameplay and on the end-of-run report. Purely cosmetic random weather cannot be the entire replay system.
+
+Reserve intervals for exploration and recovery, avoid repeating the same headline event in consecutive runs where session history is available, and cap simultaneous crises according to player count and tools. Never combine events that remove all solutions, block every exit, or hide a necessary clue. Provide a tested fallback when an event cannot start or a generated configuration is invalid.
+
+If the game supports cooperative play, make events support complementary actions and scale simultaneous workload to the active team. For supported solo play, every required action must remain possible without two simultaneous players. Joining, leaving, death, and retry must not leave a permanently unfinishable task.
+
+### 11.3. Progression that rewards learning and exploration
+
+Add modest earned progression: record completed journeys, discovered story entries, and a small set of earnable cosmetic or utility unlocks. Clearly separate earned currency/rewards from Robux and pass ownership. Show useful round results—route, major events, completed objectives, relevant performance measures, discoveries, and rewards—followed by an easy replay option.
+
+Provide progressively harder, clearly described journey settings after the appropriate introduction or milestones. Increase complexity through event combinations, timing, information, and resource decisions, not only larger enemy health values. Keep the standard story route approachable. Avoid repetitive chores and excessive grinding as substitutes for interesting runs.
+
+Save introduced persistent progress robustly, award completion rewards once, and handle failed saves without falsely claiming success. Test duplicate completion requests, disconnect/rejoin, and data-load failure. Optional variations, seeds, and cosmetic progression must not prevent the core journey from running when a nonessential service is unavailable.
+
+### 11.4. Evidence that replay actually changes play
+
+Use at least five recorded seeds/configurations spanning both route variants and different event combinations. Exercise every event template individually and test combinations that could conflict. Complete at least three different end-to-end repeat journeys, including a successful run with only free equipment and a run using each premium weapon across the test set. Record what changed in decisions, tasks, and outcomes; a different random seed number alone is not evidence of meaningful variety.
+
+Test failure/retry, unavailable event assets, interruption during a crisis, incompatible event prevention, and supported team sizes. Repeat one seed to reproduce a problem and verify its repair. Include dynamic events and weapon effects in the performance tests. If time or tools prevent part of this coverage, keep that row untested rather than claiming the replay system is fully validated.
+
+## 12. Required acceptance tests
+
+After repairs, run a fresh end-to-end playthrough through the normal player interface:
+
+1. Start from a fresh session and confirm safe spawning and the introduction.
+2. Finish the introduction and verify normal camera and controls.
+3. Explore the lobby and locate the mission start and train guidance.
+4. Start the required mission through its real interaction.
+5. Reach the platform, board the train, experience departure and travel, and arrive.
+6. Exit or transition as designed and complete the mission's real objectives.
+7. Follow every remaining required mission/transition to the agreed ending.
+8. Trigger relevant failure paths and verify retry/reset. Complete at least one mission after failure and retry.
+9. Check applicable death/respawn and cutscene interruption paths, including their effects on the train and mission state.
+10. Repeat mission entry or replay to detect duplicate objects, stale objectives, camera conflicts, and audio accumulation.
+11. Inspect visuals and audio behavior throughout, and collect runtime errors and performance observations.
+
+Also test the implemented signature moments, threat rules, puzzle hints, checkpoints, settings, and horror-event cooldown/reset behavior. Verify that every selected improvement from section 9 is present in the saved game, and that its interaction with mandatory progression works. Test any additional agreed branches separately from the main route.
+
+Complete the ownership, weapon, purchase-flow, replay, and progression tests in sections 10 and 11. The core campaign must pass with free equipment. Premium ownership, repeat-journey state, and earned progression must survive the specified lifecycle changes. An attractive shop screen is not evidence that any of these systems works.
+
+Do not teleport past required interactions, force objectives complete, or directly invoke success handlers and describe that as an end-to-end player test. Isolated developer-assisted tests are useful, but label them separately.
+
+Save the final `.rbxlx`, reopen that exact saved file, and perform a fresh full required-path playthrough. Confirm that fixes and asset references persist and that runtime-only edits were not lost. Identify the saved build/version associated with the test evidence. If you edit the file afterward, rerun affected tests and the required journey before claiming final acceptance.
+
+If Studio execution, visual inspection, audio inspection, or any other check is unavailable, explicitly mark that check **untested**. Continue the implementation and other valid checks. Do not substitute a successful build, static code review, or opening a file for gameplay verification.
+
+## 13. Deliverables and completion gate
+
+Deliver:
+
+- The final saved `.rbxlx` file, with its exact filename/path.
+- The final requirements checklist, with statuses and evidence updated after repairs.
+- A concise explanation of the train problem, the implemented fix, and the exact in-game steps a new player follows to ride it.
+- A concise list of other repairs and visual improvements.
+- A concise record of the implemented horror, story, interaction, and usability improvements, with where the player encounters them and the corresponding quality-review evidence. Clearly separate implemented features from any deferred ideas.
+- Test results covering the full player journey, failure/retry, camera restoration, audio, and measured performance, with actual screenshots/logs or recordings where available.
+- A dependency list for externally hosted assets or services that the place requires, including any unresolved access/configuration requirements.
+- The Game Pass catalogue, real or pending IDs, proposed/configured prices distinguished clearly, ownership and transaction test results, and the implemented free-versus-premium equipment rules.
+- The repeat-journey event/route catalogue, tested seeds, event combination results, earned progression rules, and replay/performance observations.
+- The saved continuation record if the work is interrupted, with no completed claim for pending phases.
+- Remaining issues, unavailable prior requirements, blocked work, and untested checks stated plainly.
+
+**Do not label the game complete while the train is missing or unusable, the required mission path is blocked, mandatory environments remain placeholders, required audio is unconfigured, or control restoration is broken.** If a blocker requires my action or external access, identify the exact blocker and the smallest action needed; finish all independent work first. An incomplete or untested build must be labeled honestly, even if you still provide the latest file.
+
+Technical functionality alone does not satisfy this request. The finished player route must also meet the visual, horror, sound, and usability requirements above. Report remaining quality shortcomings even when the main path passes. Do not describe a repaired prototype as a polished final game.
+
+Premium equipment must exist and work, and the requested replay systems must be playable before calling the expanded scope complete. Report external pass activation separately from weapon implementation. Missing external account access is not a reason to omit the in-game equipment, shop, configuration, or tests that are independently possible.
+
+Begin by inspecting the actual project, creating the evidence-based requirements and quality checklist, and reproducing the missing-train issue. Then carry the repairs and creative improvements through implementation, fresh testing, quality review, and final file delivery.
+
+## Reference links
+
+- [Official Roblox assistant connection](https://github.com/Roblox/roblox-studio-agent-plugin)
+- [Claude plans and included tools](https://claude.com/pricing)
+- [Roblox Game Pass documentation](https://create.roblox.com/docs/production/monetization/passes)
+- [Roblox Developer Product documentation](https://create.roblox.com/docs/production/monetization/developer-products)
+- [Land or Die — public game description](https://www.roblox.com/games/75547400568620/Land-or-Die)
+
+Verify current technical details against the official documentation during implementation. These references establish tool capabilities and the stated design inspiration; they are not evidence that Last Signal has already been tested.

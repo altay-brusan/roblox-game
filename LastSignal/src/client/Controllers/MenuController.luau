@@ -39,6 +39,8 @@ local WeaponRegistry = require(Shared.Registry.WeaponRegistry)
 local CosmeticRegistry = require(Shared.Registry.CosmeticRegistry)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local Widgets = require(script.Parent.Parent.UI.Widgets)
+local ArmoryPanel = require(script.Parent.Parent.UI.ArmoryPanel)
+local JourneyUI = require(script.Parent.Parent.UI.JourneyUI)
 local CameraController = require(script.Parent.CameraController)
 local InputController = require(script.Parent.InputController)
 local StateController = require(script.Parent.StateController)
@@ -97,6 +99,7 @@ local PANEL_TITLES: { [string]: string } = {
 	loadout = "Loadout",
 	inventory = "Inventory",
 	shop = "Stores",
+	armory = "Armory",
 	quests = "Orders",
 	rewards = "Rewards",
 	achievements = "Record",
@@ -104,6 +107,7 @@ local PANEL_TITLES: { [string]: string } = {
 	settings = "Settings",
 	admin = "Control",
 	results = "Expedition Report",
+	failed = "The Line Went Quiet",
 	event = "Event",
 }
 
@@ -214,6 +218,7 @@ builders.main = function(frame: Frame)
 		{ id = "crew", label = "Crew", detail = "Form a crew and depart." },
 		{ id = "loadout", label = "Loadout", detail = "Train, livery, weapons and appearance." },
 		{ id = "shop", label = "Stores", detail = "Liveries, cosmetics and supplies." },
+		{ id = "armory", label = "Armory", detail = "Inspect and equip weapons, and the passes." },
 		{ id = "quests", label = "Orders", detail = "Daily and weekly objectives." },
 		{ id = "rewards", label = "Rewards", detail = "Daily login and playtime." },
 		{ id = "achievements", label = "Record", detail = "Achievements and statistics." },
@@ -251,6 +256,11 @@ end
 builders.crew = function(frame: Frame)
 	local column = Widgets.column(frame, 1)
 	local crew = StateController.get("crew")
+	JourneyUI.crewSection(column, 0, function()
+		if rebuild then
+			rebuild()
+		end
+	end)
 
 	if not crew or crew.state == "closed" then
 		Widgets.label({
@@ -945,6 +955,18 @@ builders.shop = function(frame: Frame)
 end
 
 --------------------------------------------------------------------------
+-- Panel: armory
+--------------------------------------------------------------------------
+
+builders.armory = function(frame: Frame)
+	ArmoryPanel.build(frame, function()
+		if rebuild then
+			rebuild()
+		end
+	end)
+end
+
+--------------------------------------------------------------------------
 -- Panel: quests
 --------------------------------------------------------------------------
 
@@ -1410,7 +1432,7 @@ builders.results = function(frame: Frame)
 		parent = scroll,
 		layoutOrder = 1,
 	})
-	Widgets.caption(scroll, if results.success then "Chapter One complete." else "The expedition ended early.", 2)
+	Widgets.caption(scroll, if results.journey and results.journey.mode == "nightrun" then (if results.success then "Night run complete." else "The night run ended early.") elseif results.success then "Chapter One complete." else "The expedition ended early.", 2)
 
 	Widgets.statRow(scroll, "Time", Format.clock(results.elapsed or 0), 3)
 	Widgets.statRow(scroll, "Stations cleared", string.format("%d of %d", results.stationsCleared or 0, results.stationCount or 5), 4)
@@ -1427,12 +1449,73 @@ builders.results = function(frame: Frame)
 		Widgets.statRow(scroll, "Levels gained", string.format("%d  (now %d)", results.levelsGained, results.level), 14)
 	end
 
+	JourneyUI.results(scroll, 15, results.journey)
+
 	Widgets.button({
 		text = "Back to the yard",
 		primary = true,
 		parent = scroll,
-		layoutOrder = 20,
+		layoutOrder = 30,
 		onClick = function()
+			MenuController.close()
+		end,
+	})
+end
+
+--------------------------------------------------------------------------
+-- Panel: failure
+--------------------------------------------------------------------------
+
+-- The whole crew is down. The run is not over: retry from the last station,
+-- or go back to the yard. With no choice made the server retries by itself,
+-- which the countdown makes plain.
+local lastFailure: { [string]: any }? = nil
+
+builders.failed = function(frame: Frame)
+	local failure: { [string]: any } = lastFailure or {}
+	local scroll = Widgets.scroll(frame, 1)
+	Widgets.label({
+		text = "Everyone is down",
+		size = "display",
+		font = Theme.Font.display,
+		colour = Theme.colour("signalRed"),
+		parent = scroll,
+		layoutOrder = 1,
+	})
+	Widgets.caption(
+		scroll,
+		string.format(
+			"Nobody is left standing. You can go back to %s with the train as you left it, or return to the yard.",
+			tostring(failure.stationName or "the last station")
+		),
+		2
+	)
+	local countdown = Widgets.caption(scroll, "", 3)
+	local seconds = tonumber(failure.autoRetrySeconds) or 30
+	local openedAt = os.clock()
+	task.spawn(function()
+		while countdown.Parent do
+			local remaining = math.max(0, math.ceil(seconds - (os.clock() - openedAt)))
+			countdown.Text = string.format("Retrying on its own in %d seconds.", remaining)
+			task.wait(0.25)
+		end
+	end)
+	Widgets.button({
+		text = "Retry from " .. tostring(failure.stationName or "the last station"),
+		primary = true,
+		parent = scroll,
+		layoutOrder = 10,
+		onClick = function()
+			Net.invokeServer("ExpeditionCommand", "retry")
+			MenuController.close()
+		end,
+	})
+	Widgets.button({
+		text = "Return to the yard",
+		parent = scroll,
+		layoutOrder = 11,
+		onClick = function()
+			Net.invokeServer("ExpeditionCommand", "abandon")
 			MenuController.close()
 		end,
 	})
@@ -1602,6 +1685,23 @@ function MenuController.start()
 		if type(payload) == "table" and payload.state == "results" then
 			lastResults = payload
 			MenuController.open("results")
+		elseif type(payload) == "table" and payload.state == "failed" then
+			-- The failed state arrives more than once (the failure itself and
+			-- the routine state push); open() toggles, so only open it once.
+			local detailed = payload.autoRetrySeconds ~= nil
+			if detailed then
+				lastFailure = payload
+			end
+			if currentPanel ~= "failed" then
+				MenuController.open("failed")
+			elseif detailed and rebuild then
+				-- The detailed message names the station; redraw with it.
+				rebuild()
+			end
+		elseif type(payload) == "table" and lastFailure and payload.state ~= "failed" and currentPanel == "failed" then
+			-- The server retried by itself, or a crewmate chose.
+			lastFailure = nil
+			MenuController.close()
 		end
 	end)
 

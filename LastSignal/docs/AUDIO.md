@@ -192,3 +192,68 @@ two generic loops.
 Where a cue is reused rather than empty, the mixer differentiates it by pitch
 and volume, which is a legitimate technique but no substitute for the real
 sound.
+
+---
+
+## Audit, 2026-10-14
+
+Status words: **configured** (an ID is set), **loaded** (Studio fetched the
+asset: `ContentProvider:PreloadAsync` returned Success), **triggered** (seen
+playing in a Play session), **audible** (someone listened). Audible is
+**untested for every cue**: the session that did this audit cannot hear.
+
+* 66 of 83 cues configured (was 57). Every configured ID loads: 52 distinct
+  assets, 0 failures.
+* Only licensed library audio is used: ProSoundEffects, APM Music and
+  Roblox-created assets. User uploads were rejected even where they matched,
+  because several said outright that the uploader did not own them.
+
+### Added or replaced this pass
+
+| Cue | Asset | Source | Why |
+| --- | --- | --- | --- |
+| train_engine_idle | 9112768824 Diesel Train 1 | ProSoundEffects | Real diesel cab recording replaces a generic hum |
+| train_engine_load | 9112769003 Diesel Train 2 | ProSoundEffects | Same |
+| train_brake_apply | 9116826442 Metal Screech 12 | ProSoundEffects | Was silent |
+| train_brake_emergency | 9116824694 Metal Screech 9 | ProSoundEffects | Was silent |
+| forest_night | 9112764040 Crickets Canyon 1 | ProSoundEffects | Was silent |
+| station_hum | 9114236333 Electric Arcing 3 | ProSoundEffects | Was silent |
+| heartbeat | 9043365842 Heartbeat 02 96 BPM | APM Music | Was silent |
+| radio_static | 9120551109 Waterfall Heavy Flow 2 (white noise bed) | ProSoundEffects | Was silent; played low as carrier hiss |
+| radio_distort | 9113405968 Static bursts 3 | ProSoundEffects | Was silent |
+| music_tension | 9114353038 Evil Drone Deep Airy Swell 1 | ProSoundEffects | Was silent |
+| music_departure | 1842992846 Strange Sorrow (Loop) | APM Music | Was silent |
+| creature_near | 9114628620 Deep Growling Voice 21 | ProSoundEffects | All five creature cues shared one sound |
+| creature_attack | 9114630281 Deep Growling Voice 46 | ProSoundEffects | Same |
+| creature_repelled | 9114628818 Deep Growling Voice 22 | ProSoundEffects | Same |
+
+### Triggered in play (2026-10-14)
+
+Lobby: music_lobby. On the line: forest_night, rain, train_engine_idle,
+train_engine_load, train_wheels_roll (stops when the train stands). After a
+crew wipe and retry every loop was still playing exactly once.
+
+### Still silent (17)
+
+train_wiper, train_stall, wind_forest, downed, revive, flashlight_die,
+item_bandage, gun_revolver, gun_shotgun, gun_rifle, reload_revolver,
+reload_shotgun_shell, reload_bolt, radio_tune, creature_mimic, music_climax,
+music_resolution. Subtitles still carry every informational cue. The weapon
+cues are to be filled with the premium weapons work.
+
+### Reuse that remains
+
+Related variants share deliberately (footstep surfaces, rain intensities,
+door kinds). Two unrelated pairs remain: item_battery with train_rail_joint,
+and gun_dry with item_drop. They are listed here rather than hidden.
+
+## Premium weapon cues (2026-10-14)
+
+Eight cues added for the premium weapons. `arc_discharge` and `arc_impact` use
+Pro Sound Effects electrical bursts; `flare_burst` reuses the licensed
+`gun_flare` launch. `gun_carbine`, `reload_carbine`, `reload_launcher`,
+`arc_charge` and `arc_overheat` are silent: a search of the Roblox licensed
+libraries found no gunshot, reload or charge-up from Pro Sound Effects or APM,
+only unlicensed user uploads, which this project does not use. The gunshot has
+a subtitle, the overheat has a subtitle and a HUD readout. Filling these needs
+licensed audio uploaded to the experience. 69 of 91 cues are now configured.

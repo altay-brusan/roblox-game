@@ -51,6 +51,9 @@ local BOOT_ORDER = {
 	{ name = "WeaponController", module = Controllers.WeaponController },
 	{ name = "CabController", module = Controllers.CabController },
 	{ name = "TrainRideController", module = Controllers.TrainRideController },
+	{ name = "HorrorEffectsController", module = Controllers.HorrorEffectsController },
+	{ name = "LampController", module = Controllers.LampController },
+	{ name = "JourneyController", module = Controllers.JourneyController },
 }
 
 local failures: { string } = {}
@@ -125,14 +128,17 @@ task.spawn(function()
 	local profile = StateController.profile()
 	local isNew = profile ~= nil and (profile.sessionCount or 1) <= 1
 
-	if isNew then
-		task.wait(2)
-		hint(
-			"welcome",
-			"Tolbridge Yard",
-			"The crew board is under the shelter. Form a crew, or depart alone: everything in the chapter can be done by one person."
-		)
-	end
+	-- Every session opens by saying where the train is, because that is the
+	-- one thing a player cannot be left to discover. New players get the
+	-- longer version.
+	task.wait(2)
+	hint(
+		"welcome",
+		"The 02:17 is at Platform 1",
+		if isNew
+			then "The train straight ahead is yours. Press E at the DEPART post on the platform to leave alone or with a crew, then walk aboard. Everything in the chapter can be done by one person."
+			else "Press E at the DEPART post on the platform, or at the crew board in the shelter, then walk aboard."
+	)
 
 	StateController.Changed:Connect(function(key, value)
 		if key ~= "expedition" or type(value) ~= "table" then

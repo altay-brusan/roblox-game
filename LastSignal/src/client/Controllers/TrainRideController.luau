@@ -2,89 +2,130 @@
 --[[
 	TrainRideController
 	-------------------
-	Keeps the player with the train while the train moves.
+	Renders moving trains smoothly and keeps the player with the train they
+	are riding.
 
 	THE PROBLEM
 	-----------
 	The train is an anchored rigid assembly moved by CFrame on the server (see
-	TrainService for why). An anchored part imparts no velocity to what stands
-	on it, so without this controller a player standing in a moving carriage
-	would simply be left behind as the carriage slid out from under them.
+	TrainService for why). Two things follow from that:
 
-	Every other approach was worse. Welding players to the floor removes their
-	ability to walk. Unanchored physics rolling stock jitters and stretches with
-	six players aboard. Moving the world around a stationary train breaks
-	streaming and every position the server holds.
+	  - An anchored part imparts no velocity to what stands on it, so a player
+	    standing in a moving carriage would be left behind.
+	  - The server moves the train at its tick rate, and replicated CFrame
+	    changes on anchored parts are not interpolated. Drawn as received, the
+	    train visibly steps, and a passenger carried by those steps stutters.
 
 	THE SOLUTION
 	------------
-	The client owns its own character's physics, so the client is the correct
-	place to do this. Each frame, this controller computes how far the train
-	moved since the last frame and applies exactly that delta to the character's
-	root. The player's own walking is unaffected, because it happens in the same
-	frame on top of the delta. The result is smooth at any framerate and on any
-	connection, because nothing is being predicted or corrected.
+	The server publishes, as attributes on the train model, where the line
+	starts (OriginCFrame), how far along it the train is (Distance), how fast
+	it is moving (Velocity) and when that sample was taken (SampleTime). Every
+	frame, before the camera updates, this controller extrapolates the
+	distance from that sample, blends out any prediction error over a few
+	frames, and places the train locally. Each client therefore draws a train
+	that moves continuously, whatever the network rate.
+
+	A player riding the train is moved by exactly the change in the train's
+	rendered pose since the previous frame. The client owns its character's
+	physics, so the player's own walking happens on top of that delta and the
+	result has no lag, no jitter and no sliding.
 
 	CORRECTNESS DETAILS THAT MATTER
 	-------------------------------
-	  - The delta is applied only while the character is inside the train's
-	    volume, tested in the train's local space so it works at any position.
-	  - Entering and leaving are hysteretic: the volume used to leave is
-	    slightly larger than the one used to enter, so standing exactly on the
-	    boundary does not flicker.
+	  - "Aboard" is tested against the volume the train was built with
+	    (VolumeSize and VolumeOffset attributes), in the train's local space.
+	  - Entering and leaving are hysteretic, so standing in a doorway does not
+	    flicker.
 	  - Vertical velocity is preserved, so jumping inside a moving carriage
 	    works and lands correctly.
-	  - Nothing is applied while the character is falling outside the train,
-	    so jumping off a moving train genuinely leaves you behind, which is
-	    both correct and a real hazard the game uses.
+	  - A player falling clear of the train is not carried, so jumping off a
+	    moving train genuinely leaves you behind.
+	  - The pose is reasserted in Stepped, before physics, in case replication
+	    wrote the server's pose in between.
 ]]
 
+local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("LastSignal")
 
 local Logger = require(Shared.Core.Logger)
-local StateController = require(script.Parent.StateController)
+local Net = require(Shared.Core.Net)
 
 local log = Logger.new("TrainRideController")
 local player = Players.LocalPlayer
 
 local TrainRideController = {}
 
-local lastTrainCF: CFrame? = nil
-local aboard = false
-local trainModel: Model? = nil
+type Tracked = {
+	rendered: number, -- distance currently drawn
+	lastPose: CFrame?,
+}
 
---- Finds the train model in the workspace. Cached, and re-resolved whenever
---- the expedition changes, because a new run builds a new train.
-local function resolveTrain(): Model?
-	if trainModel and trainModel.Parent then
-		return trainModel
-	end
-	for _, instance in game:GetService("CollectionService"):GetTagged("Train") do
-		if instance:IsA("Model") and instance.Parent then
-			trainModel = instance
-			return instance
-		end
+local tracked: { [Model]: Tracked } = {}
+local riding: Model? = nil
+
+-- How quickly a prediction error is blended out, per second. High enough
+-- that a stop lands where the server says, low enough to hide a late packet.
+local CORRECTION_RATE = 6
+-- Errors beyond this are a teleport (a new run, a reset), not drift.
+local SNAP_DISTANCE = 40
+
+--------------------------------------------------------------------------
+
+local function attribute<T>(model: Model, name: string, kind: string): T?
+	local value = model:GetAttribute(name)
+	if typeof(value) == kind then
+		return value :: any
 	end
 	return nil
 end
 
---- The train's volume, from the state the server replicates plus the model's
---- own bounding box as a fallback.
-local function trainVolume(model: Model): (CFrame, Vector3)
-	local root = model:FindFirstChild("TrainRoot")
-	local cf = if root and root:IsA("BasePart") then root.CFrame else model:GetPivot()
-	local _, size = model:GetBoundingBox()
-	-- The volume is the model's box, raised so it covers the interior rather
-	-- than the bogies, and shortened slightly so standing on the buffers does
-	-- not count as being aboard.
-	return cf * CFrame.new(0, size.Y * 0.4, -size.Z * 0.5), Vector3.new(size.X + 2, size.Y, size.Z)
+--- The distance the server's latest sample says the train is at now.
+local function predictedDistance(model: Model): number?
+	local distance = attribute(model, "Distance", "number") :: number?
+	if not distance then
+		return nil
+	end
+	local velocity = (attribute(model, "Velocity", "number") :: number?) or 0
+	local sampleTime = (attribute(model, "SampleTime", "number") :: number?) or Workspace:GetServerTimeNow()
+	local age = math.clamp(Workspace:GetServerTimeNow() - sampleTime, 0, 0.5)
+	local predicted = distance + velocity * age
+	-- Never extrapolate through a stop point: the server will not pass it.
+	local stop = attribute(model, "StopDistance", "number") :: number?
+	if stop and velocity > 0 and predicted > stop then
+		predicted = stop
+	end
+	return math.max(predicted, 0)
 end
 
-local function isInside(point: Vector3, volumeCF: CFrame, half: Vector3, margin: number): boolean
-	local localPoint = volumeCF:PointToObjectSpace(point)
+local function poseFor(model: Model, distance: number): CFrame?
+	local origin = attribute(model, "OriginCFrame", "CFrame") :: CFrame?
+	if not origin then
+		return nil
+	end
+	return origin * CFrame.new(0, 0, -distance)
+end
+
+local function rootOf(model: Model): BasePart?
+	local root = model.PrimaryPart
+	if root and root.Parent then
+		return root
+	end
+	return nil
+end
+
+local function isInside(model: Model, pose: CFrame, point: Vector3, margin: number): boolean
+	local size = attribute(model, "VolumeSize", "Vector3") :: Vector3?
+	local offset = attribute(model, "VolumeOffset", "CFrame") :: CFrame?
+	if not size or not offset then
+		return false
+	end
+	local localPoint = (pose * offset):PointToObjectSpace(point)
+	local half = size * 0.5
 	return math.abs(localPoint.X) <= half.X + margin
 		and math.abs(localPoint.Y) <= half.Y + margin
 		and math.abs(localPoint.Z) <= half.Z + margin
@@ -92,115 +133,251 @@ end
 
 --------------------------------------------------------------------------
 
-local function onStepped()
-	local trainState = StateController.get("train")
-	if not trainState then
-		lastTrainCF = nil
-		aboard = false
-		return
+--- Advances one train's rendered distance and returns its pose this frame
+--- and the pose it had last frame.
+local function advance(model: Model, state: Tracked, dt: number): (CFrame?, CFrame?)
+	local target = predictedDistance(model)
+	if not target then
+		return nil, nil
 	end
-
-	local model = resolveTrain()
-	if not model then
-		lastTrainCF = nil
-		return
+	local velocity = (attribute(model, "Velocity", "number") :: number?) or 0
+	local rendered = state.rendered + velocity * dt
+	local err = target - rendered
+	if math.abs(err) > SNAP_DISTANCE then
+		rendered = target
+	else
+		rendered += err * math.min(1, CORRECTION_RATE * dt)
 	end
+	state.rendered = rendered
+	local pose = poseFor(model, rendered)
+	local previous = state.lastPose
+	state.lastPose = pose
+	return pose, previous
+end
 
-	local rootPart = model:FindFirstChild("TrainRoot")
-	if not rootPart or not rootPart:IsA("BasePart") then
-		return
-	end
-	local currentCF = rootPart.CFrame
-
-	local previous = lastTrainCF
-	lastTrainCF = currentCF
-	if not previous then
-		return
-	end
-
+local function carryCharacter(model: Model, pose: CFrame, previous: CFrame)
 	local character = player.Character
 	local root = if character then character:FindFirstChild("HumanoidRootPart") else nil
 	local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
 	if not root or not root:IsA("BasePart") or not humanoid or humanoid.Health <= 0 then
-		aboard = false
+		if riding == model then
+			riding = nil
+		end
 		return
 	end
 
-	local volumeCF, size = trainVolume(model)
-	local half = size * 0.5
-
-	-- Hysteresis: a larger margin to stay aboard than to get aboard, so the
-	-- boundary does not flicker when standing in a doorway.
-	local margin = if aboard then 4 else 0
-	local inside = isInside(root.Position, volumeCF, half, margin)
-
-	if inside and not aboard then
-		aboard = true
-	elseif not inside and aboard then
-		aboard = false
+	-- Hysteresis: a larger margin to stay aboard than to get aboard.
+	local wasAboard = riding == model
+	local inside = isInside(model, previous, root.Position, if wasAboard then 3 else 0)
+	if inside and not wasAboard then
+		riding = model
+	elseif not inside and wasAboard then
+		riding = nil
 	end
-
-	if not aboard then
+	if riding ~= model then
 		return
 	end
 
-	-- Falling clear of the train is not riding it. Without this check, jumping
-	-- out of a door would carry the player along with the train in mid-air.
+	-- A seated passenger is welded to a seat on the train and already moves
+	-- with it; carrying them as well would move them twice.
+	local seat = humanoid.SeatPart
+	if seat and seat:IsDescendantOf(model) then
+		return
+	end
+
+	-- Falling clear of the train is not riding it.
 	if humanoid.FloorMaterial == Enum.Material.Air and root.AssemblyLinearVelocity.Y < -8 then
-		local groundedInside = isInside(root.Position - Vector3.new(0, 6, 0), volumeCF, half, 0)
-		if not groundedInside then
-			aboard = false
+		if not isInside(model, previous, root.Position - Vector3.new(0, 6, 0), 0) then
+			riding = nil
 			return
 		end
 	end
 
-	-- The delta. Applying the full transform rather than just the translation
-	-- means a train that turned would carry the player's facing with it; the
-	-- line is straight in this chapter, but the maths is correct either way.
-	local delta = currentCF * previous:Inverse()
-	local moved = delta.Position
-	if moved.Magnitude < 1e-5 then
+	local delta = pose * previous:Inverse()
+	if delta.Position.Magnitude < 1e-5 then
 		return
 	end
-
-	-- Preserve the player's own velocity. Setting CFrame alone would otherwise
-	-- fight the physics solver and make jumps feel wrong.
 	local velocity = root.AssemblyLinearVelocity
 	root.CFrame = delta * root.CFrame
 	root.AssemblyLinearVelocity = velocity
 end
 
+-- Wiper arms are articulated joints (see TrainBuilder). The server only
+-- says whether the wipers are on; each client sweeps them locally, which
+-- costs no network traffic and is smooth at any frame rate.
+local WIPER_SWEEP = math.rad(52)
+local wiperArms: { [Model]: { Weld }? } = {}
+local function sweepWipers(model: Model)
+	local arms: { Weld } = wiperArms[model] or {}
+	if not wiperArms[model] then
+		for _, part in model:GetDescendants() do
+			if part:IsA("BasePart") and part:HasTag("WiperArm") then
+				local joint = part:FindFirstChild("Articulation")
+				if joint and joint:IsA("Weld") then
+					table.insert(arms, joint)
+				end
+			end
+		end
+		wiperArms[model] = arms
+	end
+	local on = model:GetAttribute("Wipers") == true
+	local angle = if on then math.sin(os.clock() * math.pi * 2 / 1.35) * WIPER_SWEEP else 0
+	for _, joint in arms do
+		local base = joint:GetAttribute("BaseC0")
+		if typeof(base) == "CFrame" then
+			joint.C0 = base * CFrame.Angles(0, 0, angle)
+		end
+	end
+end
+
+local function onRender(dt: number)
+	for model, state in tracked do
+		if not model.Parent then
+			tracked[model] = nil
+			wiperArms[model] = nil
+			continue
+		end
+		if model:GetAttribute("Wipers") ~= nil then
+			sweepWipers(model)
+		end
+		local root = rootOf(model)
+		local pose, previous = advance(model, state, dt)
+		if not root or not pose then
+			continue
+		end
+		root.CFrame = pose
+		if previous then
+			carryCharacter(model, pose, previous)
+		end
+	end
+end
+
+-- Physics runs after rendering. Replication may have written the server's
+-- pose in between, so the rendered pose is reasserted before the solver
+-- sees the floor the character is standing on.
+local function onStepped()
+	for model, state in tracked do
+		local root = rootOf(model)
+		if root and state.lastPose then
+			root.CFrame = state.lastPose
+		end
+	end
+end
+
+local function track(instance: Instance)
+	if not instance:IsA("Model") or tracked[instance] then
+		return
+	end
+	tracked[instance] = { rendered = predictedDistance(instance) or 0, lastPose = nil }
+end
+
 --------------------------------------------------------------------------
 
 function TrainRideController.isAboard(): boolean
-	return aboard
+	return riding ~= nil
+end
+
+--- The train the local player is riding, if any.
+function TrainRideController.ridingModel(): Model?
+	return riding
+end
+
+--- The tunnel crossing. The server names where on the expedition train this
+--- player should stand; the client, which owns its character, moves there,
+--- and holds the character still until the train it is standing in has
+--- streamed in, so nobody falls through a floor that has not arrived yet.
+type Crossing = {
+	relative: CFrame,
+	model: Model?,
+	origin: CFrame,
+	distance: number,
+	velocity: number,
+	sampleTime: number,
+}
+
+local function crossToLine(crossing: Crossing)
+	local character = player.Character
+	local root = if character then character:FindFirstChild("HumanoidRootPart") else nil
+	local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
+	if not root or not root:IsA("BasePart") or not humanoid then
+		return
+	end
+	humanoid.Sit = false
+	riding = nil
+
+	-- Where the train is now: from the model once it has streamed in, and
+	-- until then from the motion sample the server sent with the crossing.
+	-- The train is rolling, so the character is held to the moving train,
+	-- not to a fixed point it would be left behind at.
+	local function trainPose(): (CFrame, boolean)
+		local model = crossing.model
+		if model and model.Parent and model.PrimaryPart then
+			return model.PrimaryPart.CFrame, true
+		end
+		local age = Workspace:GetServerTimeNow() - crossing.sampleTime
+		return crossing.origin * CFrame.new(0, 0, -(crossing.distance + crossing.velocity * age)), false
+	end
+
+	root.Anchored = true
+	local deadline = os.clock() + 5
+	repeat
+		local pose, streamed = trainPose()
+		root.CFrame = pose * crossing.relative
+		root.AssemblyLinearVelocity = Vector3.zero
+		if streamed then
+			break
+		end
+		RunService.Heartbeat:Wait()
+	until os.clock() > deadline
+	root.Anchored = false
+	local pose = trainPose()
+	root.CFrame = pose * crossing.relative
+	root.AssemblyLinearVelocity = Vector3.zero
 end
 
 function TrainRideController.start()
-	-- Stepped rather than RenderStepped: it runs before physics, so the
-	-- character is moved and then simulated in the same frame, which is what
-	-- removes the visible lag between the carriage and the player.
-	RunService.Stepped:Connect(onStepped)
-
-	StateController.Changed:Connect(function(key, value)
-		if key ~= "expedition" then
+	Net.onClientEvent("CrossToLine", function(payload)
+		if
+			type(payload) ~= "table"
+			or typeof(payload.relative) ~= "CFrame"
+			or typeof(payload.origin) ~= "CFrame"
+			or type(payload.distance) ~= "number"
+			or type(payload.velocity) ~= "number"
+			or type(payload.sampleTime) ~= "number"
+		then
 			return
 		end
-		-- A new expedition means a new train; drop the cached references so
-		-- the next frame resolves the new one.
-		trainModel = nil
-		lastTrainCF = nil
-		aboard = false
-		if type(value) == "table" and value.state == "lobby" then
-			log.debug("left the expedition; ride tracking cleared")
+		crossToLine({
+			relative = payload.relative,
+			model = if typeof(payload.model) == "Instance" and payload.model:IsA("Model") then payload.model else nil,
+			origin = payload.origin,
+			distance = payload.distance,
+			velocity = payload.velocity,
+			sampleTime = payload.sampleTime,
+		})
+	end)
+
+	for _, instance in CollectionService:GetTagged("Train") do
+		track(instance)
+	end
+	CollectionService:GetInstanceAddedSignal("Train"):Connect(track)
+	CollectionService:GetInstanceRemovedSignal("Train"):Connect(function(instance)
+		if instance:IsA("Model") then
+			tracked[instance] = nil
+			if riding == instance then
+				riding = nil
+			end
 		end
 	end)
 
+	-- Before the camera, so the first-person view is drawn from where the
+	-- carried character actually is this frame.
+	RunService:BindToRenderStep("LastSignalTrainRide", Enum.RenderPriority.Camera.Value - 1, onRender)
+	RunService.Stepped:Connect(onStepped)
+
 	player.CharacterAdded:Connect(function()
-		-- A fresh character is not aboard until it is tested, which stops a
-		-- respawn inheriting the previous character's ride state.
-		aboard = false
-		lastTrainCF = nil
+		-- A fresh character is not aboard until it is tested.
+		riding = nil
 	end)
 
 	log.info("started")

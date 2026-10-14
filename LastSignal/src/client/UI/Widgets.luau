@@ -228,6 +228,8 @@ export type ButtonOptions = {
 	onClick: (() -> ())?,
 	name: string?,
 	subtitle: string?,
+	-- Shrink the label to fit a narrow button rather than truncating it.
+	fit: boolean?,
 }
 
 export type Button = {
@@ -261,6 +263,14 @@ function Widgets.button(options: ButtonOptions): Button
 	label.TextXAlignment = Enum.TextXAlignment.Center
 	label.TextYAlignment = Enum.TextYAlignment.Center
 	label.TextTruncate = Enum.TextTruncate.AtEnd
+	if options.fit then
+		label.TextTruncate = Enum.TextTruncate.None
+		label.TextScaled = true
+		local limit = Instance.new("UITextSizeConstraint")
+		limit.MaxTextSize = Theme.textSize("body")
+		limit.MinTextSize = 8
+		limit.Parent = label
+	end
 	label.Parent = button
 
 	local padding = Instance.new("UIPadding")
@@ -434,12 +444,18 @@ function Widgets.meter(parent: Instance, colour: Color3, height: number?, label:
 		text = Widgets.label({
 			text = label,
 			size = "tiny",
-			colour = Theme.colour("textMuted"),
+			colour = Theme.colour("text"),
 			align = Enum.TextXAlignment.Left,
 			parent = container,
 			name = "MeterText",
 		})
 		local resolved = text :: TextLabel
+		-- The label sits on the bar, so it needs to read against both the
+		-- fill colour and the empty track: light text with a dark outline,
+		-- drawn above the fill. It was muted grey under the fill before.
+		resolved.TextStrokeTransparency = 0.35
+		resolved.TextStrokeColor3 = Color3.new(0, 0, 0)
+		resolved.ZIndex = fill.ZIndex + 1
 		resolved.Position = UDim2.new(0, Theme.space(0.5), 0, 0)
 		resolved.Size = UDim2.new(1, -Theme.space(1), 1, 0)
 		resolved.TextYAlignment = Enum.TextYAlignment.Center
@@ -585,6 +601,12 @@ function Widgets.modalBackdrop(parent: Instance, onDismiss: () -> ()): TextButto
 	backdrop.BackgroundTransparency = 0.35
 	backdrop.BorderSizePixel = 0
 	backdrop.Size = UDim2.fromScale(1, 1)
+	-- Modal frees the cursor while the backdrop is visible. In first person
+	-- the camera locks the mouse to the centre of the screen every frame, so
+	-- without this a player could open a panel but never move the cursor to
+	-- a button: every click landed mid-screen, on this backdrop, and closed
+	-- the panel. That is why "Depart alone" could not be clicked.
+	backdrop.Modal = true
 	backdrop.Activated:Connect(onDismiss)
 	backdrop.Parent = parent
 	return backdrop

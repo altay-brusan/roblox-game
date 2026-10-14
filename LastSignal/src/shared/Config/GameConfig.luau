@@ -113,7 +113,9 @@ GameConfig.TargetRunSeconds = 32 * 60
 GameConfig.MinRunSeconds = 22 * 60
 GameConfig.MaxRunSeconds = 48 * 60
 
-GameConfig.CinematicSeconds = 38
+-- The departure sequence films the real train leaving the yard; it ends when
+-- the train is inside the tunnel, which the yard pilot reaches in about this.
+GameConfig.CinematicSeconds = 24
 GameConfig.CinematicSkippableAfter = 2
 
 --------------------------------------------------------------------------

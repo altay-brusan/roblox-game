@@ -37,6 +37,7 @@ local Shared = ReplicatedStorage:WaitForChild("LastSignal")
 
 local Logger = require(Shared.Core.Logger)
 local Spring = require(Shared.Core.Spring)
+local Theme = require(script.Parent.Parent.UI.Theme)
 local StateController = require(script.Parent.StateController)
 
 local log = Logger.new("CameraController")
@@ -220,68 +221,117 @@ end
 -- Cinematic
 --------------------------------------------------------------------------
 
--- The opening sequence, as keyframes relative to the train. Each frame is a
--- position offset, a look-at offset, and the time it is reached. Defining it
--- as data means the sequence can be re-timed without touching any logic.
-local CINEMATIC_KEYFRAMES = {
-	-- Rain on the yard, looking along the train from outside.
-	{ t = 0.0, from = Vector3.new(38, 14, 62), to = Vector3.new(0, 8, 20) },
-	{ t = 7.0, from = Vector3.new(22, 10, 36), to = Vector3.new(0, 7, 4) },
-	-- Down the platform towards the cab, under the lamps.
-	{ t = 14.0, from = Vector3.new(16, 7, 6), to = Vector3.new(0, 6, -22) },
-	{ t = 20.0, from = Vector3.new(11, 6, -14), to = Vector3.new(-2, 6, -34) },
-	-- Boarding: through the door, into the carriage.
-	{ t = 25.0, from = Vector3.new(7, 5.5, 24), to = Vector3.new(0, 5.5, 8) },
-	{ t = 30.0, from = Vector3.new(0, 6, 30), to = Vector3.new(0, 6, 10) },
-	-- The treeline, and something in it.
-	{ t = 33.0, from = Vector3.new(-2, 7, 26), to = Vector3.new(-60, 10, 10) },
-	{ t = 38.0, from = Vector3.new(0, 6, 20), to = Vector3.new(0, 6, 2) },
+-- The opening sequence films the real departure: the yard train pulling
+-- out of Platform 1 and into the tunnel. It is a list of shots with hard cuts
+-- between them. Each shot eases from a start framing to an end framing, in
+-- one of two spaces:
+--
+--   world   relative to where the train stood when the sequence began, so
+--           the camera holds still and the train moves through the frame
+--   train   relative to the moving train, so the camera travels with it
+--
+-- Offsets are in the train's own frame: -Z is ahead, +X is the platform side.
+type Shot = {
+	t0: number,
+	t1: number,
+	space: "world" | "train",
+	fromA: Vector3,
+	lookA: Vector3,
+	fromB: Vector3,
+	lookB: Vector3,
+}
+
+local SHOTS: { Shot } = {
+	-- Low on the platform ahead of the train as it begins to move.
+	{
+		t0 = 0,
+		t1 = 6,
+		space = "world",
+		fromA = Vector3.new(16, 6, -60),
+		lookA = Vector3.new(0, 7, 10),
+		fromB = Vector3.new(16, 6.5, -57),
+		lookB = Vector3.new(0, 7, 2),
+	},
+	-- Running alongside the cab.
+	{
+		t0 = 6,
+		t1 = 11,
+		space = "train",
+		fromA = Vector3.new(15, 8, 6),
+		lookA = Vector3.new(0, 7, -25),
+		fromB = Vector3.new(15, 8, -6),
+		lookB = Vector3.new(0, 7, -36),
+	},
+	-- High and ahead, looking back down the length of the train.
+	{
+		t0 = 11,
+		t1 = 16,
+		space = "train",
+		fromA = Vector3.new(8, 24, -50),
+		lookA = Vector3.new(0, 6, 50),
+		fromB = Vector3.new(-8, 22, -46),
+		lookB = Vector3.new(0, 6, 60),
+	},
+	-- Beside the tunnel mouth as the train runs into the dark.
+	{
+		t0 = 16,
+		t1 = 30,
+		space = "world",
+		fromA = Vector3.new(24, 16, -230),
+		lookA = Vector3.new(0, 6, -150),
+		fromB = Vector3.new(22, 15, -236),
+		lookB = Vector3.new(0, 5, -205),
+	},
 }
 
 local cinematicAnchor: CFrame? = nil
+local cinematicModel: Model? = nil
 
-function CameraController.startCinematic(duration: number, anchor: CFrame?)
+function CameraController.startCinematic(duration: number, anchor: CFrame?, model: Model?)
 	cinematicStartedAt = os.clock()
 	cinematicDuration = duration
 	cinematicAnchor = anchor
+	cinematicModel = model
 	CameraController.setMode("cinematic")
 end
 
 function CameraController.stopCinematic()
 	cinematicStartedAt = 0
 	cinematicAnchor = nil
+	cinematicModel = nil
 	CameraController.restore()
 end
 
 local function cinematicCFrame(elapsed: number): CFrame
-	local anchor = cinematicAnchor or CFrame.new()
-	local frames = CINEMATIC_KEYFRAMES
-
-	-- Find the pair of keyframes surrounding the current time.
-	local previous = frames[1]
-	local nextFrame = frames[#frames]
-	for index = 1, #frames - 1 do
-		if elapsed >= frames[index].t and elapsed <= frames[index + 1].t then
-			previous = frames[index]
-			nextFrame = frames[index + 1]
+	local start = cinematicAnchor or CFrame.new()
+	local shot = SHOTS[#SHOTS]
+	for _, candidate in SHOTS do
+		if elapsed < candidate.t1 then
+			shot = candidate
 			break
 		end
 	end
 
-	local span = math.max(0.001, nextFrame.t - previous.t)
-	local alpha = math.clamp((elapsed - previous.t) / span, 0, 1)
-	-- Smoothstep, so each move eases rather than starting and stopping hard.
-	alpha = alpha * alpha * (3 - 2 * alpha)
+	local anchor = start
+	if shot.space == "train" then
+		local model = cinematicModel
+		local root = if model then model.PrimaryPart else nil
+		if root and root.Parent then
+			anchor = root.CFrame
+		end
+	end
 
-	local from = previous.from:Lerp(nextFrame.from, alpha)
-	local to = previous.to:Lerp(nextFrame.to, alpha)
-
-	local worldFrom = anchor:PointToWorldSpace(from)
-	local worldTo = anchor:PointToWorldSpace(to)
-
-	-- A slow drift, so even a held shot is not locked off.
-	local drift = Vector3.new(math.sin(elapsed * 0.4) * 0.5, math.cos(elapsed * 0.31) * 0.3, 0)
-	return CFrame.lookAt(worldFrom + drift, worldTo)
+	local alpha = math.clamp((elapsed - shot.t0) / math.max(0.001, shot.t1 - shot.t0), 0, 1)
+	if Theme.motionReduced() then
+		-- Reduced motion: each shot is a held frame, cut to cut.
+		alpha = 0
+	else
+		-- Smoothstep, so each move eases rather than starting and stopping hard.
+		alpha = alpha * alpha * (3 - 2 * alpha)
+	end
+	local from = anchor:PointToWorldSpace(shot.fromA:Lerp(shot.fromB, alpha))
+	local look = anchor:PointToWorldSpace(shot.lookA:Lerp(shot.lookB, alpha))
+	return CFrame.lookAt(from, look)
 end
 
 --------------------------------------------------------------------------

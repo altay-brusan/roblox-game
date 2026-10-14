@@ -218,15 +218,13 @@ local EVENTS: { DirectorEvent } = {
 				return false
 			end
 			local door = doors[math.random(1, #doors)]
-			local closed = door.model:GetAttribute("ClosedCFrame")
-			if typeof(closed) ~= "CFrame" then
-				return false
-			end
-			door.model:PivotTo((closed :: CFrame) * CFrame.Angles(0, math.rad(70), 0))
+			-- Through the door's joint. This used to PivotTo the door model,
+			-- which moved the entire welded train.
+			TrainService.setDoorAngle(door, math.rad(70))
 			cue(expedition, inside, "door_moves", door.hinge.Position)
 			task.delay(9, function()
-				if expedition.state ~= "closed" then
-					door.model:PivotTo(closed :: CFrame)
+				if expedition.state ~= "closed" and not train.doorsOpen then
+					TrainService.setDoorAngle(door, 0)
 				end
 			end)
 			return true
@@ -618,6 +616,18 @@ function HorrorDirector.start()
 
 	ExpeditionService.Ended:Connect(function(expedition)
 		states[expedition.id] = nil
+	end)
+
+	-- After a retry the pressure starts low and the crew gets a quiet minute
+	-- to regroup before anything is scheduled.
+	ExpeditionService.Retried:Connect(function(expedition)
+		local state = states[expedition.id]
+		local station = StationRegistry.byIndex(expedition.stationIndex)
+		if state then
+			state.threat = if station then station.threat.baseline else Balance.Threat.baseline
+			state.calmUntil = os.clock() + 60
+			state.creaturesSpawned = false
+		end
 	end)
 
 	ExpeditionService.StationReached:Connect(function(expedition, index)

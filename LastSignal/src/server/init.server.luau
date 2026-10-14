@@ -73,12 +73,15 @@ local BOOT_ORDER: { ServiceEntry } = {
 	{ name = "QuestService", module = Services.QuestService, stage = "Economy" },
 	{ name = "PurchaseService", module = Services.PurchaseService, stage = "Economy" },
 	{ name = "ShopService", module = Services.ShopService, stage = "Economy" },
+	{ name = "LoadoutService", module = Services.LoadoutService, stage = "Economy" },
+	{ name = "AppearanceService", module = Services.AppearanceService, stage = "Economy" },
 	{ name = "InventoryService", module = Services.InventoryService, stage = "Economy" },
 
 	{ name = "WorldService", module = Services.WorldService, stage = "World" },
 
 	{ name = "CrewService", module = Services.CrewService, stage = "Session" },
 	{ name = "TrainService", module = Services.TrainService, stage = "Session" },
+	{ name = "DepartureService", module = Services.DepartureService, stage = "Session" },
 	{ name = "ExpeditionService", module = Services.ExpeditionService, stage = "Session" },
 
 	{ name = "SurvivalService", module = Services.SurvivalService, stage = "Gameplay" },
@@ -86,6 +89,8 @@ local BOOT_ORDER: { ServiceEntry } = {
 	{ name = "CreatureService", module = Services.CreatureService, stage = "Gameplay" },
 	{ name = "CombatService", module = Services.CombatService, stage = "Gameplay" },
 	{ name = "HorrorDirector", module = Services.HorrorDirector, stage = "Gameplay" },
+	{ name = "SignatureMoments", module = Services.SignatureMoments, stage = "Gameplay" },
+	{ name = "JourneyService", module = Services.JourneyService, stage = "Gameplay" },
 
 	{ name = "EventService", module = Services.EventService, stage = "Live" },
 	{ name = "AdminService", module = Services.AdminService, stage = "Live" },
@@ -212,8 +217,10 @@ local function onPlayerAdded(player: Player)
 				local target = if currentLobby then currentLobby.spawnCFrames[math.random(1, #currentLobby.spawnCFrames)] else spawnCF
 				-- Only reposition when the player is not on an expedition;
 				-- ExpeditionService places its own crew.
+				-- A crew still boarding at Platform 1 is in the yard too.
 				local ExpeditionService = loaded.ExpeditionService
-				if not (ExpeditionService and ExpeditionService.forPlayer(player)) then
+				local expedition = if ExpeditionService then ExpeditionService.forPlayer(player) else nil
+				if not expedition or expedition.state == "preparing" or expedition.state == "boarding" then
 					character:PivotTo(target)
 				end
 			end

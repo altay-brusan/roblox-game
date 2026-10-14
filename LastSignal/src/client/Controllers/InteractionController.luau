@@ -192,6 +192,11 @@ local function actionFor(instance: Instance): (string?, string, string)
 		local label = if kind == "body" then "Search the remains" else "Search"
 		return "search", label, ""
 	end
+	if instance:HasTag("RunTask") then
+		local label = instance:GetAttribute("TaskLabel")
+		local detail = instance:GetAttribute("TaskDetail")
+		return "run_task", if type(label) == "string" then label else "Use", if type(detail) == "string" then detail else ""
+	end
 	if instance:HasTag("StationFixture") then
 		local kind = instance:GetAttribute("FixtureKind")
 		local labels: { [string]: string } = {
@@ -221,6 +226,18 @@ local function actionFor(instance: Instance): (string?, string, string)
 	if instance:HasTag("RadioSet") then
 		return "read", "Play a recording", ""
 	end
+	if instance:HasTag("DriverSeat") then
+		if instance:IsA("Seat") and (instance.Occupant or instance:GetAttribute("SeatLocked") == true) then
+			return nil, "", ""
+		end
+		return "sit", "Take the controls", "Driver's seat"
+	end
+	if instance:HasTag("TrainSeat") then
+		if instance:IsA("Seat") and instance.Occupant then
+			return nil, "", ""
+		end
+		return "sit", "Take a seat", ""
+	end
 	if instance:HasTag("DoorLeaf") then
 		return "door", "Work the door", ""
 	end
@@ -238,6 +255,9 @@ local function actionFor(instance: Instance): (string?, string, string)
 	end
 	if instance:HasTag("StoresCounter") then
 		return "lobby", "Browse the stores", "Liveries, cosmetics and supplies"
+	end
+	if instance:HasTag("ArmoryRack") then
+		return "lobby", "Open the armory", "Premium weapons and the Conductor Collection"
 	end
 	if instance:HasTag("WorkshopBench") then
 		return "lobby", "Open your loadout", "Train, livery, weapon and appearance"
@@ -349,6 +369,16 @@ end
 
 --------------------------------------------------------------------------
 
+-- A tall fixture hosts its prompt on an eye-level Attachment (see
+-- InteractionService); the interactable is the part that carries it.
+local function promptTarget(prompt: ProximityPrompt): Instance?
+	local parent = prompt.Parent
+	if parent and parent:IsA("Attachment") then
+		return parent.Parent
+	end
+	return parent
+end
+
 function InteractionController.start()
 	build()
 
@@ -358,7 +388,7 @@ function InteractionController.start()
 			return
 		end
 		activePrompt = prompt
-		local parent = prompt.Parent
+		local parent = promptTarget(prompt)
 		if not parent then
 			return
 		end
@@ -387,13 +417,23 @@ function InteractionController.start()
 		if triggeringPlayer ~= player then
 			return
 		end
-		local parent = prompt.Parent
+		local parent = promptTarget(prompt)
 		if not parent then
 			return
 		end
 		local action = actionFor(parent)
 		if not action then
 			return
+		end
+		-- A humanoid that thinks it is climbing (beside the lattice of Hallow
+		-- Bridge, for one) cannot be seated. Stand it up before asking for the
+		-- seat, so "Take the controls" never silently fails.
+		if action == "sit" then
+			local character = player.Character
+			local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
+			if humanoid and humanoid:GetState() == Enum.HumanoidStateType.Climbing then
+				humanoid:ChangeState(Enum.HumanoidStateType.Running)
+			end
 		end
 		-- The first send tells the server we are starting; it replies with the
 		-- duration, and the hold bar runs from that.
@@ -425,6 +465,9 @@ function InteractionController.start()
 				Net.fireServer("Analytics", "tutorial_prompt_seen")
 				showPrompt("You need " .. string.sub(message, 7), "", "!")
 				task.delay(2, hidePrompt)
+			elseif string.sub(message, 1, 4) == "SAY:" then
+				showPrompt(string.sub(message, 5), "", "!")
+				task.delay(3, hidePrompt)
 			end
 			cancelHold()
 		end

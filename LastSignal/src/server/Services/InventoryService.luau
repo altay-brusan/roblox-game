@@ -189,14 +189,17 @@ end
 --- Adds items. Returns how many were actually added, which may be fewer than
 --- requested. Callers must handle a partial add rather than assuming success:
 --- the leftover is what gets dropped on the ground.
-function InventoryService.add(player: Player, itemId: string, quantity: number): number
+--- Adds items, returning how many fitted. With force, the item is taken
+--- whatever the slot and weight limits: used for parts the current
+--- objective needs, so a full bag can never block the mission.
+function InventoryService.add(player: Player, itemId: string, quantity: number, force: boolean?): number
 	local inventory = inventories[player.UserId]
 	local def = ItemRegistry.get(itemId)
 	if not inventory or not def or quantity <= 0 then
 		return 0
 	end
 
-	local canTake = math.min(quantity, InventoryService.spaceFor(player, itemId))
+	local canTake = if force then quantity else math.min(quantity, InventoryService.spaceFor(player, itemId))
 	if canTake <= 0 then
 		return 0
 	end
@@ -214,7 +217,7 @@ function InventoryService.add(player: Player, itemId: string, quantity: number):
 			remaining -= moved
 		end
 	end
-	while remaining > 0 and #inventory.stacks < inventory.slotLimit do
+	while remaining > 0 and (force or #inventory.stacks < inventory.slotLimit) do
 		local moved = math.min(def.stackSize, remaining)
 		table.insert(inventory.stacks, { id = itemId, quantity = moved })
 		remaining -= moved
@@ -227,6 +230,20 @@ function InventoryService.add(player: Player, itemId: string, quantity: number):
 		InventoryService.ItemCollected:Fire(player, itemId, added)
 	end
 	return added
+end
+
+--- Replaces a player's carried items with a saved list, as a retry does.
+function InventoryService.restore(player: Player, stacks: { { id: string, quantity: number } })
+	local inventory = inventories[player.UserId]
+	if not inventory then
+		return
+	end
+	inventory.stacks = {}
+	for _, stack in stacks do
+		table.insert(inventory.stacks, { id = stack.id, quantity = stack.quantity })
+	end
+	InventoryService.push(player)
+	InventoryService.Changed:Fire(player, inventory)
 end
 
 --- Removes items. Returns how many were removed.

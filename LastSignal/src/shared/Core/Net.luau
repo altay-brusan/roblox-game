@@ -58,6 +58,9 @@ local MANIFEST: { [string]: RemoteSpec } = {
 	ExpeditionCommand = { kind = "function", rate = { 10, 2 } },
 	Cinematic = { kind = "event" }, -- server -> client
 	CinematicSkip = { kind = "event", rate = { 4, 1 } },
+	Boarding = { kind = "event" }, -- server -> client, who is still to board the 02:17
+	ScreenFade = { kind = "event" }, -- server -> client, the tunnel crossing
+	CrossToLine = { kind = "event" }, -- server -> client, where to stand on the expedition train
 
 	-- World interaction ----------------------------------------------------
 	Interact = { kind = "event", rate = { 12, 4 } },
@@ -75,6 +78,9 @@ local MANIFEST: { [string]: RemoteSpec } = {
 	-- Combat ---------------------------------------------------------------
 	WeaponFire = { kind = "event", rate = { 16, 8 } },
 	WeaponReload = { kind = "event", rate = { 6, 2 } },
+	-- Arc Rail Projector: the moment the trigger went down. The server times
+	-- the charge from this, not from anything the client claims later.
+	WeaponCharge = { kind = "event", rate = { 8, 4 } },
 	WeaponEffect = { kind = "event" }, -- server -> client
 	MeleeSwing = { kind = "event", rate = { 10, 3 } },
 
@@ -97,6 +103,9 @@ local MANIFEST: { [string]: RemoteSpec } = {
 	-- Shop and monetization ---------------------------------------------------
 	ShopState = { kind = "event" }, -- server -> client
 	ShopCommand = { kind = "function", rate = { 10, 1.5 } },
+	-- Night runs: preferences, progress and in-run choices.
+	JourneyCommand = { kind = "function", rate = { 10, 2 } },
+	JourneyChoice = { kind = "event" }, -- server -> client
 	PurchaseResult = { kind = "event" }, -- server -> client
 
 	-- Live events --------------------------------------------------------------

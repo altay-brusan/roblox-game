@@ -48,6 +48,11 @@ local InteractionService = {}
 
 InteractionService.FixtureOperated = Signal.new() :: Signal.Signal<string, Player, BasePart>
 InteractionService.NoiseMade = Signal.new() :: Signal.Signal<Vector3, number, Player?>
+-- A RunTask hold finished: the player, the part, and whether a consumable
+-- was spent to do it faster.
+InteractionService.RunTaskDone = Signal.new() :: Signal.Signal<Player, BasePart, boolean>
+-- Set by JourneyService: the earned Lineman's toolkit shortens night-run tasks.
+InteractionService.holdScale = nil :: ((Player) -> number)?
 
 local MAX_REACH = 12
 
@@ -101,7 +106,10 @@ local function completeHold(player: Player, target: Instance, action: string): b
 		return false
 	end
 	local root = Guard.aliveRoot(player)
-	if not root or not Guard.withinDistance(root.Position, entry.position, MAX_REACH + 4) then
+	-- Against where the target is now: a job on a moving train moves with
+	-- the player, and the position at the start of the hold is left behind.
+	local position = if entry.target:IsA("BasePart") then (entry.target :: BasePart).Position else entry.position
+	if not root or not Guard.withinDistance(root.Position, position, MAX_REACH + 4) then
 		return false
 	end
 	held[player.UserId] = nil
@@ -224,12 +232,24 @@ local function operateFixture(player: Player, expedition: ExpeditionService.Expe
 				return false, "NEEDS:" .. itemDef.name
 			end
 		end
-		-- Generator steps need fuel in hand.
+		-- Generator steps need fuel. A jerry can is used if the player has one;
+		-- otherwise fuel is siphoned from the crew's own locomotive, so a crew
+		-- that already poured its can into the train is never stranded.
+		local siphon = false
 		if step.needsFuel and not InventoryService.has(player, "fuel_can", 1) then
-			return false, "NEEDS:Jerry Can"
+			if expedition.train.fuel >= Balance.Train.fuelCanRestore * 0.6 + 5 then
+				siphon = true
+			else
+				return false, "NEEDS:Jerry Can"
+			end
 		end
 
-		local duration = step.seconds or 2
+		-- A defend step is started with a short hold; its long timer then runs
+		-- on its own while the crew holds the area. It used to be treated as
+		-- one long hold, which meant standing on the key for minutes and the
+		-- defend timer never ran at all.
+		local isDefend = step.kind == "defend"
+		local duration = if isDefend then 1.5 else (step.seconds or 2)
 		local entry = held[player.UserId]
 		if not entry or entry.target ~= fixture then
 			beginHold(player, fixture, "operate", duration, fixture.Position)
@@ -238,12 +258,26 @@ local function operateFixture(player: Player, expedition: ExpeditionService.Expe
 		if not completeHold(player, fixture, "operate") then
 			return false, "TOO_EARLY"
 		end
+		if isDefend then
+			fixture:SetAttribute("State", "running")
+			return true, "START_DEFEND"
+		end
 
 		if step.item then
 			InventoryService.remove(player, step.item, 1)
 		end
 		if step.needsFuel then
-			InventoryService.remove(player, "fuel_can", 1)
+			if siphon then
+				expedition.train.fuel -= Balance.Train.fuelCanRestore * 0.6
+				Net.fireClient("Notify", player, {
+					kind = "info",
+					title = "Fuel siphoned from the locomotive",
+					body = "Nobody had a jerry can, so the generator was filled from the train.",
+					duration = 6,
+				})
+			else
+				InventoryService.remove(player, "fuel_can", 1)
+			end
 		end
 
 		fixture:SetAttribute("State", "done")
@@ -282,12 +316,12 @@ local function operateFixture(player: Player, expedition: ExpeditionService.Expe
 			return true, nil
 		end
 
-		-- Fuel delivery to a station fuel point, which fills the locomotive.
+		-- A powered station fuel point pumps from the station's own tank and
+		-- fills the locomotive to the target. It used to demand a jerry can,
+		-- and the halt's only guaranteed can is spent on its generator, so the
+		-- objective could only be finished if the loot rolls were kind.
 		if def.params.requiresPower and not fixture:GetAttribute("Powered") then
 			return false, "NO_POWER"
-		end
-		if not InventoryService.has(player, "fuel_can", 1) then
-			return false, "NEEDS:Jerry Can"
 		end
 		local duration = 4
 		local entry = held[player.UserId]
@@ -298,14 +332,10 @@ local function operateFixture(player: Player, expedition: ExpeditionService.Expe
 		if not completeHold(player, fixture, "operate") then
 			return false, "TOO_EARLY"
 		end
-		InventoryService.remove(player, "fuel_can", 1)
-		local added = TrainService.addFuel(expedition.train, Balance.Train.fuelCanRestore)
+		local target = def.params.targetFuel or 80
+		local added = TrainService.addFuel(expedition.train, math.max(0, target - expedition.train.fuel))
 		ProgressionService.addStat(player, "fuel_delivered", 1)
-		if expedition.train.fuel >= (def.params.targetFuel or 80) then
-			ExpeditionService.completeObjective(expedition, objectiveId)
-		else
-			ExpeditionService.push(expedition)
-		end
+		ExpeditionService.completeObjective(expedition, objectiveId)
 		Net.fireClient("InteractResult", player, { ok = true, action = "refuel", amount = added })
 		return true, nil
 	end
@@ -517,6 +547,8 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		"door",
 		"discover",
 		"lobby",
+		"sit",
+		"run_task",
 		"cancel",
 	})
 	if not action then
@@ -569,7 +601,7 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		if type(itemId) ~= "string" then
 			return
 		end
-		local added = InventoryService.add(player, itemId, quantity)
+		local added = InventoryService.add(player, itemId, quantity, expedition ~= nil and ExpeditionService.needsItem(expedition, itemId))
 		if added <= 0 then
 			Net.fireClient("InteractResult", player, { ok = false, error = "NO_SPACE" })
 			return
@@ -580,7 +612,45 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 			model:SetAttribute("Quantity", quantity - added)
 		end
 		ProgressionService.addStat(player, "items_collected", added)
+		if expedition then
+			ExpeditionService.checkCollectSteps(expedition)
+		end
 		Net.fireClient("InteractResult", player, { ok = true, action = "pickup", itemId = itemId, quantity = added })
+		return
+	end
+
+	----------------------------------------------------------------------
+	-- Seats. Taken with a prompt rather than by touch, in the yard and on
+	-- the line alike.
+	----------------------------------------------------------------------
+	if action == "sit" then
+		if not target:IsA("Seat") or not (target:HasTag("TrainSeat") or target:HasTag("DriverSeat")) then
+			return
+		end
+		if target:GetAttribute("SeatLocked") == true or target.Occupant then
+			Net.fireClient("InteractResult", player, { ok = false, error = "OCCUPIED" })
+			return
+		end
+		local character = player.Character
+		local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
+		if humanoid and not humanoid.SeatPart then
+			-- Seats stay disabled until somebody chooses to sit: an enabled
+			-- seat grabs anyone who brushes against it, which trapped players
+			-- walking the aisles. Enabled for this sitting, disabled again when
+			-- they get up.
+			local seat = target :: Seat
+			seat.Disabled = false
+			seat:Sit(humanoid)
+			local watch: RBXScriptConnection? = nil
+			watch = seat:GetPropertyChangedSignal("Occupant"):Connect(function()
+				if not seat.Occupant then
+					seat.Disabled = true
+					if watch then
+						watch:Disconnect()
+					end
+				end
+			end)
+		end
 		return
 	end
 
@@ -598,6 +668,8 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 			panel = "shop"
 		elseif target:HasTag("WorkshopBench") then
 			panel = "loadout"
+		elseif target:HasTag("ArmoryRack") then
+			panel = "armory"
 		end
 		if panel then
 			Net.fireClient("InteractResult", player, { ok = true, action = "open_panel", panel = panel })
@@ -648,7 +720,7 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		local taken: { { id: string, quantity: number } } = {}
 		local overflow: { { id: string, quantity: number } } = {}
 		for _, stack in contents do
-			local added = InventoryService.add(player, stack.id, stack.quantity)
+			local added = InventoryService.add(player, stack.id, stack.quantity, ExpeditionService.needsItem(expedition, stack.id))
 			if added > 0 then
 				table.insert(taken, { id = stack.id, quantity = added })
 				ProgressionService.addStat(player, "items_collected", added)
@@ -697,6 +769,7 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		end
 
 		InteractionService.NoiseMade:Fire(part.Position, 2, player)
+		ExpeditionService.checkCollectSteps(expedition)
 		Net.fireClient("InteractResult", player, { ok = true, action = "search", contents = taken, overflow = #overflow })
 		return
 	end
@@ -716,19 +789,20 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		if ok and err == "HOLD" then
 			return
 		end
+		if ok and err == "START_DEFEND" then
+			local defendObjective = part:GetAttribute("Objective")
+			local defendStep = if type(defendObjective) == "string" then ExpeditionService.currentStep(expedition, defendObjective) else nil
+			if type(defendObjective) == "string" and defendStep then
+				startDefend(expedition, defendObjective, part, defendStep.seconds or 60)
+			end
+			Net.fireClient("InteractResult", player, { ok = true, action = "defend_started", seconds = defendStep and defendStep.seconds })
+			return
+		end
 		if not ok then
 			Net.fireClient("InteractResult", player, { ok = false, error = err })
 			return
 		end
 
-		-- A completed step that is a defend step starts its timer.
-		local objectiveId = part:GetAttribute("Objective")
-		if type(objectiveId) == "string" then
-			local step = ExpeditionService.currentStep(expedition, objectiveId)
-			if step and step.kind == "defend" and step.fixture == part.Name then
-				startDefend(expedition, objectiveId, part, step.seconds or 60)
-			end
-		end
 		InteractionService.FixtureOperated:Fire(expedition.id, player, part)
 		Net.fireClient("InteractResult", player, { ok = true, action = "operate" })
 		return
@@ -757,7 +831,64 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		InventoryService.remove(player, "fuel_can", 1)
 		local added = TrainService.addFuel(expedition.train, Balance.Train.fuelCanRestore)
 		ProgressionService.addStat(player, "fuel_delivered", 1)
+		-- A can poured into the locomotive counts towards any objective that
+		-- asks for fuel delivered to the train (Tolbridge Camp). Nothing used
+		-- to credit it, which made that station impossible to clear.
+		local fuelStation = StationRegistry.byIndex(expedition.stationIndex)
+		if fuelStation then
+			for _, def in fuelStation.objectives do
+				if def.kind == "collect" and def.params.item == "fuel_can" and def.params.deliverTo == "train_fuel_point" then
+					ExpeditionService.addObjectiveProgress(expedition, def.id, 1)
+				end
+			end
+		end
 		Net.fireClient("InteractResult", player, { ok = true, action = "refuel", amount = added })
+		return
+	end
+
+	if action == "run_task" then
+		-- A night-run task (JourneyService): a held job on a part tagged
+		-- RunTask, described entirely by its attributes, so an event can add
+		-- one without this file knowing what the event is.
+		if not part:HasTag("RunTask") then
+			return
+		end
+		local blocked = part:GetAttribute("TaskBlocked")
+		if type(blocked) == "string" and blocked ~= "" then
+			Net.fireClient("InteractResult", player, { ok = false, error = "SAY:" .. blocked })
+			return
+		end
+		local needs = part:GetAttribute("TaskNeeds")
+		if type(needs) == "string" and needs ~= "" and not InventoryService.has(player, needs, 1) then
+			Net.fireClient("InteractResult", player, { ok = false, error = "NEEDS:" .. ItemRegistry.getOrFallback(needs).name })
+			return
+		end
+		local seconds = tonumber(part:GetAttribute("TaskSeconds")) or 3
+		local fastItem = part:GetAttribute("TaskFastItem")
+		if type(fastItem) == "string" and InventoryService.has(player, fastItem, 1) then
+			seconds = tonumber(part:GetAttribute("TaskFastSeconds")) or seconds * 0.5
+		end
+		if InteractionService.holdScale then
+			seconds *= InteractionService.holdScale(player)
+		end
+		local entry = held[player.UserId]
+		if not entry or entry.target ~= part then
+			beginHold(player, part, "run_task", seconds, part.Position)
+			return
+		end
+		if not completeHold(player, part, "run_task") then
+			return
+		end
+		local usedFast = type(fastItem) == "string" and part:GetAttribute("TaskFastConsumes") == true and InventoryService.has(player, fastItem, 1)
+		if usedFast then
+			InventoryService.remove(player, fastItem :: string, 1)
+		end
+		local noise = tonumber(part:GetAttribute("TaskNoise"))
+		if noise then
+			InteractionService.NoiseMade:Fire(part.Position, noise, player)
+		end
+		Net.fireClient("InteractResult", player, { ok = true, action = "run_task" })
+		InteractionService.RunTaskDone:Fire(player, part, usedFast)
 		return
 	end
 
@@ -827,8 +958,11 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		end
 		local stationId = part:GetAttribute("StationId")
 		local stationDef = if type(stationId) == "string" then StationRegistry.byId(stationId) else nil
-		local hint = ""
-		local name = discoveryId
+		-- A discovery placed by a scripted moment carries its own words.
+		local ownHint = part:GetAttribute("DiscoveryBody")
+		local ownName = part:GetAttribute("DiscoveryTitle")
+		local hint = if type(ownHint) == "string" then ownHint else ""
+		local name = if type(ownName) == "string" then ownName else discoveryId
 		if stationDef then
 			for _, entry in stationDef.discoveries do
 				if entry.id == discoveryId then
@@ -912,12 +1046,26 @@ function InteractionService.start()
 	-- Attach proximity prompts to every interactable the world builders tagged.
 	-- Prompts are created on the server so the client cannot fabricate one for
 	-- an object that has no behaviour.
-	local function attachPrompt(instance: Instance, actionText: string, objectText: string, hold: number?)
+	local function attachPrompt(instance: Instance, actionText: string, objectText: string, hold: number?, eyeLevel: boolean?)
 		if not instance:IsA("BasePart") then
 			return
 		end
-		if instance:FindFirstChildOfClass("ProximityPrompt") then
+		if instance:FindFirstChildOfClass("ProximityPrompt") or instance:FindFirstChild("PromptAnchor") then
 			return
+		end
+		-- Roblox only shows a prompt whose anchor is on screen. A tall board's
+		-- centre sits above the eye line at arm's length, so its prompt never
+		-- appeared unless the player happened to look up. Tall fixtures anchor
+		-- the prompt near their lower edge instead, where a player looking at
+		-- the fixture is actually looking. The client resolves the attachment
+		-- back to the tagged part.
+		local host: Instance = instance
+		if eyeLevel and instance.Size.Y > 4 then
+			local anchor = Instance.new("Attachment")
+			anchor.Name = "PromptAnchor"
+			anchor.Position = Vector3.new(0, -instance.Size.Y * 0.5 + 1.5, 0)
+			anchor.Parent = instance
+			host = anchor
 		end
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.ActionText = actionText
@@ -926,15 +1074,15 @@ function InteractionService.start()
 		prompt.MaxActivationDistance = MAX_REACH - 2
 		prompt.RequiresLineOfSight = false
 		prompt.Style = Enum.ProximityPromptStyle.Custom
-		prompt.Parent = instance
+		prompt.Parent = host
 	end
 
-	local function wire(tag: string, actionText: string, objectText: string)
+	local function wire(tag: string, actionText: string, objectText: string, eyeLevel: boolean?)
 		for _, instance in CollectionService:GetTagged(tag) do
-			attachPrompt(instance, actionText, objectText)
+			attachPrompt(instance, actionText, objectText, nil, eyeLevel)
 		end
 		CollectionService:GetInstanceAddedSignal(tag):Connect(function(instance)
-			attachPrompt(instance, actionText, objectText)
+			attachPrompt(instance, actionText, objectText, nil, eyeLevel)
 		end)
 	end
 
@@ -946,14 +1094,18 @@ function InteractionService.start()
 	wire("DroppedItem", "Take", "")
 	wire("RadioSet", "Radio", "")
 	wire("DoorLeaf", "Door", "")
+	wire("TrainSeat", "Sit", "")
+	wire("DriverSeat", "Drive", "")
+	wire("RunTask", "Use", "")
 
 	-- Lobby fixtures. Without these the crew board is scenery and the only way
 	-- to start an expedition is to guess a keyboard shortcut, which is how the
 	-- first build shipped and why nobody could find the train.
-	wire("CrewBoard", "Form a crew", "Crew board")
-	wire("NoticeBoard", "Read", "Notice board")
-	wire("StoresCounter", "Browse", "Stores")
-	wire("WorkshopBench", "Open loadout", "Workshop bench")
+	wire("CrewBoard", "Form a crew", "Crew board", true)
+	wire("NoticeBoard", "Read", "Notice board", true)
+	wire("StoresCounter", "Browse", "Stores", true)
+	wire("WorkshopBench", "Open loadout", "Workshop bench", true)
+	wire("ArmoryRack", "Open armory", "Armory", true)
 
 	log.info("started")
 end

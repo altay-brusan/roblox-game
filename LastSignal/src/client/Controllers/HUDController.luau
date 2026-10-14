@@ -34,6 +34,7 @@ local Format = require(Shared.Core.Format)
 local ItemRegistry = require(Shared.Registry.ItemRegistry)
 local Logger = require(Shared.Core.Logger)
 local Net = require(Shared.Core.Net)
+local WeaponRegistry = require(Shared.Registry.WeaponRegistry)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local Widgets = require(script.Parent.Parent.UI.Widgets)
 local InputController = require(script.Parent.InputController)
@@ -658,6 +659,9 @@ local function refreshQuickSlots()
 	end
 end
 
+-- When the last weapon state arrived, for cooling the arc readout locally.
+local weaponStampedAt: number? = nil
+
 local function refreshWeapon()
 	local weapon = StateController.get("weapon")
 	local panel = ammoPanel
@@ -676,6 +680,27 @@ local function refreshWeapon()
 	InputController.setTouchVisible("fire", true)
 	reticle.Visible = StateController.isOnExpedition() and not StateController.isDowned()
 
+	local arc = WeaponRegistry.get(weapon.equipped)
+	if arc and arc.arc and type(weapon.heat) == "number" then
+		-- The Arc Rail Projector has heat, not ammunition. The server sends
+		-- heat when it changes; it cools between updates, so cool it here too.
+		panel.Visible = true
+		InputController.setTouchVisible("reload", false)
+		if ammoLabel then
+			local since = os.clock() - (weaponStampedAt or os.clock())
+			local overheat = math.max(0, (weapon.overheatRemaining or 0) - since)
+			if overheat > 0 then
+				ammoLabel.Text = string.format("OVERHEATED %.0fs", math.ceil(overheat))
+				ammoLabel.TextColor3 = Theme.colour("signalRed")
+			else
+				local heat = math.max(0, weapon.heat - since * arc.arc.heatDecayPerSecond)
+				ammoLabel.Text = string.format("HEAT %d%%", math.floor(heat + 0.5))
+				ammoLabel.TextColor3 = if heat > 60 then Theme.colour("signalAmber") else Theme.colour("text")
+			end
+		end
+		return
+	end
+
 	if weapon.magazineSize then
 		panel.Visible = true
 		InputController.setTouchVisible("reload", true)
@@ -693,6 +718,16 @@ local function refreshWeapon()
 		InputController.setTouchVisible("reload", false)
 	end
 end
+
+task.spawn(function()
+	while true do
+		task.wait(0.25)
+		local weapon = StateController.get("weapon")
+		if weapon and type(weapon.heat) == "number" then
+			refreshWeapon()
+		end
+	end
+end)
 
 local function refreshDowned()
 	local vitals = StateController.get("vitals")
@@ -733,6 +768,62 @@ local function refreshDowned()
 	end
 end
 
+-- Boarding status for the 02:17, pushed by the server about twice a second
+-- while the crew walks aboard.
+local boarding: { [string]: any }? = nil
+local boardMarker: BillboardGui? = nil
+
+local function clearBoardMarker()
+	if boardMarker then
+		boardMarker:Destroy()
+		boardMarker = nil
+	end
+end
+
+--- A marker over the nearest carriage door, shown only to a crew member who
+--- is not yet aboard, so the train is findable from anywhere in the yard.
+local function showBoardMarker(target: Instance?)
+	if boardMarker and boardMarker.Parent then
+		return
+	end
+	if not target then
+		return
+	end
+	local door = target:FindFirstChild("CarriageDoor", true)
+	local anchor = if door then door:FindFirstChild("Leaf") else nil
+	if not anchor then
+		anchor = target:FindFirstChildWhichIsA("BasePart", true)
+	end
+	if not anchor or not anchor:IsA("BasePart") then
+		return
+	end
+	local marker = Instance.new("BillboardGui")
+	marker.Name = "BoardMarker"
+	marker.AlwaysOnTop = true
+	marker.Size = UDim2.fromOffset(150, 46)
+	marker.StudsOffset = Vector3.new(0, 6, 0)
+	marker.Adornee = anchor
+	marker.LightInfluence = 0
+	local label = Instance.new("TextLabel")
+	label.BackgroundColor3 = Theme.colour("backdrop")
+	label.BackgroundTransparency = 0.2
+	label.Size = UDim2.fromScale(1, 1)
+	label.Text = "BOARD HERE"
+	label.FontFace = Theme.Font.heading
+	label.TextColor3 = Theme.colour("brass")
+	label.TextScaled = true
+	label.Parent = marker
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 6)
+	corner.Parent = label
+	local pad = Instance.new("UIPadding")
+	pad.PaddingTop = UDim.new(0, 8)
+	pad.PaddingBottom = UDim.new(0, 8)
+	pad.Parent = label
+	marker.Parent = player:WaitForChild("PlayerGui")
+	boardMarker = marker
+end
+
 local function refreshDeparture()
 	local panel = departurePanel
 	if not panel then
@@ -741,6 +832,37 @@ local function refreshDeparture()
 
 	local expedition = StateController.get("expedition")
 	local crew = StateController.get("crew")
+
+	-- Boarding: the crew is walking onto the train at Platform 1.
+	local status = boarding
+	if expedition and expedition.state == "boarding" and status and status.state == "boarding" then
+		panel.Visible = true
+		local missing = if type(status.missing) == "table" then status.missing else {}
+		local remaining = tonumber(status.remaining) or 0
+		local meAboard = not table.find(missing, player.DisplayName)
+		if departureTitle then
+			departureTitle.Text = if meAboard then "Aboard the 02:17" else "Board the 02:17 at Platform 1"
+		end
+		if departureDetail then
+			if #missing == 0 then
+				departureDetail.Text = "Everyone is aboard. Doors closing."
+			elseif meAboard then
+				departureDetail.Text = "Waiting for " .. table.concat(missing, ", ")
+			else
+				departureDetail.Text = "Walk up the ramp and through an open door. The train leaves when the crew is aboard."
+			end
+		end
+		if departureMeter then
+			departureMeter.set(math.clamp(remaining / 60, 0, 1))
+		end
+		if meAboard then
+			clearBoardMarker()
+		else
+			showBoardMarker(status.target)
+		end
+		return
+	end
+	clearBoardMarker()
 
 	-- The lane is being built. This is the long one, so it gets the bar.
 	if expedition and expedition.state == "preparing" then
@@ -765,7 +887,7 @@ local function refreshDeparture()
 			departureTitle.Text = string.format("Departing in %d", math.ceil(remaining))
 		end
 		if departureDetail then
-			departureDetail.Text = "Board the train. The leader can still cancel."
+			departureDetail.Text = "The 02:17 is waiting at Platform 1. The leader can still cancel."
 		end
 		if departureMeter then
 			departureMeter.set(1 - math.clamp(remaining / 10, 0, 1))
@@ -843,6 +965,11 @@ function HUDController.start()
 	local screen = Widgets.screen("LastSignalHUD", Theme.Layer.hud, playerGui)
 	gui = screen
 
+	Net.onClientEvent("Boarding", function(payload)
+		boarding = if type(payload) == "table" then payload else nil
+		refreshDeparture()
+	end)
+
 	local frame = Instance.new("Frame")
 	frame.Name = "Root"
 	frame.BackgroundTransparency = 1
@@ -907,6 +1034,7 @@ function HUDController.start()
 		elseif key == "inventory" then
 			refreshQuickSlots()
 		elseif key == "weapon" then
+			weaponStampedAt = os.clock()
 			refreshWeapon()
 		elseif key == "crew" then
 			refreshCrew()

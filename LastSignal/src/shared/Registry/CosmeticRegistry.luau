@@ -376,6 +376,72 @@ local COSMETICS: { [string]: CosmeticDef } = {
 		glyph = "ticket",
 		rarity = 4,
 	}),
+
+	--------------------------------------------------------------------
+	-- Earned on night runs (JourneyRegistry.Unlocks). Never sold.
+	--------------------------------------------------------------------
+	patch_night_run = cosmetic({
+		id = "patch_night_run",
+		slot = "patch",
+		name = "Night Run",
+		description = "Earned by completing a night run.",
+		source = "quest",
+		accent = C(120, 150, 200),
+		glyph = "moon",
+		rarity = 2,
+	}),
+	finish_soot = cosmetic({
+		id = "finish_soot",
+		slot = "finish",
+		name = "Soot",
+		description = "Smoke-blackened steel. Earned by completing five night runs.",
+		source = "quest",
+		body = C(30, 28, 27),
+		accent = C(96, 84, 70),
+		material = Enum.Material.Metal,
+		rarity = 3,
+	}),
+
+	--------------------------------------------------------------------
+	-- Conductor Collection (Game Pass). Three pieces, one look: black
+	-- enamel, polished brass, a warm lamp. Every piece is drawn in game.
+	--------------------------------------------------------------------
+	finish_conductor = cosmetic({
+		id = "finish_conductor",
+		slot = "finish",
+		name = "Conductor",
+		description = "Black enamel with polished brass fittings, on every weapon you carry.",
+		source = "robux",
+		productKey = "pass_conductor",
+		body = C(26, 28, 32),
+		accent = C(196, 158, 82),
+		material = Enum.Material.SmoothPlastic,
+		rarity = 3,
+	}),
+	lantern_conductor = cosmetic({
+		id = "lantern_conductor",
+		slot = "lamp",
+		name = "Conductor's Lamp",
+		description = "A brass and black-enamel lantern worn at the hip, with a warm beam.",
+		source = "robux",
+		productKey = "pass_conductor",
+		body = C(26, 28, 32),
+		accent = C(196, 158, 82),
+		material = Enum.Material.Metal,
+		beamTint = C(255, 226, 176),
+		rarity = 3,
+	}),
+	badge_conductor = cosmetic({
+		id = "badge_conductor",
+		slot = "patch",
+		name = "Conductor's Badge",
+		description = "An enamel plate above your head, and the conductor's mark beside your name on the crew board.",
+		source = "robux",
+		productKey = "pass_conductor",
+		accent = C(196, 158, 82),
+		glyph = "ticket",
+		rarity = 3,
+	}),
 }
 
 --------------------------------------------------------------------------
