@@ -255,6 +255,17 @@ Audio.Cues = {
 	reload_revolver = cue({ id = 0, bus = "sfx", volume = 0.6, description = "Swing-out cylinder, eject, load, close." }),
 	reload_shotgun_shell = cue({ id = 0, bus = "sfx", volume = 0.6, pitchVariance = 0.05, description = "Single shell into the tube, one per shell." }),
 	reload_bolt = cue({ id = 0, bus = "sfx", volume = 0.6, description = "Bolt cycle." }),
+	-- Premium weapons. Firearm audio is silent for the same reason as the
+	-- three above: no licensed gunshot or reload exists in the Roblox
+	-- licensed libraries (docs/AUDIO.md). The arc uses Pro Sound Effects.
+	gun_carbine = cue({ id = 0, bus = "sfx", volume = 1.0, rollOffMax = 900, subtitle = "[Gunshot]", description = "Nightwatch Carbine discharge." }),
+	reload_carbine = cue({ id = 0, bus = "sfx", volume = 0.6, description = "Carbine magazine change." }),
+	reload_launcher = cue({ id = 0, bus = "sfx", volume = 0.6, description = "Flare launcher drum reload." }),
+	arc_charge = cue({ id = 0, bus = "sfx", volume = 0.5, description = "Arc projector capacitor charging." }),
+	arc_discharge = cue({ id = 9116278351, bus = "sfx", volume = 0.9, rollOffMax = 500, subtitle = "[Electrical discharge]", description = "Arc projector burst. Pro Sound Effects, Lightning Flashes Quick Electrical Bursts 38." }),
+	arc_impact = cue({ id = 9116277729, bus = "sfx", volume = 0.7, rollOffMax = 300, description = "Arc striking a target. Pro Sound Effects, Lightning Flashes Quick Electrical Bursts 28." }),
+	arc_overheat = cue({ id = 0, bus = "sfx", volume = 0.6, subtitle = "[Projector overheated]", description = "Arc projector heat lockout." }),
+	flare_burst = cue({ id = 12222084, bus = "sfx", volume = 0.7, rollOffMax = 800, subtitle = "[Flare bursts overhead]", description = "Signal flare bursting overhead. Same licensed launch sound as gun_flare." }),
 	bullet_impact = cue({ id = 12222046, bus = "sfx", volume = 0.6, pitchVariance = 0.15, description = "Bullet impact at the hit point." }),
 
 	--------------------------------------------------------------------

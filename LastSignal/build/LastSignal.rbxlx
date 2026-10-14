@@ -726,6 +726,17 @@ Audio.Cues = {
 	reload_revolver = cue({ id = 0, bus = "sfx", volume = 0.6, description = "Swing-out cylinder, eject, load, close." }),
 	reload_shotgun_shell = cue({ id = 0, bus = "sfx", volume = 0.6, pitchVariance = 0.05, description = "Single shell into the tube, one per shell." }),
 	reload_bolt = cue({ id = 0, bus = "sfx", volume = 0.6, description = "Bolt cycle." }),
+	-- Premium weapons. Firearm audio is silent for the same reason as the
+	-- three above: no licensed gunshot or reload exists in the Roblox
+	-- licensed libraries (docs/AUDIO.md). The arc uses Pro Sound Effects.
+	gun_carbine = cue({ id = 0, bus = "sfx", volume = 1.0, rollOffMax = 900, subtitle = "[Gunshot]", description = "Nightwatch Carbine discharge." }),
+	reload_carbine = cue({ id = 0, bus = "sfx", volume = 0.6, description = "Carbine magazine change." }),
+	reload_launcher = cue({ id = 0, bus = "sfx", volume = 0.6, description = "Flare launcher drum reload." }),
+	arc_charge = cue({ id = 0, bus = "sfx", volume = 0.5, description = "Arc projector capacitor charging." }),
+	arc_discharge = cue({ id = 9116278351, bus = "sfx", volume = 0.9, rollOffMax = 500, subtitle = "[Electrical discharge]", description = "Arc projector burst. Pro Sound Effects, Lightning Flashes Quick Electrical Bursts 38." }),
+	arc_impact = cue({ id = 9116277729, bus = "sfx", volume = 0.7, rollOffMax = 300, description = "Arc striking a target. Pro Sound Effects, Lightning Flashes Quick Electrical Bursts 28." }),
+	arc_overheat = cue({ id = 0, bus = "sfx", volume = 0.6, subtitle = "[Projector overheated]", description = "Arc projector heat lockout." }),
+	flare_burst = cue({ id = 12222084, bus = "sfx", volume = 0.7, rollOffMax = 800, subtitle = "[Flare bursts overhead]", description = "Signal flare bursting overhead. Same licensed launch sound as gun_flare." }),
 	bullet_impact = cue({ id = 12222046, bus = "sfx", volume = 0.6, pitchVariance = 0.15, description = "Bullet impact at the hit point." }),
 
 	--------------------------------------------------------------------
@@ -1459,6 +1470,10 @@ export type ProductDef = {
 	permanent: boolean,
 	-- Sort weight inside its shop category.
 	order: number,
+	-- False takes a product off sale: hidden in the shop and never prompted.
+	-- Used for a product whose benefit is not finished in the game, because
+	-- selling something that does not exist is not an option.
+	offered: boolean?,
 }
 
 --------------------------------------------------------------------------
@@ -1471,7 +1486,7 @@ local GAMEPASSES: { ProductDef } = {
 		kind = "gamepass",
 		id = 0,
 		name = "Signalman's Pass",
-		blurb = "Permanent: +25% credits and XP, a reserved cab seat cosmetic, the Signalman lantern skin, and a second daily quest slot.",
+		blurb = "Permanent: +25% credits and XP, the Signalman lamp and crew patch, and a second daily quest slot.",
 		suggestedPrice = 399,
 		category = "passes",
 		grants = {
@@ -1505,7 +1520,7 @@ local GAMEPASSES: { ProductDef } = {
 		kind = "gamepass",
 		id = 0,
 		name = "Workshop Access",
-		blurb = "Permanent: unlocks the lobby workshop bench for livery mixing, plus three exclusive interior kits.",
+		blurb = "Permanent: three exclusive carriage interior kits (brass, surveyor and ashwood), chosen at the workshop bench.",
 		suggestedPrice = 199,
 		category = "passes",
 		grants = {
@@ -1514,6 +1529,58 @@ local GAMEPASSES: { ProductDef } = {
 		},
 		permanent = true,
 		order = 3,
+	},
+
+	-- Premium weapons. Each grants permanent access to one weapon. Only one
+	-- primary weapon can be carried on a run, so owning all three never means
+	-- carrying all three.
+	{
+		key = "pass_nightwatch_carbine",
+		kind = "gamepass",
+		id = 0,
+		name = "Nightwatch Carbine",
+		blurb = "Permanent: the Nightwatch Carbine. Ten rounds, light recoil, the fastest drive-off in the game. Loud, uses scarce rifle rounds (20 to start each run), and cannot kill the Signal-Eater.",
+		suggestedPrice = 449,
+		category = "passes",
+		grants = { weapons = { "nightwatch_carbine" } },
+		permanent = true,
+		order = 4,
+	},
+	{
+		key = "pass_arc_projector",
+		kind = "gamepass",
+		id = 0,
+		name = "Arc Rail Projector",
+		blurb = "Permanent: the Arc Rail Projector. Hold to charge, release to stun everything in a short cone. No ammunition, but it overheats after three quick bursts, reaches 26 studs, and each stun on the Signal-Eater is shorter than the last.",
+		suggestedPrice = 449,
+		category = "passes",
+		grants = { weapons = { "arc_projector" } },
+		permanent = true,
+		order = 5,
+	},
+	{
+		key = "pass_flare_launcher",
+		kind = "gamepass",
+		id = 0,
+		name = "Signal Flare Launcher",
+		blurb = "Permanent: the Signal Flare Launcher. Flares hang over the target for 20 s, light the ground 85 studs around, outline the Signal-Eater for your crew, draw it away from you and deny the ground beneath. No damage. Six flares a run plus any you find.",
+		suggestedPrice = 299,
+		category = "passes",
+		grants = { weapons = { "flare_launcher" } },
+		permanent = true,
+		order = 6,
+	},
+	{
+		key = "pass_conductor",
+		kind = "gamepass",
+		id = 0,
+		name = "Conductor Collection",
+		blurb = "Permanent, appearance only: the Conductor finish (black enamel and brass on every weapon you carry), the Conductor's lamp (a brass lantern at your hip with a warm beam), and the Conductor's badge (an enamel plate above your head and beside your name on the crew board).",
+		suggestedPrice = 199,
+		category = "passes",
+		grants = { cosmetics = { "finish_conductor", "lantern_conductor", "badge_conductor" } },
+		permanent = true,
+		order = 7,
 	},
 }
 
@@ -1572,7 +1639,7 @@ local DEVELOPER_PRODUCTS: { ProductDef } = {
 	},
 	{
 		key = "livery_ember",
-		kind = "developerproduct",
+		kind = "gamepass",
 		id = 0,
 		name = "Livery: Ember Line",
 		blurb = "Permanent livery. Oxblood panels, brass trim, warm running lights that read clearly at distance in fog.",
@@ -1584,7 +1651,7 @@ local DEVELOPER_PRODUCTS: { ProductDef } = {
 	},
 	{
 		key = "livery_permafrost",
-		kind = "developerproduct",
+		kind = "gamepass",
 		id = 0,
 		name = "Livery: Permafrost",
 		blurb = "Permanent livery. Frost-bitten white over grey steel with ice-blue signal lamps.",
@@ -1596,7 +1663,7 @@ local DEVELOPER_PRODUCTS: { ProductDef } = {
 	},
 	{
 		key = "livery_nightpost",
-		kind = "developerproduct",
+		kind = "gamepass",
 		id = 0,
 		name = "Livery: Night Post",
 		blurb = "Permanent livery. Matte black with reflective hazard chevrons that catch your own headlights.",
@@ -1608,7 +1675,7 @@ local DEVELOPER_PRODUCTS: { ProductDef } = {
 	},
 	{
 		key = "lantern_kit",
-		kind = "developerproduct",
+		kind = "gamepass",
 		id = 0,
 		name = "Lamp Collection",
 		blurb = "Permanent: four cosmetic flashlight bodies, including the brass Dispatcher lamp with a warmer beam tint.",
@@ -1620,9 +1687,11 @@ local DEVELOPER_PRODUCTS: { ProductDef } = {
 	},
 	{
 		key = "crew_outfits",
-		kind = "developerproduct",
+		kind = "gamepass",
 		id = 0,
 		name = "Crew Wardrobe",
+		-- Outfits are not drawn on characters yet. Off sale until they are.
+		offered = false,
 		blurb = "Permanent: six crew outfits including the conductor's coat and the long-haul engineer's kit.",
 		suggestedPrice = 179,
 		category = "cosmetics",
@@ -1641,7 +1710,7 @@ local DEVELOPER_PRODUCTS: { ProductDef } = {
 	},
 	{
 		key = "tool_finishes",
-		kind = "developerproduct",
+		kind = "gamepass",
 		id = 0,
 		name = "Equipment Finishes",
 		blurb = "Permanent: worn brass, gunmetal and enamel finishes for your tools and weapons. Appearance only, no stat change.",
@@ -2394,6 +2463,9 @@ local MANIFEST: { [string]: RemoteSpec } = {
 	-- Combat ---------------------------------------------------------------
 	WeaponFire = { kind = "event", rate = { 16, 8 } },
 	WeaponReload = { kind = "event", rate = { 6, 2 } },
+	-- Arc Rail Projector: the moment the trigger went down. The server times
+	-- the charge from this, not from anything the client claims later.
+	WeaponCharge = { kind = "event", rate = { 8, 4 } },
 	WeaponEffect = { kind = "event" }, -- server -> client
 	MeleeSwing = { kind = "event", rate = { 10, 3 } },
 
@@ -3569,6 +3641,47 @@ local COSMETICS: { [string]: CosmeticDef } = {
 		accent = C(186, 162, 116),
 		glyph = "ticket",
 		rarity = 4,
+	}),
+
+	--------------------------------------------------------------------
+	-- Conductor Collection (Game Pass). Three pieces, one look: black
+	-- enamel, polished brass, a warm lamp. Every piece is drawn in game.
+	--------------------------------------------------------------------
+	finish_conductor = cosmetic({
+		id = "finish_conductor",
+		slot = "finish",
+		name = "Conductor",
+		description = "Black enamel with polished brass fittings, on every weapon you carry.",
+		source = "robux",
+		productKey = "pass_conductor",
+		body = C(26, 28, 32),
+		accent = C(196, 158, 82),
+		material = Enum.Material.SmoothPlastic,
+		rarity = 3,
+	}),
+	lantern_conductor = cosmetic({
+		id = "lantern_conductor",
+		slot = "lamp",
+		name = "Conductor's Lamp",
+		description = "A brass and black-enamel lantern worn at the hip, with a warm beam.",
+		source = "robux",
+		productKey = "pass_conductor",
+		body = C(26, 28, 32),
+		accent = C(196, 158, 82),
+		material = Enum.Material.Metal,
+		beamTint = C(255, 226, 176),
+		rarity = 3,
+	}),
+	badge_conductor = cosmetic({
+		id = "badge_conductor",
+		slot = "patch",
+		name = "Conductor's Badge",
+		description = "An enamel plate above your head, and the conductor's mark beside your name on the crew board.",
+		source = "robux",
+		productKey = "pass_conductor",
+		accent = C(196, 158, 82),
+		glyph = "ticket",
+		rarity = 3,
 	}),
 }
 
@@ -7021,6 +7134,246 @@ return TrainRegistry
         </Item>
         <Item class="ModuleScript" referent="34">
           <Properties>
+            <string name="Name">WeaponModels</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	WeaponModels
+	------------
+	One builder for every weapon model in the game: the first-person viewmodel,
+	the weapon in a character's hand that other players see, and the turntable
+	preview in the armory. Building all three from the same function is what
+	keeps them identical, so the thing you inspect in the armory is the thing
+	you carry.
+
+	Convention: the model's Root sits at the firing hand's grip, the weapon
+	points along -Z, and +Y is up. Every part is welded to Root, unanchored, and
+	non-colliding, so callers can pose the whole model by moving Root.
+
+	Finishes recolour parts by role. "body" takes the finish body colour and
+	material, "accent" takes the finish accent colour. Parts with a fixed role
+	(lenses, glass, coils) never change, so a finish never hides what a weapon
+	is doing.
+]]
+
+local WeaponRegistry = require(script.Parent.WeaponRegistry)
+
+local C = Color3.fromRGB
+
+local WeaponModels = {}
+
+export type Finish = {
+	body: Color3?,
+	accent: Color3?,
+	material: Enum.Material?,
+}
+
+export type Built = {
+	model: Model,
+	root: BasePart,
+	muzzle: BasePart?,
+	-- Parts that glow with the weapon's state: the Arc Rail Projector's
+	-- capacitor and coils. Callers drive their colour and transparency.
+	glow: { BasePart },
+}
+
+type Role = "body" | "grip" | "accent" | "fixed"
+
+function WeaponModels.build(def: WeaponRegistry.WeaponDef, finish: Finish?): Built
+	local model = Instance.new("Model")
+	model.Name = "Weapon_" .. def.id
+
+	local spec = def.model
+	local bodyColour: Color3 = (finish and finish.body) or spec.colour or C(80, 80, 84)
+	local bodyMaterial: Enum.Material = (finish and finish.material) or spec.material or Enum.Material.Metal
+	local gripColour: Color3 = spec.gripColour or C(60, 44, 36)
+	local accentColour: Color3 = (finish and finish.accent) or spec.accentColour or C(150, 120, 64)
+	local length: number = spec.length or 1.5
+	local glow: { BasePart } = {}
+
+	local root = Instance.new("Part")
+	root.Name = "Root"
+	root.Size = Vector3.new(0.2, 0.2, 0.2)
+	root.Transparency = 1
+	root.CanCollide = false
+	root.CanQuery = false
+	root.CanTouch = false
+	root.Massless = true
+	root.Parent = model
+	model.PrimaryPart = root
+
+	local function part(name: string, size: Vector3, cf: CFrame, role: Role, colour: Color3?, material: Enum.Material?, shape: Enum.PartType?): BasePart
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.CFrame = cf
+		if role == "body" then
+			p.Color = bodyColour
+			p.Material = bodyMaterial
+		elseif role == "grip" then
+			p.Color = colour or gripColour
+			p.Material = material or Enum.Material.Wood
+		elseif role == "accent" then
+			p.Color = accentColour
+			p.Material = Enum.Material.Metal
+		else
+			p.Color = colour or C(40, 40, 42)
+			p.Material = material or Enum.Material.Metal
+		end
+		if shape then
+			p.Shape = shape
+		end
+		p.CanCollide = false
+		p.CanQuery = false
+		p.CanTouch = false
+		p.CastShadow = false
+		p.Massless = true
+		p.Parent = model
+		return p
+	end
+
+	-- A cylinder that lies along the weapon's length (Roblox cylinders run
+	-- along X, so they are turned a quarter onto Z).
+	local function tube(name: string, diameter: number, tubeLength: number, cf: CFrame, role: Role, colour: Color3?, material: Enum.Material?): BasePart
+		return part(name, Vector3.new(tubeLength, diameter, diameter), cf * CFrame.Angles(0, math.rad(90), 0), role, colour, material, Enum.PartType.Cylinder)
+	end
+
+	local muzzleAt: CFrame? = nil
+	local id = def.id
+
+	if def.kind == "melee" then
+		local shape = spec.shape
+		if shape == "axe" then
+			part("Haft", Vector3.new(0.22, 0.22, length), CFrame.new(0, -0.1, -length * 0.4), "grip")
+			part("Head", Vector3.new(0.24, 0.9, 0.7), CFrame.new(0, 0.2, -length * 0.85), "body")
+			part("Blade", Vector3.new(0.12, 1.1, 0.4), CFrame.new(0, 0.2, -length * 0.95), "fixed", C(160, 164, 168))
+		elseif shape == "crowbar" then
+			part("Shaft", Vector3.new(0.16, 0.16, length), CFrame.new(0, -0.1, -length * 0.4), "body")
+			part("Claw", Vector3.new(0.16, 0.5, 0.34), CFrame.new(0, 0.06, -length * 0.85) * CFrame.Angles(math.rad(35), 0, 0), "body")
+		else
+			part("Shaft", Vector3.new(0.18, 0.18, length), CFrame.new(0, -0.1, -length * 0.4), "body")
+			part("Jaw", Vector3.new(0.34, 0.5, 0.5), CFrame.new(0, 0.02, -length * 0.82), "body")
+			part("Grip", Vector3.new(0.22, 0.22, 0.6), CFrame.new(0, -0.1, 0.1), "grip", C(60, 44, 36), Enum.Material.Fabric)
+		end
+	elseif id == "nightwatch_carbine" then
+		-- Railway-security pattern: a squat enamelled receiver with brass
+		-- bands, a short ventilated shroud, a box magazine forward of the
+		-- grip, a folding stock, and the thing nobody else carries: a
+		-- signal-lamp clamped under the barrel with a green lens.
+		part("Receiver", Vector3.new(0.3, 0.42, 1.05), CFrame.new(0, 0, -0.35), "body")
+		part("TopRail", Vector3.new(0.14, 0.06, 0.9), CFrame.new(0, 0.24, -0.35), "fixed", C(36, 36, 38))
+		part("RearSight", Vector3.new(0.18, 0.14, 0.12), CFrame.new(0, 0.33, 0.02), "fixed", C(36, 36, 38))
+		part("Grip", Vector3.new(0.24, 0.6, 0.32), CFrame.new(0, -0.4, 0.1) * CFrame.Angles(math.rad(-16), 0, 0), "grip")
+		part("Trigger", Vector3.new(0.06, 0.18, 0.08), CFrame.new(0, -0.24, -0.06), "fixed")
+		part("TriggerGuard", Vector3.new(0.06, 0.04, 0.34), CFrame.new(0, -0.34, -0.08), "accent")
+		part("Magazine", Vector3.new(0.2, 0.62, 0.3), CFrame.new(0, -0.5, -0.5) * CFrame.Angles(math.rad(12), 0, 0), "fixed", C(30, 30, 32))
+		part("MagazineBase", Vector3.new(0.24, 0.06, 0.34), CFrame.new(0, -0.81, -0.57) * CFrame.Angles(math.rad(12), 0, 0), "accent")
+		part("Stock", Vector3.new(0.12, 0.3, 0.75), CFrame.new(0, -0.08, 0.55), "body")
+		part("StockPad", Vector3.new(0.22, 0.42, 0.1), CFrame.new(0, -0.1, 0.95), "grip", C(44, 36, 30), Enum.Material.Fabric)
+		local shroud = tube("Shroud", 0.3, 0.75, CFrame.new(0, 0.02, -1.25), "body")
+		for i = -1, 1 do
+			part("Vent", Vector3.new(0.32, 0.05, 0.12), shroud.CFrame * CFrame.Angles(0, math.rad(-90), 0) * CFrame.new(0, 0.1, i * 0.22), "fixed", C(18, 18, 20))
+		end
+		tube("Band", 0.34, 0.06, CFrame.new(0, 0.02, -0.92), "accent")
+		tube("Band", 0.34, 0.06, CFrame.new(0, 0.02, -1.58), "accent")
+		tube("Barrel", 0.14, 0.4, CFrame.new(0, 0.02, -1.8), "fixed", C(34, 34, 36))
+		part("FrontSight", Vector3.new(0.05, 0.14, 0.05), CFrame.new(0, 0.22, -1.6), "fixed")
+		-- The signal-lamp.
+		part("LampClamp", Vector3.new(0.1, 0.16, 0.18), CFrame.new(0, -0.17, -1.2), "accent")
+		tube("LampBody", 0.22, 0.38, CFrame.new(0, -0.3, -1.25), "body")
+		tube("LampLens", 0.18, 0.04, CFrame.new(0, -0.3, -1.45), "fixed", C(90, 255, 140), Enum.Material.Neon)
+		muzzleAt = CFrame.new(0, 0.02, -2.02)
+	elseif id == "arc_projector" then
+		-- Industrial, not a gun: a battery box, a ceramic insulator barrel
+		-- wound with copper, a glass capacitor along the top that glows as it
+		-- charges, and two contact prongs where a muzzle would be.
+		part("BatteryBox", Vector3.new(0.5, 0.55, 0.8), CFrame.new(0, -0.15, 0.2), "body")
+		part("HazardStripe", Vector3.new(0.52, 0.1, 0.82), CFrame.new(0, 0.05, 0.2), "fixed", C(214, 170, 40), Enum.Material.SmoothPlastic)
+		part("Grip", Vector3.new(0.24, 0.58, 0.32), CFrame.new(0, -0.55, -0.15) * CFrame.Angles(math.rad(-10), 0, 0), "grip", C(34, 30, 28), Enum.Material.Fabric)
+		part("Trigger", Vector3.new(0.06, 0.18, 0.1), CFrame.new(0, -0.35, -0.32), "fixed")
+		part("ForeGrip", Vector3.new(0.18, 0.48, 0.22), CFrame.new(0, -0.38, -0.95), "grip", C(34, 30, 28), Enum.Material.Fabric)
+		tube("Insulator", 0.32, 1.2, CFrame.new(0, 0, -0.85), "fixed", C(214, 208, 192), Enum.Material.SmoothPlastic)
+		for i = 0, 4 do
+			local coil = tube("Coil", 0.4, 0.07, CFrame.new(0, 0, -0.4 - i * 0.22), "fixed", C(184, 112, 60), Enum.Material.Metal)
+			table.insert(glow, coil)
+		end
+		local capacitor = tube("Capacitor", 0.2, 0.95, CFrame.new(0, 0.32, -0.55), "fixed", C(70, 180, 255), Enum.Material.Glass)
+		capacitor.Transparency = 0.25
+		table.insert(glow, capacitor)
+		part("CapacitorCap", Vector3.new(0.24, 0.24, 0.08), CFrame.new(0, 0.32, -0.05), "accent")
+		part("CapacitorCap", Vector3.new(0.24, 0.24, 0.08), CFrame.new(0, 0.32, -1.05), "accent")
+		part("Cable", Vector3.new(0.08, 0.08, 0.7), CFrame.new(0.22, 0.1, -0.2) * CFrame.Angles(0, math.rad(8), 0), "fixed", C(24, 24, 24), Enum.Material.Rubber)
+		for _, side in { -1, 1 } do
+			part("Prong", Vector3.new(0.07, 0.07, 0.42), CFrame.new(side * 0.12, 0, -1.6) * CFrame.Angles(0, math.rad(-side * 8), 0), "accent")
+		end
+		muzzleAt = CFrame.new(0, 0, -1.85)
+	elseif id == "flare_launcher" then
+		-- Signal orange, a brass four-chamber drum, a stubby wide bore and a
+		-- folding ladder sight for lobbing flares high over the trees.
+		part("Frame", Vector3.new(0.3, 0.4, 0.75), CFrame.new(0, 0, -0.2), "body")
+		part("Grip", Vector3.new(0.26, 0.62, 0.34), CFrame.new(0, -0.42, 0.1) * CFrame.Angles(math.rad(-14), 0, 0), "grip")
+		part("Trigger", Vector3.new(0.06, 0.18, 0.1), CFrame.new(0, -0.24, -0.08), "fixed")
+		tube("Drum", 0.62, 0.5, CFrame.new(0, -0.02, -0.55), "accent")
+		for i = 0, 3 do
+			local a = math.rad(45 + i * 90)
+			tube("Chamber", 0.16, 0.52, CFrame.new(math.cos(a) * 0.19, -0.02 + math.sin(a) * 0.19, -0.55), "fixed", C(30, 26, 22))
+		end
+		tube("Bore", 0.4, 0.75, CFrame.new(0, 0.02, -1.15), "body")
+		tube("BoreLip", 0.46, 0.08, CFrame.new(0, 0.02, -1.52), "accent")
+		part("ForeGrip", Vector3.new(0.2, 0.42, 0.24), CFrame.new(0, -0.36, -1.0), "grip")
+		part("LadderSight", Vector3.new(0.16, 0.36, 0.05), CFrame.new(0, 0.38, -0.25) * CFrame.Angles(math.rad(-25), 0, 0), "fixed", C(36, 36, 38))
+		part("Stencil", Vector3.new(0.31, 0.1, 0.4), CFrame.new(0, 0.12, -0.2), "fixed", C(240, 236, 220), Enum.Material.SmoothPlastic)
+		muzzleAt = CFrame.new(0, 0.02, -1.58)
+	else
+		-- The original firearms share a receiver, a grip and a barrel,
+		-- differing in proportion and the details hung off them.
+		part("Receiver", Vector3.new(0.28, 0.4, length * 0.45), CFrame.new(0, -0.05, -length * 0.18), "body")
+		part("Grip", Vector3.new(0.24, 0.62, 0.34), CFrame.new(0, -0.42, 0.12) * CFrame.Angles(math.rad(-14), 0, 0), "grip")
+		part("Trigger", Vector3.new(0.08, 0.2, 0.1), CFrame.new(0, -0.24, -0.05), "fixed")
+		local barrelLength = length * 0.55
+		local barrel = part("Barrel", Vector3.new(0.16, 0.16, barrelLength), CFrame.new(0, 0.02, -length * 0.45 - barrelLength * 0.35), "body")
+		if id == "shotgun" then
+			part("SecondBarrel", Vector3.new(0.16, 0.16, barrelLength), barrel.CFrame * CFrame.new(0.18, 0, 0), "body")
+			part("Forend", Vector3.new(0.4, 0.28, barrelLength * 0.5), barrel.CFrame * CFrame.new(0.09, -0.12, 0.3), "grip")
+		elseif id == "rifle" then
+			part("Stock", Vector3.new(0.24, 0.42, 0.9), CFrame.new(0, -0.14, 0.55), "grip")
+			part("Bolt", Vector3.new(0.12, 0.12, 0.5), CFrame.new(0.18, 0.1, -0.1), "fixed", C(150, 150, 154))
+			part("BoltHandle", Vector3.new(0.1, 0.28, 0.1), CFrame.new(0.26, 0.02, 0.02), "fixed", C(150, 150, 154))
+			part("Sight", Vector3.new(0.06, 0.16, 0.06), CFrame.new(0, 0.24, -length * 0.6), "fixed")
+		elseif id == "revolver" then
+			part("Cylinder", Vector3.new(0.3, 0.3, 0.34), CFrame.new(0, -0.02, -0.18), "fixed", C(70, 70, 74))
+			part("Hammer", Vector3.new(0.07, 0.16, 0.12), CFrame.new(0, 0.18, 0.08), "fixed", C(50, 50, 52))
+		elseif id == "flare_gun" then
+			part("WideBarrel", Vector3.new(0.3, 0.3, barrelLength * 0.7), barrel.CFrame * CFrame.new(0, 0, 0.1), "body")
+		end
+		part("FrontSight", Vector3.new(0.05, 0.12, 0.05), barrel.CFrame * CFrame.new(0, 0.14, -barrelLength * 0.45), "fixed")
+		muzzleAt = barrel.CFrame * CFrame.new(0, 0, -barrelLength * 0.5)
+	end
+
+	local muzzle: BasePart? = nil
+	if muzzleAt then
+		local flash = part("Muzzle", Vector3.new(0.1, 0.1, 0.1), muzzleAt, "fixed", C(255, 220, 150), Enum.Material.Neon)
+		flash.Transparency = 1
+		muzzle = flash
+	end
+
+	for _, descendant in model:GetDescendants() do
+		if descendant:IsA("BasePart") and descendant ~= root then
+			local weld = Instance.new("WeldConstraint")
+			weld.Part0 = root
+			weld.Part1 = descendant
+			weld.Parent = root
+		end
+	end
+
+	return { model = model, root = root, muzzle = muzzle, glow = glow }
+end
+
+return WeaponModels
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="35">
+          <Properties>
             <string name="Name">WeaponRegistry</string>
             <string name="Source"><![CDATA[--!strict
 --[[
@@ -7101,6 +7454,36 @@ export type WeaponDef = {
 	startingLoadout: boolean, -- selectable in the lobby loadout screen
 	unlockLevel: number,
 	creditCost: number,
+	-- Premium -------------------------------------------------------------
+	-- The Game Pass that grants permanent access. Checked on the server at
+	-- every equip; nothing on the client can stand in for it.
+	passKey: string?,
+	-- Rounds of this weapon's ammunition handed out when a run starts with it
+	-- as the primary, so a premium firearm is never an empty gun.
+	startingRounds: number?,
+	-- Arc Rail Projector: charge, heat and the stun with diminishing returns.
+	arc: {
+		chargeSeconds: number,
+		coneDegrees: number,
+		heatPerBurst: number,
+		heatDecayPerSecond: number,
+		overheatLockSeconds: number,
+		stunSeconds: number,
+		resistWindow: number,
+		stunImmunitySeconds: number,
+	}?,
+	-- Signal Flare Launcher: the hanging flare.
+	launcher: {
+		burstHeight: number,
+		hangSeconds: number,
+		lightRange: number,
+		revealRadius: number,
+		denyRadius: number,
+		distractLoudness: number,
+	}?,
+	-- Armory copy: strengths and weaknesses, shown as written.
+	pros: { string }?,
+	cons: { string }?,
 }
 
 local C = Color3.fromRGB
@@ -7402,6 +7785,176 @@ local WEAPONS: { [string]: WeaponDef } = {
 		unlockLevel = 2,
 		creditCost = 650,
 	}),
+
+	--------------------------------------------------------------------
+	-- Premium weapons. Each is a Game Pass (Monetization), and each is a
+	-- different answer to the same problem, not a bigger number. None of
+	-- them kills the Signal-Eater, and each says so in its description.
+	--------------------------------------------------------------------
+
+	nightwatch_carbine = weapon({
+		id = "nightwatch_carbine",
+		name = "Nightwatch Carbine",
+		kind = "firearm",
+		description = "Railway-security issue. Ten rounds, light recoil, accurate when it matters, and a signal-lamp under the barrel. It drives the Signal-Eater back faster than anything free, but every shot is heard for half a mile and it eats the same scarce rifle rounds as everyone else.",
+		damage = 20,
+		range = 320,
+		fireInterval = 0.32,
+		ammoType = "rifle",
+		magazineSize = 10,
+		reloadStyle = "clip",
+		reloadSeconds = 2.4,
+		spreadDegrees = 0.8,
+		recoilVertical = 1.2,
+		recoilHorizontal = 0.25,
+		aimSpreadMultiplier = 0.25,
+		noiseRadius = 560,
+		weight = 3.0,
+		moveSpeedMultiplier = 0.96,
+		equipSeconds = 0.55,
+		model = {
+			shape = "carbine",
+			length = 2.0,
+			colour = C(34, 46, 40),
+			gripColour = C(92, 64, 42),
+			accentColour = C(176, 142, 74),
+			material = Enum.Material.SmoothPlastic,
+		},
+		fireCue = "gun_carbine",
+		dryCue = "gun_dry",
+		reloadCue = "reload_carbine",
+		impactCue = "bullet_impact",
+		viewmodel = {
+			restOffset = Vector3.new(0.6, -0.62, -1.15),
+			aimOffset = Vector3.new(0, -0.3, -0.85),
+			swayScale = 0.8,
+			bobScale = 0.9,
+			recoilKick = Vector3.new(-0.22, 0.05, -0.18),
+			recoilRecovery = 16,
+		},
+		startingLoadout = false,
+		unlockLevel = 1,
+		creditCost = 0,
+		passKey = "pass_nightwatch_carbine",
+		startingRounds = 20,
+		pros = { "Accurate and controllable", "Fastest drive-off of any weapon", "Ten-round magazine" },
+		cons = { "Loud: every shot raises threat", "Uses scarce rifle rounds (starts each run with 20)", "Cannot kill the Signal-Eater" },
+	}),
+
+	arc_projector = weapon({
+		id = "arc_projector",
+		name = "Arc Rail Projector",
+		kind = "firearm",
+		description = "A track-maintenance tool someone made dangerous. Hold to charge, release to throw a short arc across everything in front of you. It stuns the Signal-Eater for a moment, but the creature learns: each stun is shorter than the last, and three quick bursts overheat it.",
+		damage = 26,
+		range = 26,
+		fireInterval = 0.4,
+		magazineSize = nil,
+		reloadStyle = "none",
+		spreadDegrees = 0,
+		recoilVertical = 0.8,
+		recoilHorizontal = 0.4,
+		aimSpreadMultiplier = 1,
+		noiseRadius = 300,
+		weight = 4.2,
+		moveSpeedMultiplier = 0.9,
+		equipSeconds = 0.8,
+		model = {
+			shape = "arc",
+			length = 1.9,
+			colour = C(66, 70, 74),
+			gripColour = C(34, 30, 28),
+			accentColour = C(184, 112, 60),
+			material = Enum.Material.Metal,
+		},
+		fireCue = "arc_discharge",
+		dryCue = "arc_overheat",
+		reloadCue = nil,
+		impactCue = "arc_impact",
+		viewmodel = {
+			restOffset = Vector3.new(0.58, -0.68, -1.1),
+			aimOffset = Vector3.new(0.2, -0.45, -0.95),
+			swayScale = 1.1,
+			bobScale = 1.0,
+			recoilKick = Vector3.new(-0.3, 0.08, -0.35),
+			recoilRecovery = 9,
+		},
+		startingLoadout = false,
+		unlockLevel = 1,
+		creditCost = 0,
+		passKey = "pass_arc_projector",
+		arc = {
+			chargeSeconds = 0.9,
+			coneDegrees = 32,
+			heatPerBurst = 40,
+			heatDecayPerSecond = 9,
+			overheatLockSeconds = 7,
+			stunSeconds = 2.5,
+			-- Each stun inside this window halves the next one, and a stunned
+			-- creature cannot be stunned again until it has moved for a while.
+			resistWindow = 30,
+			stunImmunitySeconds = 6,
+		},
+		pros = { "No ammunition: runs on heat", "Stuns the Signal-Eater in place", "Hits everything in a short cone" },
+		cons = { "26 stud reach: you must let it close", "0.9 s charge before every burst", "Overheats after three quick bursts; stuns get shorter" },
+	}),
+
+	flare_launcher = weapon({
+		id = "flare_launcher",
+		name = "Signal Flare Launcher",
+		kind = "firearm",
+		description = "Four-chamber signal launcher. Each flare bursts high over where you aim and hangs for twenty seconds: it lights the whole area, outlines the Signal-Eater for your crew if it is under the light, draws its attention to the flare instead of you, and it will not cross the ground beneath. It does no damage at all.",
+		damage = 0,
+		range = 240,
+		fireInterval = 1.1,
+		ammoType = "flare",
+		magazineSize = 4,
+		reloadStyle = "clip",
+		reloadSeconds = 3.2,
+		spreadDegrees = 1.5,
+		recoilVertical = 2.4,
+		recoilHorizontal = 0.5,
+		aimSpreadMultiplier = 0.6,
+		noiseRadius = 300,
+		weight = 2.6,
+		moveSpeedMultiplier = 0.97,
+		equipSeconds = 0.6,
+		model = {
+			shape = "launcher",
+			length = 1.6,
+			colour = C(196, 74, 40),
+			gripColour = C(52, 44, 40),
+			accentColour = C(176, 142, 74),
+			material = Enum.Material.SmoothPlastic,
+		},
+		fireCue = "gun_flare",
+		dryCue = "gun_dry",
+		reloadCue = "reload_launcher",
+		impactCue = "flare_burst",
+		viewmodel = {
+			restOffset = Vector3.new(0.58, -0.62, -1.05),
+			aimOffset = Vector3.new(0, -0.36, -0.8),
+			swayScale = 0.9,
+			bobScale = 0.9,
+			recoilKick = Vector3.new(-0.5, 0.12, -0.3),
+			recoilRecovery = 10,
+		},
+		startingLoadout = false,
+		unlockLevel = 1,
+		creditCost = 0,
+		passKey = "pass_flare_launcher",
+		startingRounds = 6,
+		launcher = {
+			burstHeight = 32,
+			hangSeconds = 20,
+			lightRange = 85,
+			revealRadius = 110,
+			denyRadius = 45,
+			distractLoudness = 9,
+		},
+		pros = { "Lights the ground 85 studs around it for 20 s", "Reveals and distracts the Signal-Eater", "Denies ground under the flare" },
+		cons = { "No damage", "Six flares a run, plus any flare shells you find", "A light in the sky tells everything where you are" },
+	}),
 }
 
 --------------------------------------------------------------------------
@@ -7465,11 +8018,11 @@ return WeaponRegistry
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="35">
+  <Item class="ServerScriptService" referent="36">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Script" referent="36">
+    <Item class="Script" referent="37">
       <Properties>
         <string name="Name">LastSignalServer</string>
         <token name="RunContext">0</token>
@@ -7548,6 +8101,8 @@ local BOOT_ORDER: { ServiceEntry } = {
 	{ name = "QuestService", module = Services.QuestService, stage = "Economy" },
 	{ name = "PurchaseService", module = Services.PurchaseService, stage = "Economy" },
 	{ name = "ShopService", module = Services.ShopService, stage = "Economy" },
+	{ name = "LoadoutService", module = Services.LoadoutService, stage = "Economy" },
+	{ name = "AppearanceService", module = Services.AppearanceService, stage = "Economy" },
 	{ name = "InventoryService", module = Services.InventoryService, stage = "Economy" },
 
 	{ name = "WorldService", module = Services.WorldService, stage = "World" },
@@ -7723,16 +8278,16 @@ if RunService:IsStudio() then
 end
 ]]></string>
       </Properties>
-      <Item class="Folder" referent="37">
+      <Item class="Folder" referent="38">
         <Properties>
           <string name="Name">Gameplay</string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="38">
+      <Item class="Folder" referent="39">
         <Properties>
           <string name="Name">Services</string>
         </Properties>
-        <Item class="ModuleScript" referent="39">
+        <Item class="ModuleScript" referent="40">
           <Properties>
             <string name="Name">AdminService</string>
             <string name="Source"><![CDATA[--!strict
@@ -8393,7 +8948,7 @@ return AdminService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="40">
+        <Item class="ModuleScript" referent="41">
           <Properties>
             <string name="Name">AnalyticsService</string>
             <string name="Source"><![CDATA[--!strict
@@ -8711,7 +9266,239 @@ return AnalyticsService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="41">
+        <Item class="ModuleScript" referent="42">
+          <Properties>
+            <string name="Name">AppearanceService</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	AppearanceService
+	-----------------
+	What a crew member visibly carries: their lamp and their badge.
+
+	THE LAMP
+	--------
+	The lamp has always had a battery, a meter, a toggle on F and a flicker
+	when it runs low, but nothing ever produced light. This service gives every
+	character a real beam: a SpotLight in the head that follows the vitals
+	(on, off, flickering when low), and the lantern itself hanging at the hip.
+	Lamp cosmetics colour the lantern and tint the beam. Range, angle and
+	brightness come from Balance and are the same for everyone, as
+	CosmeticRegistry promises.
+
+	The server owns the light so every player sees every lamp. The owning
+	client turns its own beam to follow the camera (LampController), because
+	the head does not look up and down with the view.
+
+	THE BADGE
+	---------
+	The Conductor's badge is a small enamel plate above the character's head,
+	seen by other players. It is a patch-slot cosmetic, so it also appears
+	beside the player's name on the crew board.
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage.LastSignal
+
+local Balance = require(Shared.Config.Balance)
+local CosmeticRegistry = require(Shared.Registry.CosmeticRegistry)
+local Logger = require(Shared.Core.Logger)
+
+local DataService = require(script.Parent.DataService)
+local LoadoutService = require(script.Parent.LoadoutService)
+local SurvivalService = require(script.Parent.SurvivalService)
+
+local log = Logger.new("AppearanceService")
+local C = Color3.fromRGB
+
+local AppearanceService = {}
+
+local DEFAULT_BEAM = C(255, 240, 214)
+
+local function part(name: string, size: Vector3, colour: Color3, material: Enum.Material, parent: Instance): Part
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Size = size
+	p.Color = colour
+	p.Material = material
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.Massless = true
+	p.CastShadow = false
+	p.Parent = parent
+	return p
+end
+
+local function weldTo(base: BasePart, p: BasePart, offset: CFrame)
+	p.CFrame = base.CFrame * offset
+	local weld = Instance.new("Weld")
+	weld.Part0 = base
+	weld.Part1 = p
+	weld.C0 = offset
+	weld.Parent = p
+end
+
+--- Builds (or rebuilds) the lamp and badge for a character from the profile.
+function AppearanceService.dress(player: Player)
+	local character = player.Character
+	local profile = DataService.getProfile(player)
+	if not character or not profile then
+		return
+	end
+	local head = character:FindFirstChild("Head")
+	local hip = character:FindFirstChild("LowerTorso") or character:FindFirstChild("Torso")
+	if not head or not head:IsA("BasePart") or not hip or not hip:IsA("BasePart") then
+		return
+	end
+	for _, name in { "Lantern", "Badge" } do
+		local old = character:FindFirstChild(name)
+		if old then
+			old:Destroy()
+		end
+	end
+	local oldAttachment = head:FindFirstChild("LampAttachment")
+	if oldAttachment then
+		oldAttachment:Destroy()
+	end
+
+	-- The beam.
+	local lampDef = CosmeticRegistry.get(profile.loadout.lamp)
+	local tint = if lampDef and lampDef.beamTint then lampDef.beamTint else DEFAULT_BEAM
+	local attachment = Instance.new("Attachment")
+	attachment.Name = "LampAttachment"
+	attachment.Position = Vector3.new(0, 0.1, -0.5)
+	attachment.Parent = head
+	local beam = Instance.new("SpotLight")
+	beam.Name = "Lamp"
+	beam.Face = Enum.NormalId.Front
+	-- SpotLight range stops at 60 studs, below the balance figure.
+	beam.Range = math.min(60, Balance.Flashlight.range)
+	beam.Angle = Balance.Flashlight.angle
+	beam.Brightness = Balance.Flashlight.brightness
+	beam.Color = tint
+	beam.Shadows = true
+	beam.Enabled = false
+	beam.Parent = attachment
+
+	-- The lantern at the hip.
+	local lantern = Instance.new("Model")
+	lantern.Name = "Lantern"
+	local body = if lampDef and lampDef.body then lampDef.body else C(70, 72, 70)
+	local accent = if lampDef and lampDef.accent then lampDef.accent else C(150, 120, 64)
+	local side = if hip.Name == "LowerTorso" then 1.15 else 1.2
+	local case = part("Case", Vector3.new(0.5, 0.65, 0.5), body, (lampDef and lampDef.material) or Enum.Material.Metal, lantern)
+	weldTo(hip, case, CFrame.new(side, -0.35, -0.1))
+	local lens = part("Lens", Vector3.new(0.38, 0.4, 0.52), tint, Enum.Material.Neon, lantern)
+	weldTo(hip, lens, CFrame.new(side, -0.35, -0.12))
+	local cap = part("Cap", Vector3.new(0.58, 0.1, 0.58), accent, Enum.Material.Metal, lantern)
+	weldTo(hip, cap, CFrame.new(side, 0.0, -0.1))
+	local handle = part("Handle", Vector3.new(0.08, 0.3, 0.4), accent, Enum.Material.Metal, lantern)
+	weldTo(hip, handle, CFrame.new(side, 0.18, -0.1))
+	lantern.Parent = character
+
+	-- The badge.
+	local patch = CosmeticRegistry.get(profile.loadout.patch)
+	if patch and patch.id == "badge_conductor" then
+		local gui = Instance.new("BillboardGui")
+		gui.Name = "Badge"
+		gui.Size = UDim2.fromOffset(120, 26)
+		gui.StudsOffset = Vector3.new(0, 2.4, 0)
+		gui.MaxDistance = 70
+		gui.Adornee = head
+		local plate = Instance.new("Frame")
+		plate.Size = UDim2.fromScale(1, 1)
+		plate.BackgroundColor3 = C(26, 28, 32)
+		plate.Parent = gui
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 5)
+		corner.Parent = plate
+		local stroke = Instance.new("UIStroke")
+		stroke.Color = patch.accent or C(196, 158, 82)
+		stroke.Thickness = 2
+		stroke.Parent = plate
+		local label = Instance.new("TextLabel")
+		label.Size = UDim2.fromScale(1, 1)
+		label.BackgroundTransparency = 1
+		label.Font = Enum.Font.GothamBold
+		label.TextSize = 13
+		label.TextColor3 = patch.accent or C(196, 158, 82)
+		label.Text = "CONDUCTOR"
+		label.Parent = plate
+		gui.Parent = character
+	end
+end
+
+--- Matches every lamp to its owner's vitals: on, off, or failing.
+local function updateLamps()
+	for _, player in Players:GetPlayers() do
+		local character = player.Character
+		local head = if character then character:FindFirstChild("Head") else nil
+		local attachment = if head then head:FindFirstChild("LampAttachment") else nil
+		local beam = if attachment then attachment:FindFirstChild("Lamp") else nil
+		if not beam or not beam:IsA("SpotLight") then
+			continue
+		end
+		local vitals = SurvivalService.get(player)
+		local on = vitals ~= nil and vitals.state ~= "dead" and vitals.flashlightOn and vitals.flashlight > 0
+		local brightness = Balance.Flashlight.brightness
+		if on and vitals and vitals.flashlight < Balance.Flashlight.lowChargeWarning then
+			-- Failing: it stutters, more often the lower it gets.
+			local failing = 1 - vitals.flashlight / Balance.Flashlight.lowChargeWarning
+			if math.random() < 0.25 + failing * 0.5 then
+				brightness *= math.random() * 0.4
+			end
+		end
+		beam.Enabled = on
+		beam.Brightness = brightness
+		local lantern = if character then character:FindFirstChild("Lantern") else nil
+		local lens = if lantern then lantern:FindFirstChild("Lens") else nil
+		if lens and lens:IsA("BasePart") then
+			lens.Material = if on then Enum.Material.Neon else Enum.Material.Glass
+			lens.Transparency = if on then 0 else 0.3
+		end
+	end
+end
+
+function AppearanceService.start()
+	local function watch(player: Player)
+		player.CharacterAdded:Connect(function(character)
+			character:WaitForChild("Head", 10)
+			task.wait(0.3)
+			AppearanceService.dress(player)
+		end)
+		if player.Character then
+			task.defer(AppearanceService.dress, player)
+		end
+	end
+	Players.PlayerAdded:Connect(watch)
+	for _, player in Players:GetPlayers() do
+		watch(player)
+	end
+	DataService.ProfileLoaded:Connect(function(player)
+		AppearanceService.dress(player)
+	end)
+	-- A new lamp or badge chosen in the loadout shows straight away.
+	LoadoutService.Changed:Connect(function(player, slot)
+		if slot == "lamp" or slot == "patch" then
+			AppearanceService.dress(player)
+		end
+	end)
+
+	task.spawn(function()
+		while true do
+			task.wait(0.25)
+			updateLamps()
+		end
+	end)
+	log.info("started")
+end
+
+return AppearanceService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="43">
           <Properties>
             <string name="Name">CombatService</string>
             <string name="Source"><![CDATA[--!strict
@@ -8749,6 +9536,7 @@ return AnalyticsService
 ]]
 
 local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage.LastSignal
 
@@ -8758,6 +9546,8 @@ local Logger = require(Shared.Core.Logger)
 local Net = require(Shared.Core.Net)
 local Signal = require(Shared.Core.Signal)
 local WeaponRegistry = require(Shared.Registry.WeaponRegistry)
+local WeaponModels = require(Shared.Registry.WeaponModels)
+local CosmeticRegistry = require(Shared.Registry.CosmeticRegistry)
 
 local CreatureService = require(script.Parent.CreatureService)
 local DataService = require(script.Parent.DataService)
@@ -8770,6 +9560,8 @@ local log = Logger.new("CombatService")
 
 local CombatService = {}
 
+local handleArc: (Player, any, WeaponRegistry.WeaponDef, any, any) -> ()
+
 export type WeaponState = {
 	userId: number,
 	equipped: string?,
@@ -8779,6 +9571,12 @@ export type WeaponState = {
 	reloadDuration: number,
 	lastFiredAt: number,
 	lastSwingAt: number,
+	-- Arc Rail Projector. Heat decays continuously, so it is stored with the
+	-- time it was last written and resolved on read.
+	heat: number,
+	heatAt: number,
+	overheatUntil: number,
+	chargeStartedAt: number?,
 }
 
 local states: { [number]: WeaponState } = {}
@@ -8802,6 +9600,10 @@ local function stateFor(player: Player): WeaponState
 		reloadDuration = 0,
 		lastFiredAt = 0,
 		lastSwingAt = 0,
+		heat = 0,
+		heatAt = 0,
+		overheatUntil = 0,
+		chargeStartedAt = nil,
 	}
 	states[player.UserId] = created
 	return created
@@ -8822,11 +9624,62 @@ local function ammoItemFor(ammoType: string): string?
 	return nil
 end
 
+local function finishFor(player: Player): WeaponModels.Finish?
+	local profile = DataService.getProfile(player)
+	local def = if profile then CosmeticRegistry.get(profile.loadout.finish) else nil
+	if not def or def.slot ~= "finish" then
+		return nil
+	end
+	return { body = def.body, accent = def.accent, material = def.material }
+end
+
+--- The weapon in the character's hand, built by the same code as the
+--- first-person viewmodel and the armory preview, so other players see what
+--- you are carrying. Massless and non-colliding: it changes nothing but looks.
+local function attachHeld(player: Player)
+	local character = player.Character
+	if not character then
+		return
+	end
+	local existing = character:FindFirstChild("HeldWeapon")
+	if existing then
+		existing:Destroy()
+	end
+	local state = states[player.UserId]
+	local def = if state and state.equipped then WeaponRegistry.get(state.equipped) else nil
+	if not def then
+		return
+	end
+	local hand = character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm")
+	if not hand or not hand:IsA("BasePart") then
+		return
+	end
+	local built = WeaponModels.build(def, finishFor(player))
+	built.model.Name = "HeldWeapon"
+	local grip = if hand.Name == "RightHand" then CFrame.new(0, -0.15, -0.1) else CFrame.new(0, -0.9, -0.1)
+	built.root.CFrame = hand.CFrame * grip
+	local weld = Instance.new("Weld")
+	weld.Part0 = hand
+	weld.Part1 = built.root
+	weld.C0 = grip
+	weld.Parent = built.root
+	built.model.Parent = character
+end
+
+local function heatOf(state: WeaponState, def: WeaponRegistry.WeaponDef): number
+	local arc = def.arc
+	if not arc then
+		return 0
+	end
+	return math.max(0, state.heat - (os.clock() - state.heatAt) * arc.heatDecayPerSecond)
+end
+
 function CombatService.equip(player: Player, weaponId: string?): (boolean, string?)
 	local state = stateFor(player)
 	if not weaponId then
 		state.equipped = nil
 		state.reloading = false
+		attachHeld(player)
 		return true, nil
 	end
 
@@ -8855,10 +9708,19 @@ function CombatService.equip(player: Player, weaponId: string?): (boolean, strin
 		local ammoItem = ammoItemFor(def.ammoType or "")
 		local available = if ammoItem then InventoryService.countOf(player, ammoItem) else 0
 		local wanted = math.floor((def.magazineSize or 1) * Balance.Combat.startingAmmoFraction + 0.5)
-		state.magazine = math.min(def.magazineSize or 1, math.max(0, math.min(wanted, available)))
+		local loading = math.min(def.magazineSize or 1, math.max(0, math.min(wanted, available)))
+		if ammoItem and loading > 0 then
+			InventoryService.remove(player, ammoItem, loading)
+		end
+		state.magazine = loading
 	else
 		state.magazine = 0
 	end
+	state.heat = 0
+	state.heatAt = os.clock()
+	state.overheatUntil = 0
+	state.chargeStartedAt = nil
+	attachHeld(player)
 	CombatService.push(player)
 	return true, nil
 end
@@ -8886,6 +9748,8 @@ function CombatService.push(player: Player)
 		reserve = reserve,
 		reloading = state.reloading,
 		reloadRemaining = if state.reloading then math.max(0, state.reloadDuration - (os.clock() - state.reloadStartedAt)) else 0,
+		heat = if def and def.arc then heatOf(state, def) else nil,
+		overheatRemaining = if def and def.arc then math.max(0, state.overheatUntil - os.clock()) else nil,
 	})
 end
 
@@ -8995,6 +9859,72 @@ end
 -- Firing
 --------------------------------------------------------------------------
 
+--------------------------------------------------------------------------
+-- Arc Rail Projector
+--------------------------------------------------------------------------
+
+--- A burst from the arc. The server times the charge from WeaponCharge,
+--- tracks heat itself, and finds what is in the cone with its own geometry:
+--- the client says only where it was pointing.
+function handleArc(player: Player, state: WeaponState, def: WeaponRegistry.WeaponDef, rawOrigin: any, rawDirection: any)
+	local arc = def.arc :: any
+	local now = os.clock()
+	if now < state.overheatUntil then
+		return
+	end
+	local chargedAt = state.chargeStartedAt
+	state.chargeStartedAt = nil
+	if not chargedAt or now - chargedAt < arc.chargeSeconds - Balance.Combat.fireIntervalGrace then
+		return
+	end
+	local origin = Guard.vector3(rawOrigin, 1e5)
+	local direction = Guard.direction(rawDirection)
+	local root = Guard.aliveRoot(player)
+	if not origin or not direction or not root or not Guard.withinDistance(origin, root.Position, 12) then
+		return
+	end
+
+	local heat = heatOf(state, def) + arc.heatPerBurst
+	state.heat = heat
+	state.heatAt = now
+	state.lastFiredAt = now
+	local overheated = heat >= 100
+	if overheated then
+		state.overheatUntil = now + arc.overheatLockSeconds
+		state.heat = 100
+	end
+
+	local expedition = ExpeditionService.forPlayer(player)
+	local struck: { { position: Vector3, stunned: number } } = {}
+	if expedition then
+		ExpeditionService.noteWeaponFired(expedition, true)
+		CreatureService.hearNoise(expedition.id, origin, def.noiseRadius / 40)
+		ExpeditionService.ThreatEvent:Fire(expedition, "gunshot", Balance.Threat.noisePerGunshot * 0.5)
+		local cosCone = math.cos(math.rad(arc.coneDegrees))
+		for _, creature in CreatureService.forExpedition(expedition.id) do
+			local offset = creature.root.Position - origin
+			local distance = offset.Magnitude
+			if distance <= def.range + 4 and (distance < 3 or offset.Unit:Dot(direction) >= cosCone) then
+				CreatureService.applyDamage(creature, def.damage, player)
+				CombatService.Hit:Fire(player, creature.model, def.damage)
+				local stunned = CreatureService.stun(creature, arc.stunSeconds, arc.resistWindow, arc.stunImmunitySeconds)
+				table.insert(struck, { position = creature.root.Position, stunned = stunned })
+			end
+		end
+		Net.fireClients("WeaponEffect", ExpeditionService.playersOf(expedition), {
+			kind = "arc",
+			userId = player.UserId,
+			origin = origin,
+			direction = direction,
+			range = def.range,
+			struck = struck,
+		})
+	end
+	ProgressionService.addStat(player, "shots_fired", 1)
+	CombatService.Fired:Fire(player, def.id, origin)
+	CombatService.push(player)
+end
+
 local function handleFire(player: Player, rawOrigin: any, rawDirection: any, rawHitInstance: any, rawHitPosition: any)
 	local state = states[player.UserId]
 	if not state or not state.equipped then
@@ -9007,6 +9937,10 @@ local function handleFire(player: Player, rawOrigin: any, rawDirection: any, raw
 
 	local vitals = SurvivalService.get(player)
 	if not vitals or vitals.state ~= "alive" then
+		return
+	end
+	if def.arc then
+		handleArc(player, state, def, rawOrigin, rawDirection)
 		return
 	end
 	if state.reloading then
@@ -9086,6 +10020,30 @@ local function handleFire(player: Player, rawOrigin: any, rawDirection: any, raw
 	end
 	CombatService.Fired:Fire(player, def.id, origin)
 	CombatService.push(player)
+
+	-- The launcher's flare bursts high over where it lands and hangs there.
+	-- The server finds the landing point with its own ray, so a client cannot
+	-- put a flare somewhere the shot could not reach.
+	local launcher = def.launcher
+	if launcher and expedition then
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		params.FilterDescendantsInstances = if player.Character then { player.Character } else {}
+		local ray = Workspace:Raycast(origin, direction * def.range, params)
+		local landing = if ray then ray.Position else origin + direction * def.range
+		local burst = landing + Vector3.new(0, launcher.burstHeight, 0)
+		CreatureService.denyArea(expedition.id, landing, launcher.denyRadius, launcher.hangSeconds)
+		-- Something new and bright to investigate, away from the crew.
+		CreatureService.hearNoise(expedition.id, landing, launcher.distractLoudness)
+		Net.fireClients("WeaponEffect", ExpeditionService.playersOf(expedition), {
+			kind = "skyflare",
+			position = burst,
+			landing = landing,
+			seconds = launcher.hangSeconds,
+			range = launcher.lightRange,
+			revealRadius = launcher.revealRadius,
+		})
+	end
 
 	-- Flare rounds deny ground where they land, which is the whole point of
 	-- carrying a flare pistol.
@@ -9187,6 +10145,29 @@ function CombatService.start()
 		CombatService.reload(player)
 	end)
 
+	Net.onServerEvent("WeaponCharge", function(player)
+		local state = states[player.UserId]
+		local def = if state and state.equipped then WeaponRegistry.get(state.equipped) else nil
+		if state and def and def.arc and os.clock() >= state.overheatUntil then
+			state.chargeStartedAt = os.clock()
+		end
+	end)
+
+	-- A new character after a death or a retry carries the same weapon:
+	-- ownership and the round's loadout survive, only the body is new.
+	Players.PlayerAdded:Connect(function(player)
+		player.CharacterAdded:Connect(function()
+			task.wait(0.5)
+			attachHeld(player)
+		end)
+	end)
+	for _, player in Players:GetPlayers() do
+		player.CharacterAdded:Connect(function()
+			task.wait(0.5)
+			attachHeld(player)
+		end)
+	end
+
 	-- Equipping is a command on the inventory channel, since it is an
 	-- inventory action from the player's point of view.
 	InventoryService.Changed:Connect(function(player)
@@ -9201,6 +10182,15 @@ function CombatService.start()
 		for _, player in ExpeditionService.playersOf(expedition) do
 			local profile = DataService.getProfile(player)
 			if profile then
+				-- A premium firearm starts the run with its own rounds, so it is
+				-- never an empty gun. Found ammunition tops it up as normal.
+				local primary = WeaponRegistry.get(profile.loadout.primaryWeapon)
+				if primary and primary.startingRounds and primary.ammoType then
+					local ammoItem = ammoItemFor(primary.ammoType)
+					if ammoItem then
+						InventoryService.add(player, ammoItem, primary.startingRounds, true)
+					end
+				end
 				CombatService.equip(player, profile.loadout.primaryWeapon)
 				-- Starting ammunition for the sidearm, so a player is never
 				-- completely without an answer.
@@ -9218,6 +10208,7 @@ function CombatService.start()
 	ExpeditionService.Ended:Connect(function(expedition)
 		for _, player in ExpeditionService.playersOf(expedition) do
 			states[player.UserId] = nil
+			attachHeld(player)
 		end
 	end)
 
@@ -9237,7 +10228,7 @@ return CombatService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="42">
+        <Item class="ModuleScript" referent="44">
           <Properties>
             <string name="Name">CreatureService</string>
             <string name="Source"><![CDATA[--!strict
@@ -9324,6 +10315,11 @@ export type Creature = {
 
 	lastAttackAt: number,
 	lastCallAt: number,
+	-- Stunned by the Arc Rail Projector: frozen until this time. Stuns weaken
+	-- with repetition and cannot be chained; see CreatureService.stun.
+	stunnedUntil: number,
+	stunImmuneUntil: number,
+	recentStuns: { number },
 	-- Sounds it has heard often enough to imitate.
 	learnedCues: { [string]: number },
 }
@@ -9523,6 +10519,9 @@ function CreatureService.spawn(expedition: ExpeditionService.Expedition, positio
 		lastHeardAt = 0,
 		lastSeenTargetAt = 0,
 		driveOffMeter = 0,
+		stunnedUntil = 0,
+		stunImmuneUntil = 0,
+		recentStuns = {},
 		retreatUntil = 0,
 		deniedZones = {},
 		lastAttackAt = 0,
@@ -9636,6 +10635,34 @@ function CreatureService.hearHorn(expeditionId: string, position: Vector3)
 			CreatureService.hearNoise(expeditionId, position, Balance.Threat.noisePerHorn)
 		end
 	end
+end
+
+--- Freezes the creature for up to `seconds`. It learns: every stun in the last
+--- `resistWindow` seconds halves the next one, and after a stun ends it cannot
+--- be stunned again for `immunitySeconds`. Returns the seconds actually
+--- applied, 0 when it shrugged the stun off, so the weapon can say so.
+function CreatureService.stun(creature: Creature, seconds: number, resistWindow: number, immunitySeconds: number): number
+	local now = os.clock()
+	if now < creature.stunnedUntil or now < creature.stunImmuneUntil then
+		return 0
+	end
+	local recent = {}
+	for _, at in creature.recentStuns do
+		if now - at < resistWindow then
+			table.insert(recent, at)
+		end
+	end
+	local applied = seconds * (0.5 ^ #recent)
+	if applied < 0.4 then
+		creature.recentStuns = recent
+		return 0
+	end
+	table.insert(recent, now)
+	creature.recentStuns = recent
+	creature.stunnedUntil = now + applied
+	creature.stunImmuneUntil = now + applied + immunitySeconds
+	log.debug(string.format("%s stunned for %.1fs", creature.id, applied))
+	return applied
 end
 
 --- A flare, a burning brazier or a lit carriage: ground it will not cross.
@@ -9766,6 +10793,11 @@ local function stepCreature(creature: Creature, dt: number)
 	end
 
 	local now = os.clock()
+	if now < creature.stunnedUntil then
+		-- Locked rigid by the arc. It does nothing, which is the point, and
+		-- for no longer than CreatureService.stun allows.
+		return
+	end
 	local target, targetPosition, targetDistance = nearestTarget(creature, expedition)
 
 	if creature.state == "retreat" then
@@ -9934,7 +10966,7 @@ return CreatureService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="43">
+        <Item class="ModuleScript" referent="45">
           <Properties>
             <string name="Name">CrewService</string>
             <string name="Source"><![CDATA[--!strict
@@ -10719,7 +11751,7 @@ return CrewService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="44">
+        <Item class="ModuleScript" referent="46">
           <Properties>
             <string name="Name">DataService</string>
             <string name="Source"><![CDATA[--!strict
@@ -11289,7 +12321,7 @@ return DataService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="45">
+        <Item class="ModuleScript" referent="47">
           <Properties>
             <string name="Name">DepartureService</string>
             <string name="Source"><![CDATA[--!strict
@@ -11749,7 +12781,7 @@ return DepartureService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="46">
+        <Item class="ModuleScript" referent="48">
           <Properties>
             <string name="Name">EventService</string>
             <string name="Source"><![CDATA[--!strict
@@ -12384,7 +13416,7 @@ return EventService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="47">
+        <Item class="ModuleScript" referent="49">
           <Properties>
             <string name="Name">ExpeditionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -13919,7 +14951,7 @@ return ExpeditionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="48">
+        <Item class="ModuleScript" referent="50">
           <Properties>
             <string name="Name">HorrorDirector</string>
             <string name="Source"><![CDATA[--!strict
@@ -14668,7 +15700,7 @@ return HorrorDirector
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="49">
+        <Item class="ModuleScript" referent="51">
           <Properties>
             <string name="Name">InteractionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -15332,6 +16364,8 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 			panel = "shop"
 		elseif target:HasTag("WorkshopBench") then
 			panel = "loadout"
+		elseif target:HasTag("ArmoryRack") then
+			panel = "armory"
 		end
 		if panel then
 			Net.fireClient("InteractResult", player, { ok = true, action = "open_panel", panel = panel })
@@ -15720,6 +16754,7 @@ function InteractionService.start()
 	wire("NoticeBoard", "Read", "Notice board", true)
 	wire("StoresCounter", "Browse", "Stores", true)
 	wire("WorkshopBench", "Open loadout", "Workshop bench", true)
+	wire("ArmoryRack", "Open armory", "Armory", true)
 
 	log.info("started")
 end
@@ -15728,7 +16763,7 @@ return InteractionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="50">
+        <Item class="ModuleScript" referent="52">
           <Properties>
             <string name="Name">InventoryService</string>
             <string name="Source"><![CDATA[--!strict
@@ -16314,7 +17349,7 @@ return InventoryService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="51">
+        <Item class="ModuleScript" referent="53">
           <Properties>
             <string name="Name">LeaderboardService</string>
             <string name="Source"><![CDATA[--!strict
@@ -16611,7 +17646,135 @@ return LeaderboardService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="52">
+        <Item class="ModuleScript" referent="54">
+          <Properties>
+            <string name="Name">LoadoutService</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	LoadoutService
+	--------------
+	What a player takes on their next run: train, livery, interior, primary
+	weapon and appearance. The loadout panel has always sent these choices as
+	"loadout_*" settings, and SurvivalService has always passed them on to "the
+	profile setting handler", but that handler did not exist, so every choice on
+	the loadout panel was silently dropped. This is that handler.
+
+	OWNERSHIP IS CHECKED HERE
+	-------------------------
+	A choice is accepted only if the profile owns it. Premium weapons are owned
+	only through their Game Pass, which PurchaseService mirrors from Roblox, so
+	a client that asks for a weapon it has not bought gets nothing. Equipping
+	at the start of a run checks again (CombatService.equip).
+
+	ONE PRIMARY WEAPON
+	------------------
+	The primary slot is the shared loadout limit: one weapon per run, whatever
+	a player owns. Owning every pass never means carrying every advantage.
+
+	Changes are refused during a run; the loadout is for the next one.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage.LastSignal
+
+local CosmeticRegistry = require(Shared.Registry.CosmeticRegistry)
+local Guard = require(Shared.Core.Guard)
+local Logger = require(Shared.Core.Logger)
+local Net = require(Shared.Core.Net)
+local Signal = require(Shared.Core.Signal)
+local TrainRegistry = require(Shared.Registry.TrainRegistry)
+local WeaponRegistry = require(Shared.Registry.WeaponRegistry)
+
+local DataService = require(script.Parent.DataService)
+local ExpeditionService = require(script.Parent.ExpeditionService)
+local ProgressionService = require(script.Parent.ProgressionService)
+
+local log = Logger.new("LoadoutService")
+
+local LoadoutService = {}
+
+LoadoutService.Changed = Signal.new() :: Signal.Signal<Player, string, string>
+
+local SLOTS = { "train", "livery", "interior", "primary", "lamp", "outfit", "finish", "patch" }
+
+--- Whether this profile may select this item for this slot.
+local function allowed(profile: any, slot: string, id: string): (boolean, string?)
+	if slot == "primary" then
+		local def = WeaponRegistry.get(id)
+		if not def then
+			return false, "UNKNOWN"
+		end
+		if not (def.startingLoadout or profile.weapons[id]) then
+			return false, "NOT_OWNED"
+		end
+		if profile.level < def.unlockLevel then
+			return false, "LEVEL_LOCKED"
+		end
+		return true, nil
+	elseif slot == "train" then
+		return TrainRegistry.get(id) ~= nil and profile.trains[id] == true, "NOT_OWNED"
+	elseif slot == "livery" then
+		return TrainRegistry.Liveries[id] ~= nil and profile.liveries[id] == true, "NOT_OWNED"
+	elseif slot == "interior" then
+		return TrainRegistry.Interiors[id] ~= nil and profile.interiors[id] == true, "NOT_OWNED"
+	else
+		local def = CosmeticRegistry.get(id)
+		if not def or def.slot ~= slot then
+			return false, "UNKNOWN"
+		end
+		return profile.cosmetics[id] == true, "NOT_OWNED"
+	end
+end
+
+--- Sets one loadout slot. Returns false and a reason when refused.
+function LoadoutService.set(player: Player, slot: string, id: string): (boolean, string?)
+	if ExpeditionService.forPlayer(player) then
+		return false, "ON_EXPEDITION"
+	end
+	local profile = DataService.getProfile(player)
+	if not profile then
+		return false, "NOT_LOADED"
+	end
+	-- An empty patch is a valid choice: no patch.
+	if not (slot == "patch" and id == "") then
+		local ok, reason = allowed(profile, slot, id)
+		if not ok then
+			return false, reason
+		end
+	end
+	local field = if slot == "primary" then "primaryWeapon" else slot
+	DataService.update(player, function(p)
+		(p.loadout :: any)[field] = id
+	end)
+	ProgressionService.pushToClient(player)
+	LoadoutService.Changed:Fire(player, slot, id)
+	log.debug(player.Name, slot, id)
+	return true, nil
+end
+
+function LoadoutService.start()
+	Net.onServerEvent("SetSetting", function(player, rawKey, rawValue)
+		if type(rawKey) ~= "string" or string.sub(rawKey, 1, 8) ~= "loadout_" then
+			return
+		end
+		local slot = Guard.enum(string.sub(rawKey, 9), SLOTS)
+		local id = Guard.string(rawValue, 64)
+		if not slot or not id then
+			return
+		end
+		local ok, reason = LoadoutService.set(player, slot, id)
+		if not ok then
+			Net.fireClient("InteractResult", player, { ok = false, error = "LOADOUT_" .. tostring(reason) })
+		end
+	end)
+	log.info("started")
+end
+
+return LoadoutService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="55">
           <Properties>
             <string name="Name">ProfileSchema</string>
             <string name="Source"><![CDATA[--!strict
@@ -17059,7 +18222,7 @@ return ProfileSchema
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="53">
+        <Item class="ModuleScript" referent="56">
           <Properties>
             <string name="Name">ProgressionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -17589,7 +18752,7 @@ return ProgressionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="54">
+        <Item class="ModuleScript" referent="57">
           <Properties>
             <string name="Name">PurchaseService</string>
             <string name="Source"><![CDATA[--!strict
@@ -17631,6 +18794,7 @@ return ProgressionService
 
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage.LastSignal
@@ -17656,7 +18820,7 @@ PurchaseService.Purchased = Signal.new() :: Signal.Signal<Player, string, number
 
 -- GetProductInfo is a web call and is rate limited. Prices are cached, and the
 -- cache is what the shop displays, so the panel never blocks on the network.
-type PriceEntry = { price: number, name: string, fetchedAt: number, ok: boolean }
+type PriceEntry = { price: number, name: string, fetchedAt: number, ok: boolean, onSale: boolean }
 local priceCache: { [string]: PriceEntry } = {}
 local PRICE_TTL = 600
 
@@ -17666,7 +18830,7 @@ end
 
 --- Fetches the live price. Returns nil when the product is unconfigured or
 --- the lookup failed; callers must render that as Unavailable, never as free.
-function PurchaseService.getPrice(productKey: string): (number?, string?)
+function PurchaseService.getPrice(productKey: string): (number?, string?, boolean?)
 	local def = Monetization.get(productKey)
 	if not def or def.id <= 0 then
 		return nil, nil
@@ -17675,7 +18839,7 @@ function PurchaseService.getPrice(productKey: string): (number?, string?)
 	local key = cacheKey(def.kind, def.id)
 	local cached = priceCache[key]
 	if cached and cached.ok and (os.clock() - cached.fetchedAt) < PRICE_TTL then
-		return cached.price, cached.name
+		return cached.price, cached.name, cached.onSale
 	end
 
 	local infoType = if def.kind == "gamepass" then Enum.InfoType.GamePass else Enum.InfoType.Product
@@ -17683,18 +18847,23 @@ function PurchaseService.getPrice(productKey: string): (number?, string?)
 		return MarketplaceService:GetProductInfo(def.id, infoType)
 	end)
 
-	if ok and type(info) == "table" and type(info.PriceInRobux) == "number" then
+	if ok and type(info) == "table" and (type(info.PriceInRobux) == "number" or info.IsForSale == false) then
+		-- A pass taken off sale reports IsForSale = false and may have no
+		-- price at all. That is a state to show, not a failure.
+		local onSale = info.IsForSale ~= false
+		local price = if type(info.PriceInRobux) == "number" then info.PriceInRobux else 0
 		priceCache[key] = {
-			price = info.PriceInRobux,
+			price = price,
 			name = info.Name or def.name,
 			fetchedAt = os.clock(),
 			ok = true,
+			onSale = onSale,
 		}
-		return info.PriceInRobux, info.Name or def.name
+		return price, info.Name or def.name, onSale
 	end
 
 	log.warn(string.format("price lookup failed for %s (%s %d): %s", productKey, def.kind, def.id, tostring(info)))
-	priceCache[key] = { price = 0, name = def.name, fetchedAt = os.clock(), ok = false }
+	priceCache[key] = { price = 0, name = def.name, fetchedAt = os.clock(), ok = false, onSale = false }
 	return nil, nil
 end
 
@@ -17734,6 +18903,17 @@ local function applyGrants(player: Player, def: Monetization.ProductDef): { [str
 	for id in cosmeticIds do
 		if ProgressionService.grantUnlock(player, "cosmetic", id) then
 			table.insert(summary.cosmetics, id)
+		end
+	end
+
+	-- Weapons. A weapon pass grants the weapon itself; ammunition and the
+	-- current run's loadout follow the normal rules.
+	if type(grants.weapons) == "table" then
+		for _, id in grants.weapons do
+			if ProgressionService.grantUnlock(player, "weapon", id) then
+				summary.weapons = summary.weapons or {}
+				table.insert(summary.weapons, id)
+			end
 		end
 	end
 
@@ -17873,18 +19053,50 @@ end
 -- Game passes
 --------------------------------------------------------------------------
 
+--- Asks Roblox whether a player owns one pass. Studio can simulate ownership
+--- for testing, through a server-set attribute that clients cannot write and
+--- that does nothing outside Studio. Simulated grants are logged as such.
+local function queryPass(player: Player, def: Monetization.ProductDef): (boolean, any)
+	if RunService:IsStudio() and player:GetAttribute("SimulatePass_" .. def.key) == true then
+		log.warn(string.format("SIMULATED ownership of %s for %s (Studio test only)", def.key, player.Name))
+		return true, true
+	end
+	if def.id <= 0 then
+		return true, false
+	end
+	return Protect.call(function()
+		return MarketplaceService:UserOwnsGamePassAsync(player.UserId, def.id)
+	end)
+end
+
+-- Delays between attempts when Roblox cannot answer. Bounded: after the last
+-- one the player is told, and can ask again from the armory.
+local PASS_RETRY_DELAYS = { 2, 5, 12 }
+
 --- Queries Roblox for pass ownership and mirrors it into the profile.
 --- Only ever adds. A failed query must never revoke a pass.
+---
+--- Progress is published on the player as the PassCheck attribute
+--- ("checking", "ok" or "failed"), which the armory reads to show a checking
+--- state, and a failure with a retry button instead of a wrong "not owned".
 function PurchaseService.refreshPasses(player: Player)
-	local profile = DataService.getProfile(player)
-	if not profile then
+	if player:GetAttribute("PassCheck") == "checking" then
 		return
 	end
-	for _, def in Monetization.GamePasses do
-		if def.id > 0 then
-			local ok, owns = Protect.call(function()
-				return MarketplaceService:UserOwnsGamePassAsync(player.UserId, def.id)
-			end)
+	player:SetAttribute("PassCheck", "checking")
+	local attempt = 0
+	while true do
+		local profile = DataService.getProfile(player)
+		if not profile or not player.Parent then
+			player:SetAttribute("PassCheck", nil)
+			return
+		end
+		local failed = 0
+		for _, def in Monetization.All do
+			if def.kind ~= "gamepass" then
+				continue
+			end
+			local ok, owns = queryPass(player, def)
 			if ok and owns == true then
 				if (profile.purchases.products[def.key] or 0) <= 0 then
 					if recordPurchase(player, def, nil, 0) then
@@ -17894,14 +19106,27 @@ function PurchaseService.refreshPasses(player: Player)
 					end
 				else
 					-- Already mirrored, but re-apply grants so a pass bundle
-					-- that gained a new cosmetic in an update reaches players
-					-- who bought it before that update shipped.
+					-- that gained a new item in an update reaches players who
+					-- bought it before that update shipped.
 					applyGrants(player, def)
 				end
 			elseif not ok then
+				failed += 1
 				log.warn(string.format("pass check failed for %s / %s: %s", player.Name, def.key, tostring(owns)))
 			end
 		end
+		if failed == 0 then
+			player:SetAttribute("PassCheck", "ok")
+			ProgressionService.pushToClient(player)
+			return
+		end
+		attempt += 1
+		if attempt > #PASS_RETRY_DELAYS then
+			player:SetAttribute("PassCheck", "failed")
+			ProgressionService.pushToClient(player)
+			return
+		end
+		task.wait(PASS_RETRY_DELAYS[attempt])
 	end
 end
 
@@ -17917,6 +19142,11 @@ end
 -- Prompting
 --------------------------------------------------------------------------
 
+-- Players with a purchase prompt open, and since when. Cleared when Roblox
+-- reports the prompt closed; the time limit covers a close that never arrives.
+local promptOpen: { [number]: number } = {}
+local PROMPT_LOCK_SECONDS = 20
+
 --- Opens the Roblox purchase prompt. Returns false with a reason when the
 --- product is unconfigured, already owned, or prompts are currently blocked.
 function PurchaseService.prompt(player: Player, productKey: string, blockedReason: string?): (boolean, string?)
@@ -17924,8 +19154,17 @@ function PurchaseService.prompt(player: Player, productKey: string, blockedReaso
 	if not def then
 		return false, "UNKNOWN_PRODUCT"
 	end
+	if def.offered == false then
+		return false, "NOT_OFFERED"
+	end
 	if def.id <= 0 then
 		return false, "NOT_CONFIGURED"
+	end
+	-- One prompt at a time. A second press while the first prompt is open is
+	-- ignored rather than queued, so a double click never opens two prompts.
+	local openSince = promptOpen[player.UserId]
+	if openSince and os.clock() - openSince < PROMPT_LOCK_SECONDS then
+		return false, "PROMPT_OPEN"
 	end
 	if blockedReason then
 		-- Prompts are suppressed during cinematics, encounters and other
@@ -17947,6 +19186,7 @@ function PurchaseService.prompt(player: Player, productKey: string, blockedReaso
 		log.warn(string.format("prompt failed for %s: %s", productKey, tostring(err)))
 		return false, "PROMPT_FAILED"
 	end
+	promptOpen[player.UserId] = os.clock()
 	return true, nil
 end
 
@@ -17967,6 +19207,13 @@ function PurchaseService.start()
 	end
 
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, gamePassId, wasPurchased)
+		promptOpen[player.UserId] = nil
+		if not wasPurchased then
+			-- Cancelled or failed. Nothing is granted; the client is told so
+			-- the armory can return from its waiting state.
+			Net.fireClient("PurchaseResult", player, { ok = false, cancelled = true, gamePassId = gamePassId })
+			return
+		end
 		if wasPurchased then
 			-- Re-query rather than trusting the event, so the profile mirror
 			-- always reflects what Roblox actually believes.
@@ -17976,6 +19223,13 @@ function PurchaseService.start()
 				Net.fireClient("PurchaseResult", player, { ok = true, productKey = def.key, productName = def.name })
 			end
 		end
+	end)
+
+	MarketplaceService.PromptProductPurchaseFinished:Connect(function(userId)
+		promptOpen[userId] = nil
+	end)
+	Players.PlayerRemoving:Connect(function(player)
+		promptOpen[player.UserId] = nil
 	end)
 
 	DataService.ProfileLoaded:Connect(function(player)
@@ -18005,7 +19259,7 @@ return PurchaseService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="55">
+        <Item class="ModuleScript" referent="58">
           <Properties>
             <string name="Name">QuestService</string>
             <string name="Source"><![CDATA[--!strict
@@ -18386,7 +19640,7 @@ return QuestService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="56">
+        <Item class="ModuleScript" referent="59">
           <Properties>
             <string name="Name">RewardService</string>
             <string name="Source"><![CDATA[--!strict
@@ -18692,7 +19946,7 @@ return RewardService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="57">
+        <Item class="ModuleScript" referent="60">
           <Properties>
             <string name="Name">ShopService</string>
             <string name="Source"><![CDATA[--!strict
@@ -18774,20 +20028,26 @@ type Entry = {
 local function robuxEntries(player: Player): { Entry }
 	local out: { Entry } = {}
 	for _, def in Monetization.All do
+		if def.offered == false then
+			continue
+		end
 		local owned = def.permanent and PurchaseService.ownsProduct(player, def.key)
-		local price, liveName = PurchaseService.getPrice(def.key)
+		local price, liveName, onSale = PurchaseService.getPrice(def.key)
 
 		local purchasable = true
 		local reason: string? = nil
 		if def.id <= 0 then
 			purchasable = false
 			reason = "This item is not available yet."
-		elseif not price then
-			purchasable = false
-			reason = "Price unavailable. Try again in a moment."
 		elseif owned then
 			purchasable = false
 			reason = "Owned"
+		elseif not price then
+			purchasable = false
+			reason = "Price unavailable. Try again in a moment."
+		elseif onSale == false then
+			purchasable = false
+			reason = "Not on sale right now."
 		end
 
 		table.insert(out, {
@@ -19002,9 +20262,11 @@ end
 
 --------------------------------------------------------------------------
 
+local lastPassRefresh: { [number]: number } = {}
+
 function ShopService.start()
 	Net.onServerInvoke("ShopCommand", function(player, rawCommand, rawArg)
-		local command = Guard.enum(rawCommand, { "catalogue", "buy_credits", "prompt_robux" })
+		local command = Guard.enum(rawCommand, { "catalogue", "buy_credits", "prompt_robux", "refresh_passes" })
 		if not command then
 			return { ok = false, error = "BAD_COMMAND" }
 		end
@@ -19020,6 +20282,18 @@ function ShopService.start()
 			end
 			local ok, err = buyWithCredits(player, entryKey)
 			return { ok = ok, error = err, catalogue = ShopService.catalogue(player) }
+		end
+
+		if command == "refresh_passes" then
+			-- The armory's "check again" after a failed ownership check.
+			-- Rate limited: each check is several web calls.
+			local last = lastPassRefresh[player.UserId]
+			if last and os.clock() - last < 15 then
+				return { ok = false, error = "WAIT" }
+			end
+			lastPassRefresh[player.UserId] = os.clock()
+			task.spawn(PurchaseService.refreshPasses, player)
+			return { ok = true }
 		end
 
 		-- prompt_robux
@@ -19063,7 +20337,7 @@ return ShopService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="58">
+        <Item class="ModuleScript" referent="61">
           <Properties>
             <string name="Name">SignatureMoments</string>
             <string name="Source"><![CDATA[--!strict
@@ -19414,7 +20688,7 @@ return SignatureMoments
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="59">
+        <Item class="ModuleScript" referent="62">
           <Properties>
             <string name="Name">SurvivalService</string>
             <string name="Source"><![CDATA[--!strict
@@ -20318,7 +21592,7 @@ return SurvivalService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="60">
+        <Item class="ModuleScript" referent="63">
           <Properties>
             <string name="Name">TrainService</string>
             <string name="Source"><![CDATA[--!strict
@@ -21179,7 +22453,7 @@ return TrainService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="61">
+        <Item class="ModuleScript" referent="64">
           <Properties>
             <string name="Name">WorldService</string>
             <string name="Source"><![CDATA[--!strict
@@ -21753,11 +23027,11 @@ return WorldService
           </Properties>
         </Item>
       </Item>
-      <Item class="Folder" referent="62">
+      <Item class="Folder" referent="65">
         <Properties>
           <string name="Name">World</string>
         </Properties>
-        <Item class="ModuleScript" referent="63">
+        <Item class="ModuleScript" referent="66">
           <Properties>
             <string name="Name">BuildKit</string>
             <string name="Source"><![CDATA[--!strict
@@ -22945,7 +24219,7 @@ return BuildKit
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="64">
+        <Item class="ModuleScript" referent="67">
           <Properties>
             <string name="Name">ForestBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -23499,7 +24773,7 @@ return ForestBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="65">
+        <Item class="ModuleScript" referent="68">
           <Properties>
             <string name="Name">LobbyBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -23525,6 +24799,9 @@ return ForestBuilder
 ]]
 
 local BuildKit = require(script.Parent.BuildKit)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local WeaponModels = require(ReplicatedStorage.LastSignal.Registry.WeaponModels)
+local WeaponRegistry = require(ReplicatedStorage.LastSignal.Registry.WeaponRegistry)
 
 local C = Color3.fromRGB
 local P = BuildKit.Palette
@@ -23996,6 +25273,63 @@ end
 --------------------------------------------------------------------------
 
 --------------------------------------------------------------------------
+-- Armory rack
+--------------------------------------------------------------------------
+
+-- A wall-mounted rack beside the stores hatch with the three premium weapons
+-- on it, built by the same code that builds them in your hands, so what is
+-- on the wall is exactly what you would carry. The rack opens the armory.
+local function buildArmory(cf: CFrame, parent: Instance, lights: { Light }): BasePart
+	local board = BuildKit.part({
+		name = "ArmoryBoard",
+		size = Vector3.new(12, 8, 0.6),
+		cf = cf * CFrame.new(0, 5.5, 0),
+		colour = C(52, 46, 40),
+		material = Enum.Material.WoodPlanks,
+		parent = parent,
+	})
+	board:AddTag("ArmoryRack")
+	for _, x in { -5.6, 5.6 } do
+		BuildKit.part({
+			name = "ArmoryPost",
+			size = Vector3.new(0.6, 10, 0.6),
+			cf = cf * CFrame.new(x, 5.0, 0.4),
+			colour = C(40, 36, 32),
+			material = Enum.Material.Wood,
+			parent = parent,
+		})
+	end
+	BuildKit.sign(cf * CFrame.new(0, 10.4, -0.35), 6, 1.2, "ARMORY", Enum.NormalId.Front, parent)
+	local display = { "nightwatch_carbine", "arc_projector", "flare_launcher" }
+	for i, id in display do
+		local def = WeaponRegistry.get(id)
+		if def then
+			local built = WeaponModels.build(def, nil)
+			built.model.Name = "Display_" .. id
+			-- Shown flat on pegs, side on, a little larger than life so they
+			-- read from across the yard.
+			built.model:ScaleTo(1.3)
+			built.root.Anchored = true
+			built.model:PivotTo(cf * CFrame.new(-0.2, 9.9 - i * 2.2, -0.6) * CFrame.Angles(0, math.rad(90), 0))
+			built.model.Parent = parent
+			for _, x in { -1.6, 1.6 } do
+				BuildKit.detail({
+					name = "Peg",
+					size = Vector3.new(0.15, 0.15, 0.5),
+					cf = cf * CFrame.new(x, 9.5 - i * 2.2, -0.45),
+					colour = C(150, 120, 64),
+					material = Enum.Material.Metal,
+					parent = parent,
+				})
+			end
+		end
+	end
+	local _, light = BuildKit.lamp(cf * CFrame.new(0, 11.4, -1.0), "bulkhead", C(255, 226, 180), 1.1, 18, parent)
+	table.insert(lights, light)
+	return board
+end
+
+--------------------------------------------------------------------------
 -- Platform 1
 --------------------------------------------------------------------------
 
@@ -24364,6 +25698,8 @@ function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): B
 	local workshopBench = buildWorkshop(originCF * CFrame.new(-86, 0, -20) * CFrame.Angles(0, math.rad(90), 0), model, lights, rng)
 	local crewBoard, noticeBoard = buildShelter(originCF * CFrame.new(52, 0, -30), model, lights)
 	local storesCounter = buildStoresHut(originCF * CFrame.new(74, 0, 60) * CFrame.Angles(0, math.rad(-90), 0), model, lights)
+	-- Facing the same way as the stores hatch, just past the hut's corner.
+	buildArmory(originCF * CFrame.new(88, 0, 79) * CFrame.Angles(0, math.rad(-90), 0), model, lights)
 
 	-- Water column by the departure road, the classic yard silhouette.
 	do
@@ -24611,7 +25947,7 @@ return LobbyBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="66">
+        <Item class="ModuleScript" referent="69">
           <Properties>
             <string name="Name">StationBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -26272,7 +27608,7 @@ return StationBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="67">
+        <Item class="ModuleScript" referent="70">
           <Properties>
             <string name="Name">TrainBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -28586,12 +29922,12 @@ return TrainBuilder
       </Item>
     </Item>
   </Item>
-  <Item class="ServerStorage" referent="68">
+  <Item class="ServerStorage" referent="71">
     <Properties>
       <string name="Name">ServerStorage</string>
     </Properties>
   </Item>
-  <Item class="SoundService" referent="69">
+  <Item class="SoundService" referent="72">
     <Properties>
       <string name="Name">SoundService</string>
       <float name="DistanceFactor">8</float>
@@ -28600,14 +29936,14 @@ return TrainBuilder
       <float name="RolloffScale">1.25</float>
     </Properties>
   </Item>
-  <Item class="StarterGui" referent="70">
+  <Item class="StarterGui" referent="73">
     <Properties>
       <string name="Name">StarterGui</string>
       <bool name="ResetPlayerGuiOnSpawn">false</bool>
       <token name="ScreenOrientation">4</token>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="71">
+  <Item class="StarterPlayer" referent="74">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <bool name="AutoJumpEnabled">false</bool>
@@ -28619,16 +29955,16 @@ return TrainBuilder
       <bool name="EnableMouseLockOption">false</bool>
       <bool name="LoadCharacterAppearance">true</bool>
     </Properties>
-    <Item class="StarterCharacterScripts" referent="72">
+    <Item class="StarterCharacterScripts" referent="75">
       <Properties>
         <string name="Name">StarterCharacterScripts</string>
       </Properties>
     </Item>
-    <Item class="StarterPlayerScripts" referent="73">
+    <Item class="StarterPlayerScripts" referent="76">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="74">
+      <Item class="LocalScript" referent="77">
         <Properties>
           <string name="Name">LastSignalClient</string>
           <string name="Source"><![CDATA[--!strict
@@ -28685,6 +30021,7 @@ local BOOT_ORDER = {
 	{ name = "CabController", module = Controllers.CabController },
 	{ name = "TrainRideController", module = Controllers.TrainRideController },
 	{ name = "HorrorEffectsController", module = Controllers.HorrorEffectsController },
+	{ name = "LampController", module = Controllers.LampController },
 }
 
 local failures: { string } = {}
@@ -28801,11 +30138,11 @@ else
 end
 ]]></string>
         </Properties>
-        <Item class="Folder" referent="75">
+        <Item class="Folder" referent="78">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="76">
+          <Item class="ModuleScript" referent="79">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--!strict
@@ -29462,7 +30799,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="77">
+          <Item class="ModuleScript" referent="80">
             <Properties>
               <string name="Name">CabController</string>
               <string name="Source"><![CDATA[--!strict
@@ -30019,7 +31356,7 @@ return CabController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="78">
+          <Item class="ModuleScript" referent="81">
             <Properties>
               <string name="Name">CameraController</string>
               <string name="Source"><![CDATA[--!strict
@@ -30524,7 +31861,7 @@ return CameraController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="79">
+          <Item class="ModuleScript" referent="82">
             <Properties>
               <string name="Name">CinematicController</string>
               <string name="Source"><![CDATA[--!strict
@@ -30942,7 +32279,7 @@ return CinematicController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="80">
+          <Item class="ModuleScript" referent="83">
             <Properties>
               <string name="Name">HUDController</string>
               <string name="Source"><![CDATA[--!strict
@@ -30981,6 +32318,7 @@ local Format = require(Shared.Core.Format)
 local ItemRegistry = require(Shared.Registry.ItemRegistry)
 local Logger = require(Shared.Core.Logger)
 local Net = require(Shared.Core.Net)
+local WeaponRegistry = require(Shared.Registry.WeaponRegistry)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local Widgets = require(script.Parent.Parent.UI.Widgets)
 local InputController = require(script.Parent.InputController)
@@ -31605,6 +32943,9 @@ local function refreshQuickSlots()
 	end
 end
 
+-- When the last weapon state arrived, for cooling the arc readout locally.
+local weaponStampedAt: number? = nil
+
 local function refreshWeapon()
 	local weapon = StateController.get("weapon")
 	local panel = ammoPanel
@@ -31623,6 +32964,27 @@ local function refreshWeapon()
 	InputController.setTouchVisible("fire", true)
 	reticle.Visible = StateController.isOnExpedition() and not StateController.isDowned()
 
+	local arc = WeaponRegistry.get(weapon.equipped)
+	if arc and arc.arc and type(weapon.heat) == "number" then
+		-- The Arc Rail Projector has heat, not ammunition. The server sends
+		-- heat when it changes; it cools between updates, so cool it here too.
+		panel.Visible = true
+		InputController.setTouchVisible("reload", false)
+		if ammoLabel then
+			local since = os.clock() - (weaponStampedAt or os.clock())
+			local overheat = math.max(0, (weapon.overheatRemaining or 0) - since)
+			if overheat > 0 then
+				ammoLabel.Text = string.format("OVERHEATED %.0fs", math.ceil(overheat))
+				ammoLabel.TextColor3 = Theme.colour("signalRed")
+			else
+				local heat = math.max(0, weapon.heat - since * arc.arc.heatDecayPerSecond)
+				ammoLabel.Text = string.format("HEAT %d%%", math.floor(heat + 0.5))
+				ammoLabel.TextColor3 = if heat > 60 then Theme.colour("signalAmber") else Theme.colour("text")
+			end
+		end
+		return
+	end
+
 	if weapon.magazineSize then
 		panel.Visible = true
 		InputController.setTouchVisible("reload", true)
@@ -31640,6 +33002,16 @@ local function refreshWeapon()
 		InputController.setTouchVisible("reload", false)
 	end
 end
+
+task.spawn(function()
+	while true do
+		task.wait(0.25)
+		local weapon = StateController.get("weapon")
+		if weapon and type(weapon.heat) == "number" then
+			refreshWeapon()
+		end
+	end
+end)
 
 local function refreshDowned()
 	local vitals = StateController.get("vitals")
@@ -31946,6 +33318,7 @@ function HUDController.start()
 		elseif key == "inventory" then
 			refreshQuickSlots()
 		elseif key == "weapon" then
+			weaponStampedAt = os.clock()
 			refreshWeapon()
 		elseif key == "crew" then
 			refreshCrew()
@@ -31984,7 +33357,7 @@ return HUDController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="81">
+          <Item class="ModuleScript" referent="84">
             <Properties>
               <string name="Name">HorrorEffectsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -32262,7 +33635,7 @@ return HorrorEffectsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="82">
+          <Item class="ModuleScript" referent="85">
             <Properties>
               <string name="Name">InputController</string>
               <string name="Source"><![CDATA[--!strict
@@ -32634,7 +34007,7 @@ return InputController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="83">
+          <Item class="ModuleScript" referent="86">
             <Properties>
               <string name="Name">InteractionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -32889,6 +34262,9 @@ local function actionFor(instance: Instance): (string?, string, string)
 	end
 	if instance:HasTag("StoresCounter") then
 		return "lobby", "Browse the stores", "Liveries, cosmetics and supplies"
+	end
+	if instance:HasTag("ArmoryRack") then
+		return "lobby", "Open the armory", "Premium weapons and the Conductor Collection"
 	end
 	if instance:HasTag("WorkshopBench") then
 		return "lobby", "Open your loadout", "Train, livery, weapon and appearance"
@@ -33222,7 +34598,46 @@ return InteractionController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="84">
+          <Item class="ModuleScript" referent="87">
+            <Properties>
+              <string name="Name">LampController</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	LampController
+	--------------
+	Points your own lamp where you are looking. The beam itself is made and
+	switched by the server (AppearanceService) so everyone sees it; a head does
+	not tilt with the camera, so without this the beam would light your feet
+	when you look up at the treeline. Other players' beams follow their heads.
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
+local LampController = {}
+
+local player = Players.LocalPlayer
+
+function LampController.start()
+	RunService.RenderStepped:Connect(function()
+		local character = player.Character
+		local head = if character then character:FindFirstChild("Head") else nil
+		local attachment = if head then head:FindFirstChild("LampAttachment") else nil
+		local camera = Workspace.CurrentCamera
+		if not head or not head:IsA("BasePart") or not attachment or not attachment:IsA("Attachment") or not camera then
+			return
+		end
+		local origin = head.Position + camera.CFrame.LookVector * 0.6
+		attachment.WorldCFrame = CFrame.lookAt(origin, origin + camera.CFrame.LookVector)
+	end)
+end
+
+return LampController
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="88">
             <Properties>
               <string name="Name">MenuController</string>
               <string name="Source"><![CDATA[--!strict
@@ -33266,6 +34681,7 @@ local WeaponRegistry = require(Shared.Registry.WeaponRegistry)
 local CosmeticRegistry = require(Shared.Registry.CosmeticRegistry)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local Widgets = require(script.Parent.Parent.UI.Widgets)
+local ArmoryPanel = require(script.Parent.Parent.UI.ArmoryPanel)
 local CameraController = require(script.Parent.CameraController)
 local InputController = require(script.Parent.InputController)
 local StateController = require(script.Parent.StateController)
@@ -33324,6 +34740,7 @@ local PANEL_TITLES: { [string]: string } = {
 	loadout = "Loadout",
 	inventory = "Inventory",
 	shop = "Stores",
+	armory = "Armory",
 	quests = "Orders",
 	rewards = "Rewards",
 	achievements = "Record",
@@ -33442,6 +34859,7 @@ builders.main = function(frame: Frame)
 		{ id = "crew", label = "Crew", detail = "Form a crew and depart." },
 		{ id = "loadout", label = "Loadout", detail = "Train, livery, weapons and appearance." },
 		{ id = "shop", label = "Stores", detail = "Liveries, cosmetics and supplies." },
+		{ id = "armory", label = "Armory", detail = "Inspect and equip weapons, and the passes." },
 		{ id = "quests", label = "Orders", detail = "Daily and weekly objectives." },
 		{ id = "rewards", label = "Rewards", detail = "Daily login and playtime." },
 		{ id = "achievements", label = "Record", detail = "Achievements and statistics." },
@@ -34170,6 +35588,18 @@ builders.shop = function(frame: Frame)
 	end)
 	local startIndex = table.find(ids, shopCategory) or 1
 	select(startIndex)
+end
+
+--------------------------------------------------------------------------
+-- Panel: armory
+--------------------------------------------------------------------------
+
+builders.armory = function(frame: Frame)
+	ArmoryPanel.build(frame, function()
+		if rebuild then
+			rebuild()
+		end
+	end)
 end
 
 --------------------------------------------------------------------------
@@ -34925,7 +36355,7 @@ return MenuController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="85">
+          <Item class="ModuleScript" referent="89">
             <Properties>
               <string name="Name">StateController</string>
               <string name="Source"><![CDATA[--!strict
@@ -35180,7 +36610,7 @@ return StateController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="86">
+          <Item class="ModuleScript" referent="90">
             <Properties>
               <string name="Name">TrainRideController</string>
               <string name="Source"><![CDATA[--!strict
@@ -35572,7 +37002,7 @@ return TrainRideController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="87">
+          <Item class="ModuleScript" referent="91">
             <Properties>
               <string name="Name">WeaponController</string>
               <string name="Source"><![CDATA[--!strict
@@ -35612,6 +37042,9 @@ local Logger = require(Shared.Core.Logger)
 local Net = require(Shared.Core.Net)
 local Spring = require(Shared.Core.Spring)
 local WeaponRegistry = require(Shared.Registry.WeaponRegistry)
+local WeaponModels = require(Shared.Registry.WeaponModels)
+local CosmeticRegistry = require(Shared.Registry.CosmeticRegistry)
+local CollectionService = game:GetService("CollectionService")
 local CameraController = require(script.Parent.CameraController)
 local InputController = require(script.Parent.InputController)
 local StateController = require(script.Parent.StateController)
@@ -35625,6 +37058,10 @@ local viewmodel: Model? = nil
 local viewmodelRoot: BasePart? = nil
 local muzzle: BasePart? = nil
 local currentWeaponId: string? = nil
+local currentFinish: string? = nil
+-- Arc Rail Projector: glowing parts, and when the trigger went down.
+local glowParts: { BasePart } = {}
+local chargeStartedAt: number? = nil
 
 local firing = false
 local aiming = false
@@ -35680,107 +37117,52 @@ local function buildHands(parent: Instance, skin: Color3)
 	end
 end
 
-local function buildViewmodel(def: WeaponRegistry.WeaponDef): (Model, BasePart, BasePart?)
-	local model = Instance.new("Model")
-	model.Name = "Viewmodel_" .. def.id
-
-	local root = makePart("Root", Vector3.new(0.2, 0.2, 0.2), CFrame.new(), C(0, 0, 0), Enum.Material.SmoothPlastic, model)
-	root.Transparency = 1
-
-	local spec = def.model
-	local bodyColour = spec.colour or C(80, 80, 84)
-	local gripColour = spec.gripColour or C(60, 44, 36)
-	local material = spec.material or Enum.Material.Metal
-	local length = spec.length or 1.5
-	local muzzlePart: BasePart? = nil
-
-	buildHands(model, C(196, 166, 138))
-
-	if def.kind == "melee" then
-		local shape = spec.shape
-		if shape == "axe" then
-			makePart("Haft", Vector3.new(0.22, 0.22, length), CFrame.new(0, -0.1, -length * 0.4), bodyColour, Enum.Material.Wood, model)
-			makePart("Head", Vector3.new(0.24, 0.9, 0.7), CFrame.new(0, 0.2, -length * 0.85), spec.headColour or C(112, 116, 120), Enum.Material.Metal, model)
-			makePart("Blade", Vector3.new(0.12, 1.1, 0.4), CFrame.new(0, 0.2, -length * 0.95), C(160, 164, 168), Enum.Material.Metal, model)
-		elseif shape == "crowbar" then
-			makePart("Shaft", Vector3.new(0.16, 0.16, length), CFrame.new(0, -0.1, -length * 0.4), bodyColour, material, model)
-			makePart("Claw", Vector3.new(0.16, 0.5, 0.34), CFrame.new(0, 0.06, -length * 0.85) * CFrame.Angles(math.rad(35), 0, 0), bodyColour, material, model)
-		else
-			makePart("Shaft", Vector3.new(0.18, 0.18, length), CFrame.new(0, -0.1, -length * 0.4), bodyColour, material, model)
-			makePart("Jaw", Vector3.new(0.34, 0.5, 0.5), CFrame.new(0, 0.02, -length * 0.82), bodyColour, material, model)
-			makePart("Grip", Vector3.new(0.22, 0.22, 0.6), CFrame.new(0, -0.1, 0.1), gripColour, Enum.Material.Fabric, model)
-		end
-	else
-		-- Firearms share a receiver, a grip and a barrel, differing in
-		-- proportion and in the details hung off them.
-		makePart("Receiver", Vector3.new(0.28, 0.4, length * 0.45), CFrame.new(0, -0.05, -length * 0.18), bodyColour, material, model)
-		makePart("Grip", Vector3.new(0.24, 0.62, 0.34), CFrame.new(0, -0.42, 0.12) * CFrame.Angles(math.rad(-14), 0, 0), gripColour, Enum.Material.Wood, model)
-		makePart("Trigger", Vector3.new(0.08, 0.2, 0.1), CFrame.new(0, -0.24, -0.05), C(40, 40, 42), Enum.Material.Metal, model)
-
-		local barrelLength = length * 0.55
-		local barrel = makePart(
-			"Barrel",
-			Vector3.new(0.16, 0.16, barrelLength),
-			CFrame.new(0, 0.02, -length * 0.45 - barrelLength * 0.35),
-			bodyColour,
-			Enum.Material.Metal,
-			model
-		)
-
-		if def.id == "shotgun" then
-			makePart("SecondBarrel", Vector3.new(0.16, 0.16, barrelLength), barrel.CFrame * CFrame.new(0.18, 0, 0), bodyColour, Enum.Material.Metal, model)
-			makePart("Forend", Vector3.new(0.4, 0.28, barrelLength * 0.5), barrel.CFrame * CFrame.new(0.09, -0.12, 0.3), gripColour, Enum.Material.Wood, model)
-		elseif def.id == "rifle" then
-			makePart("Stock", Vector3.new(0.24, 0.42, 0.9), CFrame.new(0, -0.14, 0.55), gripColour, Enum.Material.Wood, model)
-			makePart("Bolt", Vector3.new(0.12, 0.12, 0.5), CFrame.new(0.18, 0.1, -0.1), C(150, 150, 154), Enum.Material.Metal, model)
-			makePart("BoltHandle", Vector3.new(0.1, 0.28, 0.1), CFrame.new(0.26, 0.02, 0.02), C(150, 150, 154), Enum.Material.Metal, model)
-			makePart("Sight", Vector3.new(0.06, 0.16, 0.06), CFrame.new(0, 0.24, -length * 0.6), C(40, 40, 42), Enum.Material.Metal, model)
-		elseif def.id == "revolver" then
-			makePart("Cylinder", Vector3.new(0.3, 0.3, 0.34), CFrame.new(0, -0.02, -0.18), C(70, 70, 74), Enum.Material.Metal, model)
-			makePart("Hammer", Vector3.new(0.07, 0.16, 0.12), CFrame.new(0, 0.18, 0.08), C(50, 50, 52), Enum.Material.Metal, model)
-		elseif def.id == "flare_gun" then
-			makePart("WideBarrel", Vector3.new(0.3, 0.3, barrelLength * 0.7), barrel.CFrame * CFrame.new(0, 0, 0.1), bodyColour, Enum.Material.SmoothPlastic, model)
-		end
-
-		-- Front sight, so there is something to line up with.
-		makePart("FrontSight", Vector3.new(0.05, 0.12, 0.05), barrel.CFrame * CFrame.new(0, 0.14, -barrelLength * 0.45), C(40, 40, 42), Enum.Material.Metal, model)
-
-		local flash = makePart(
-			"Muzzle",
-			Vector3.new(0.1, 0.1, 0.1),
-			barrel.CFrame * CFrame.new(0, 0, -barrelLength * 0.5),
-			C(255, 220, 150),
-			Enum.Material.Neon,
-			model
-		)
-		flash.Transparency = 1
-		muzzlePart = flash
+local function finishFor(): WeaponModels.Finish?
+	local profile = StateController.profile()
+	local id = if profile and profile.loadout then profile.loadout.finish else nil
+	local def = if type(id) == "string" then CosmeticRegistry.get(id) else nil
+	if not def or def.slot ~= "finish" then
+		return nil
 	end
+	return { body = def.body, accent = def.accent, material = def.material }
+end
 
-	-- Weld everything to the root so the model can be posed as one object.
-	for _, descendant in model:GetDescendants() do
-		if descendant:IsA("BasePart") and descendant ~= root then
+--- The shared weapon model (WeaponModels) with a pair of hands on it, so the
+--- weapon in first person is the same object the armory shows and other
+--- players see in your hand.
+local function buildViewmodel(def: WeaponRegistry.WeaponDef): (Model, BasePart, BasePart?, { BasePart })
+	local built = WeaponModels.build(def, finishFor())
+	local model = built.model
+	model.Name = "Viewmodel_" .. def.id
+	buildHands(model, C(196, 166, 138))
+	for _, descendant in model:GetChildren() do
+		if descendant:IsA("BasePart") and descendant.Anchored and descendant ~= built.root then
 			local weld = Instance.new("WeldConstraint")
-			weld.Part0 = root
+			weld.Part0 = built.root
 			weld.Part1 = descendant
-			weld.Parent = root
+			weld.Parent = built.root
 			descendant.Anchored = false
 		end
 	end
-	root.Anchored = true
-
-	return model, root, muzzlePart
+	built.root.Anchored = true
+	return model, built.root, built.muzzle, built.glow
 end
 
 --------------------------------------------------------------------------
+-- Equipping--------------------------------------------------------------------------
 -- Equipping
 --------------------------------------------------------------------------
 
 local function equip(weaponId: string?)
-	if currentWeaponId == weaponId then
+	local profile = StateController.profile()
+	local finish = if profile and profile.loadout then profile.loadout.finish else nil
+	if currentWeaponId == weaponId and currentFinish == finish then
 		return
 	end
 	currentWeaponId = weaponId
+	currentFinish = finish
+	chargeStartedAt = nil
+	glowParts = {}
 
 	if viewmodel then
 		viewmodel:Destroy()
@@ -35797,11 +37179,12 @@ local function equip(weaponId: string?)
 		return
 	end
 
-	local model, root, flash = buildViewmodel(def)
+	local model, root, flash, glow = buildViewmodel(def)
 	model.Parent = Workspace.CurrentCamera
 	viewmodel = model
 	viewmodelRoot = root
 	muzzle = flash
+	glowParts = glow
 
 	-- The equip animation is a spring impulse rather than a keyframe sequence,
 	-- so it settles correctly even if the weapon is swapped mid-animation.
@@ -35891,6 +37274,59 @@ end
 -- Firing
 --------------------------------------------------------------------------
 
+local function aimRay(): (Vector3?, Vector3?)
+	local camera = Workspace.CurrentCamera
+	if not camera then
+		return nil, nil
+	end
+	return camera.CFrame.Position, camera.CFrame.LookVector
+end
+
+local function canUseWeapon(): boolean
+	return not (StateController.isDowned() or StateController.isDead() or StateController.ui("openPanel"))
+end
+
+--- Arc Rail Projector, trigger down: start charging, if it is not too hot.
+local function startCharge()
+	local def = if currentWeaponId then WeaponRegistry.get(currentWeaponId) else nil
+	if not def or not def.arc or not canUseWeapon() then
+		return
+	end
+	local weaponState = StateController.get("weapon")
+	if weaponState and (weaponState.overheatRemaining or 0) > 0 then
+		local AudioController = require(script.Parent.AudioController)
+		AudioController.play(def.dryCue or "gun_dry")
+		return
+	end
+	chargeStartedAt = os.clock()
+	Net.fireServer("WeaponCharge")
+	local AudioController = require(script.Parent.AudioController)
+	AudioController.play("arc_charge")
+end
+
+--- Trigger up: discharge if the charge is full, otherwise let it bleed off.
+local function releaseCharge()
+	local def = if currentWeaponId then WeaponRegistry.get(currentWeaponId) else nil
+	local started = chargeStartedAt
+	chargeStartedAt = nil
+	if not def or not def.arc or not started then
+		return
+	end
+	if os.clock() - started < def.arc.chargeSeconds or not canUseWeapon() then
+		return
+	end
+	local origin, direction = aimRay()
+	if not origin or not direction then
+		return
+	end
+	Net.fireServer("WeaponFire", origin, direction, nil, nil)
+	muzzleFlash()
+	local kick = def.viewmodel.recoilKick
+	rotationSpring:impulse(Vector3.new(kick.X * 4, kick.Y * 4, kick.Z))
+	positionSpring:impulse(Vector3.new(0, 0, 1.0))
+	CameraController.shake(0.2, 0.2)
+end
+
 local function tryFire()
 	local weaponId = currentWeaponId
 	if not weaponId then
@@ -35912,6 +37348,10 @@ local function tryFire()
 		return
 	end
 
+	if def.arc then
+		-- Charged weapons fire on release, not on press.
+		return
+	end
 	local now = os.clock()
 	if (now - lastFiredAt) < def.fireInterval then
 		return
@@ -36038,9 +37478,173 @@ local function onRenderStep(deltaTime: number)
 		0
 	)
 
+	local shake = Vector3.zero
+	if def.arc and #glowParts > 0 then
+		local charge = if chargeStartedAt then math.clamp((os.clock() - chargeStartedAt) / def.arc.chargeSeconds, 0, 1) else 0
+		local weaponState = StateController.get("weapon")
+		local heat = if weaponState and type(weaponState.heat) == "number" then weaponState.heat / 100 else 0
+		local hot = weaponState and (weaponState.overheatRemaining or 0) > 0
+		for _, part in glowParts do
+			if part.Name == "Capacitor" then
+				part.Color = C(70, 180, 255):Lerp(C(220, 250, 255), charge)
+				part.Material = if charge > 0.05 then Enum.Material.Neon else Enum.Material.Glass
+			else
+				part.Color = C(184, 112, 60):Lerp(C(255, 70, 30), if hot then 1 else heat * 0.8)
+				part.Material = if hot or heat > 0.5 then Enum.Material.Neon else Enum.Material.Metal
+			end
+		end
+		if charge > 0 then
+			-- A full charge hums in the hands.
+			shake = Vector3.new((math.random() - 0.5) * 0.012, (math.random() - 0.5) * 0.012, 0) * charge
+		end
+	end
+
 	root.CFrame = camera.CFrame
-		* CFrame.new(position + sway)
+		* CFrame.new(position + sway + shake)
 		* CFrame.Angles(rotation.X, rotation.Y, rotation.Z)
+end
+
+--------------------------------------------------------------------------
+-- Premium weapon effects
+--------------------------------------------------------------------------
+
+local function neon(name: string, size: Vector3, cf: CFrame, colour: Color3, transparency: number): Part
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Size = size
+	p.CFrame = cf
+	p.Color = colour
+	p.Material = Enum.Material.Neon
+	p.Transparency = transparency
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.CastShadow = false
+	p.Parent = Workspace
+	return p
+end
+
+--- A jagged arc between two points: a few neon segments that flicker out.
+local function lightning(from: Vector3, to: Vector3)
+	local points = { from }
+	local segments = 6
+	for i = 1, segments - 1 do
+		local t = i / segments
+		local jitter = Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * 1.6
+		table.insert(points, from:Lerp(to, t) + jitter)
+	end
+	table.insert(points, to)
+	local parts: { Part } = {}
+	for i = 1, #points - 1 do
+		local a, b = points[i], points[i + 1]
+		local d = (b - a).Magnitude
+		table.insert(parts, neon("Arc", Vector3.new(0.12, 0.12, d), CFrame.lookAt(a:Lerp(b, 0.5), b), C(170, 230, 255), 0))
+	end
+	local glow = neon("ArcLight", Vector3.new(0.2, 0.2, 0.2), CFrame.new(to), C(170, 230, 255), 1)
+	local light = Instance.new("PointLight")
+	light.Color = C(150, 210, 255)
+	light.Brightness = 8
+	light.Range = 30
+	light.Parent = glow
+	table.insert(parts, glow)
+	task.spawn(function()
+		for step = 1, 5 do
+			task.wait(0.03)
+			for _, p in parts do
+				if p.Name == "Arc" then
+					p.Transparency = step * 0.2
+				end
+			end
+			light.Brightness = 8 - step * 1.6
+		end
+		for _, p in parts do
+			p:Destroy()
+		end
+	end)
+end
+
+--- A label over a creature saying what the arc did to it. Resistance has to
+--- be visible, or a player will think the weapon simply missed.
+local function stunLabel(position: Vector3, stunned: number)
+	local anchor = neon("StunLabel", Vector3.new(0.2, 0.2, 0.2), CFrame.new(position + Vector3.new(0, 7, 0)), C(0, 0, 0), 1)
+	local gui = Instance.new("BillboardGui")
+	gui.Size = UDim2.fromOffset(160, 36)
+	gui.AlwaysOnTop = true
+	gui.Parent = anchor
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.GothamBold
+	label.TextSize = 20
+	label.TextStrokeTransparency = 0.4
+	label.TextColor3 = if stunned > 0 then C(170, 230, 255) else C(255, 150, 120)
+	label.Text = if stunned > 0 then string.format("STUNNED %.1fs", stunned) else "RESISTED"
+	label.Parent = gui
+	task.delay(1.6, function()
+		anchor:Destroy()
+	end)
+end
+
+--- The launcher's flare: bursts high, drifts down slowly, lights the ground
+--- around it, and outlines any creature underneath it for the whole crew.
+local function skyFlare(position: Vector3, landing: Vector3, seconds: number, revealRadius: number)
+	local flare = neon("SkyFlare", Vector3.new(0.9, 0.9, 0.9), CFrame.new(position), C(255, 110, 70), 0)
+	flare.Shape = Enum.PartType.Ball
+	local light = Instance.new("PointLight")
+	light.Color = C(255, 140, 100)
+	light.Brightness = 4
+	light.Range = 60
+	light.Shadows = true
+	light.Parent = flare
+	-- One light cannot reach past 60 studs, so the ground glow is spread over
+	-- four more around the landing point.
+	local spill: { Part } = {}
+	for i = 0, 3 do
+		local a = i * math.pi / 2
+		local p = neon("FlareSpill", Vector3.new(0.2, 0.2, 0.2), CFrame.new(landing + Vector3.new(math.cos(a) * 40, 14, math.sin(a) * 40)), C(0, 0, 0), 1)
+		local l = Instance.new("PointLight")
+		l.Color = C(255, 140, 100)
+		l.Brightness = 1.6
+		l.Range = 45
+		l.Parent = p
+		table.insert(spill, p)
+	end
+	local highlights: { [Model]: Highlight } = {}
+	local born = os.clock()
+	task.spawn(function()
+		while os.clock() - born < seconds do
+			local t = (os.clock() - born) / seconds
+			flare.CFrame = CFrame.new(position:Lerp(landing + Vector3.new(0, 4, 0), t))
+			light.Brightness = 4 * (1 - t * 0.5) * (0.85 + math.random() * 0.15)
+			for _, creature in CollectionService:GetTagged("Creature") do
+				if creature:IsA("Model") then
+					local pivot = creature:GetPivot().Position
+					local near = Vector3.new(pivot.X - landing.X, 0, pivot.Z - landing.Z).Magnitude <= revealRadius
+					if near and not highlights[creature] then
+						local h = Instance.new("Highlight")
+						h.FillColor = C(255, 120, 60)
+						h.FillTransparency = 0.75
+						h.OutlineColor = C(255, 190, 140)
+						h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+						h.Parent = creature
+						highlights[creature] = h
+					elseif not near and highlights[creature] then
+						highlights[creature]:Destroy()
+						highlights[creature] = nil
+					end
+				end
+			end
+			task.wait(0.1)
+		end
+		for _, h in highlights do
+			h:Destroy()
+		end
+		flare:Destroy()
+		for _, p in spill do
+			p:Destroy()
+		end
+	end)
 end
 
 --------------------------------------------------------------------------
@@ -36050,7 +37654,10 @@ function WeaponController.start()
 		if actionId == "fire" then
 			firing = pressed
 			if pressed then
+				startCharge()
 				tryFire()
+			else
+				releaseCharge()
 			end
 		elseif actionId == "aim" then
 			aiming = pressed
@@ -36062,6 +37669,8 @@ function WeaponController.start()
 	StateController.Changed:Connect(function(key, value)
 		if key == "weapon" and type(value) == "table" then
 			equip(value.equipped)
+		elseif key == "profile" and currentWeaponId then
+			equip(currentWeaponId)
 		elseif key == "expedition" and type(value) == "table" then
 			if value.state == "lobby" or value.state == "results" then
 				equip(nil)
@@ -36077,6 +37686,28 @@ function WeaponController.start()
 		-- locatable by sight as well as by sound.
 		if payload.kind == "fire" and payload.userId ~= player.UserId and payload.origin and payload.hitPosition then
 			tracer(payload.origin, payload.hitPosition)
+		elseif payload.kind == "arc" and typeof(payload.origin) == "Vector3" and typeof(payload.direction) == "Vector3" then
+			local AudioController = require(script.Parent.AudioController)
+			AudioController.play("arc_discharge", { position = payload.origin })
+			local from = payload.origin + payload.direction * 1.5 - Vector3.new(0, 0.4, 0)
+			local struck = if type(payload.struck) == "table" then payload.struck else {}
+			if #struck == 0 then
+				-- Nothing in reach: the arc grounds out at the end of its range.
+				lightning(from, payload.origin + payload.direction * (tonumber(payload.range) or 26))
+				lightning(from, payload.origin + payload.direction * (tonumber(payload.range) or 26) * 0.7)
+			end
+			for _, hit in struck do
+				if type(hit) == "table" and typeof(hit.position) == "Vector3" then
+					lightning(from, hit.position + Vector3.new(0, 2, 0))
+					lightning(from, hit.position + Vector3.new(0, 4, 0))
+					stunLabel(hit.position, tonumber(hit.stunned) or 0)
+					AudioController.play("arc_impact", { position = hit.position })
+				end
+			end
+		elseif payload.kind == "skyflare" and typeof(payload.position) == "Vector3" and typeof(payload.landing) == "Vector3" then
+			local AudioController = require(script.Parent.AudioController)
+			AudioController.play("flare_burst", { position = payload.position })
+			skyFlare(payload.position, payload.landing, math.clamp(tonumber(payload.seconds) or 20, 1, 40), tonumber(payload.revealRadius) or 100)
 		elseif payload.kind == "flare" and payload.position then
 			-- A burning flare denies ground; it needs to be unmistakable.
 			local flare = Instance.new("Part")
@@ -36131,11 +37762,392 @@ return WeaponController
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="88">
+        <Item class="Folder" referent="92">
           <Properties>
             <string name="Name">UI</string>
           </Properties>
-          <Item class="ModuleScript" referent="89">
+          <Item class="ModuleScript" referent="93">
+            <Properties>
+              <string name="Name">ArmoryPanel</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	ArmoryPanel
+	-----------
+	The lobby armory: every weapon you can carry, inspectable, with what it is
+	good and bad at, and the four Game Passes with exactly what they include.
+
+	HONESTY RULES THE PANEL FOLLOWS
+	-------------------------------
+	  - Prices are the live Roblox price fetched by the server, never a number
+	    written here. Until it arrives the card says so.
+	  - A pass that does not exist on Roblox yet says "Not available yet", and
+	    there is no buy button. Nothing pretends a purchase happened.
+	  - Ownership comes from the server's profile mirror of Roblox. If Roblox
+	    could not be asked, the panel says that and offers to ask again,
+	    instead of showing a wrong "not owned".
+	  - Owning a weapon is permanent. Equipping it chooses what you carry on
+	    your next run, and only one primary weapon can be carried.
+	  - A purchase prompt opens only from the Buy button.
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage:WaitForChild("LastSignal")
+
+local CosmeticRegistry = require(Shared.Registry.CosmeticRegistry)
+local Format = require(Shared.Core.Format)
+local Monetization = require(Shared.Config.Monetization)
+local Net = require(Shared.Core.Net)
+local WeaponModels = require(Shared.Registry.WeaponModels)
+local WeaponRegistry = require(Shared.Registry.WeaponRegistry)
+
+local StateController = require(script.Parent.Parent.Controllers.StateController)
+local Theme = require(script.Parent.Theme)
+local Widgets = require(script.Parent.Widgets)
+
+local ArmoryPanel = {}
+
+local C = Color3.fromRGB
+local player = Players.LocalPlayer
+
+-- The Conductor Collection is equipped as three loadout slots at once.
+local CONDUCTOR_SET: { [string]: string } = { finish = "finish_conductor", lamp = "lantern_conductor", patch = "badge_conductor" }
+local STANDARD_SET: { [string]: string } = { finish = "finish_standard", lamp = "lantern_standard", patch = "" }
+
+local tab = "premium"
+
+--- A turntable preview: the real weapon model, slowly turning, and draggable.
+local function preview(parent: Instance, def: WeaponRegistry.WeaponDef, finish: WeaponModels.Finish?, order: number)
+	local viewport = Instance.new("ViewportFrame")
+	viewport.Name = "Preview"
+	viewport.Size = UDim2.new(1, 0, 0, 150)
+	viewport.BackgroundColor3 = C(18, 20, 22)
+	viewport.LayoutOrder = order
+	viewport.Ambient = C(150, 150, 160)
+	viewport.LightColor = C(255, 240, 220)
+	viewport.LightDirection = Vector3.new(-1, -1.2, -0.6)
+	viewport.Parent = parent
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 6)
+	corner.Parent = viewport
+
+	local built = WeaponModels.build(def, finish)
+	built.root.Anchored = true
+	built.model.Parent = viewport
+	for _, part in built.glow do
+		-- The arc's capacitor glows in the armory, as if fully charged.
+		if part.Name == "Capacitor" then
+			part.Material = Enum.Material.Neon
+			part.Color = C(170, 230, 255)
+		end
+	end
+	local camera = Instance.new("Camera")
+	camera.FieldOfView = 30
+	camera.Parent = viewport
+	viewport.CurrentCamera = camera
+	local _, size = built.model:GetBoundingBox()
+	local distance = math.max(size.X, size.Y, size.Z) * 1.45 + 0.5
+
+	local yaw = math.rad(70)
+	local dragging = false
+	local lastX = 0
+	viewport.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			lastX = input.Position.X
+		end
+	end)
+	viewport.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = false
+		end
+	end)
+	viewport.InputChanged:Connect(function(input)
+		if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+			yaw += (input.Position.X - lastX) * 0.02
+			lastX = input.Position.X
+		end
+	end)
+
+	local centre = built.model:GetBoundingBox().Position
+	local connection: RBXScriptConnection? = nil
+	connection = RunService.RenderStepped:Connect(function(dt: number)
+		if not viewport.Parent then
+			if connection then
+				connection:Disconnect()
+			end
+			return
+		end
+		if not dragging then
+			yaw += dt * 0.5
+		end
+		local eye = centre + Vector3.new(math.sin(yaw), 0.35, math.cos(yaw)).Unit * distance
+		camera.CFrame = CFrame.lookAt(eye, centre)
+	end)
+end
+
+local function bullets(parent: Instance, heading: string, lines: { string }?, colour: Color3, order: number)
+	if not lines or #lines == 0 then
+		return
+	end
+	local text = heading
+	for _, line in lines do
+		text ..= "\n  •  " .. line
+	end
+	Widgets.label({ text = text, size = "small", colour = colour, wrap = true, parent = parent, layoutOrder = order })
+end
+
+local function finishFromLoadout(): WeaponModels.Finish?
+	local profile = StateController.profile()
+	local def = if profile and profile.loadout then CosmeticRegistry.get(profile.loadout.finish) else nil
+	if not def or def.slot ~= "finish" then
+		return nil
+	end
+	return { body = def.body, accent = def.accent, material = def.material }
+end
+
+--- The price and ownership line for one pass, filled in once the server's
+--- live catalogue arrives.
+type PassUi = { status: TextLabel, buy: Widgets.Button }
+
+function ArmoryPanel.build(frame: Frame, rebuild: () -> ())
+	local profile = StateController.profile()
+	if not profile then
+		Widgets.emptyState(frame, "Loading your profile.")
+		return
+	end
+	local column = Widgets.column(frame, 0.8)
+
+	-- Ownership check state, from the server.
+	local check = player:GetAttribute("PassCheck")
+	local checkText = "One primary weapon per run, whatever you own. Everything in the story can be finished with the free kit."
+	if check == "checking" then
+		checkText = "Checking your passes with Roblox..."
+	elseif check == "failed" then
+		checkText = "Roblox could not confirm your passes just now. Anything you own is safe; press Check again."
+	end
+	Widgets.caption(column, checkText, 1)
+	if check == "failed" then
+		local again = Widgets.button({ text = "Check again", parent = column, layoutOrder = 2 })
+		again.instance.Activated:Connect(function()
+			again.setEnabled(false)
+			again.setText("Checking...")
+			local result = Net.invokeServer("ShopCommand", "refresh_passes")
+			if type(result) == "table" and result.error == "WAIT" then
+				again.setText("Wait a moment, then try again")
+			end
+			task.delay(6, rebuild)
+		end)
+	end
+
+	local _, select = Widgets.tabs(column, { "Premium", "Free kit" }, function(index)
+		local wanted = if index == 1 then "premium" else "free"
+		if wanted ~= tab then
+			tab = wanted
+			rebuild()
+		end
+	end)
+	select(if tab == "premium" then 1 else 2)
+
+	local scroll = Widgets.scroll(column, 0.8)
+	scroll.LayoutOrder = 10
+	local passUis: { [string]: PassUi } = {}
+
+	local function card(order: number): Frame
+		local c = Widgets.panel({
+			name = "Card",
+			size = UDim2.new(1, 0, 0, 0),
+			padding = 1.0,
+			background = Theme.colour("surface"),
+			parent = scroll,
+		})
+		c.AutomaticSize = Enum.AutomaticSize.Y
+		c.LayoutOrder = order
+		return Widgets.column(c, 0.4)
+	end
+
+	local equipped = profile.loadout.primaryWeapon
+	local weapons = WeaponRegistry.all()
+	table.sort(weapons, function(a, b)
+		return a.name < b.name
+	end)
+
+	local order = 0
+	for _, def in weapons do
+		local premium = def.passKey ~= nil
+		if (tab == "premium") ~= premium then
+			continue
+		end
+		order += 1
+		local body = card(order)
+		local owned = def.startingLoadout or StateController.owns("weapon", def.id)
+		local locked = (profile.level or 1) < def.unlockLevel
+		preview(body, def, finishFromLoadout(), 1)
+		Widgets.label({ text = def.name, size = "heading", font = Theme.Font.heading, parent = body, layoutOrder = 2 })
+		Widgets.label({ text = def.description, size = "small", colour = Theme.colour("textMuted"), wrap = true, parent = body, layoutOrder = 3 })
+		bullets(body, "Strengths", def.pros, Theme.colour("signalGreen"), 4)
+		bullets(body, "Weaknesses", def.cons, Theme.colour("signalAmber"), 5)
+		local rules: string
+		if def.arc then
+			rules = string.format("Heat: %d per burst, overheats at 100 and locks for %d s. Charge %.1f s. Reach %d studs.", def.arc.heatPerBurst, def.arc.overheatLockSeconds, def.arc.chargeSeconds, def.range)
+		elseif def.kind == "firearm" then
+			rules = string.format("%d-round magazine, %.1f s reload. Ammunition: %s rounds%s.", def.magazineSize or 1, def.reloadSeconds or 0, def.ammoType or "-", if def.startingRounds then string.format(", %d to start each run", def.startingRounds) else "")
+		else
+			rules = "Melee. Costs stamina per swing."
+		end
+		Widgets.label({ text = rules, size = "small", font = Theme.Font.mono, wrap = true, parent = body, layoutOrder = 6 })
+
+		local status = Widgets.label({ text = "", size = "small", font = Theme.Font.mono, parent = body, layoutOrder = 7 })
+		if owned and not locked then
+			status.Text = if premium then "Owned permanently" else "Free"
+			status.TextColor3 = Theme.colour("signalGreen")
+			local isEquipped = equipped == def.id
+			local equip = Widgets.button({
+				text = if isEquipped then "Equipped for your next run (unequip)" else "Equip for your next run",
+				primary = not isEquipped,
+				parent = body,
+				layoutOrder = 8,
+			})
+			equip.instance.Activated:Connect(function()
+				equip.setEnabled(false)
+				-- Unequipping returns to the free wrench.
+				Net.fireServer("SetSetting", "loadout_primary", if isEquipped then "wrench" else def.id)
+				task.delay(0.4, rebuild)
+			end)
+		elseif locked then
+			status.Text = string.format("Unlocks at level %d", def.unlockLevel)
+			status.TextColor3 = Theme.colour("textMuted")
+		elseif premium and def.passKey then
+			status.Text = "Checking price..."
+			status.TextColor3 = Theme.colour("textMuted")
+			local buy = Widgets.button({ text = "Buy pass", primary = true, enabled = false, parent = body, layoutOrder = 8 })
+			passUis[def.passKey] = { status = status, buy = buy }
+		else
+			status.Text = "Buy with credits in the Stores"
+			status.TextColor3 = Theme.colour("textMuted")
+		end
+	end
+
+	-- The Conductor Collection.
+	if tab == "premium" then
+		order += 1
+		local body = card(order)
+		local pass = Monetization.get("pass_conductor")
+		local owned = StateController.owns("cosmetic", "finish_conductor")
+		local revolver = WeaponRegistry.get("revolver")
+		local finish = CosmeticRegistry.get("finish_conductor")
+		if revolver and finish then
+			preview(body, revolver, { body = finish.body, accent = finish.accent, material = finish.material }, 1)
+		end
+		Widgets.label({ text = "Conductor Collection", size = "heading", font = Theme.Font.heading, parent = body, layoutOrder = 2 })
+		Widgets.label({ text = if pass then pass.blurb else "", size = "small", colour = Theme.colour("textMuted"), wrap = true, parent = body, layoutOrder = 3 })
+		bullets(body, "Includes", {
+			"Conductor finish: black enamel and brass on every weapon (shown above on the revolver)",
+			"Conductor's Lamp: brass lantern at the hip, warm beam",
+			"Conductor's Badge: enamel CONDUCTOR plate above your head, mark on the crew board",
+		}, Theme.colour("text"), 4)
+		Widgets.caption(body, "Appearance only. No gameplay advantage.", 5)
+		local status = Widgets.label({ text = "", size = "small", font = Theme.Font.mono, parent = body, layoutOrder = 7 })
+		if owned then
+			status.Text = "Owned permanently"
+			status.TextColor3 = Theme.colour("signalGreen")
+			local wearing = profile.loadout.finish == CONDUCTOR_SET.finish
+			local wear = Widgets.button({
+				text = if wearing then "Wearing it (take it off)" else "Wear the collection",
+				primary = not wearing,
+				parent = body,
+				layoutOrder = 8,
+			})
+			wear.instance.Activated:Connect(function()
+				wear.setEnabled(false)
+				local set: { [string]: string } = if wearing then STANDARD_SET else CONDUCTOR_SET
+				for slot, id in pairs(set) do
+					Net.fireServer("SetSetting", "loadout_" .. slot, id)
+				end
+				task.delay(0.5, rebuild)
+			end)
+		else
+			status.Text = "Checking price..."
+			status.TextColor3 = Theme.colour("textMuted")
+			local buy = Widgets.button({ text = "Buy pass", primary = true, enabled = false, parent = body, layoutOrder = 8 })
+			passUis["pass_conductor"] = { status = status, buy = buy }
+		end
+	end
+
+	-- Live prices, after the panel is already on screen.
+	if next(passUis) then
+		task.spawn(function()
+			local result = Net.invokeServer("ShopCommand", "catalogue")
+			local entries = if type(result) == "table" and type(result.catalogue) == "table" then result.catalogue.entries else nil
+			for key, ui in passUis do
+				if not ui.status.Parent then
+					continue
+				end
+				local entry: any = nil
+				for _, e in entries or {} do
+					if e.key == key then
+						entry = e
+						break
+					end
+				end
+				if not entries then
+					ui.status.Text = "Could not reach the stores. Close and reopen to retry."
+					ui.status.TextColor3 = Theme.colour("signalRed")
+				elseif not entry then
+					ui.status.Text = "Not available yet"
+				elseif entry.owned then
+					ui.status.Text = "Owned permanently"
+					ui.status.TextColor3 = Theme.colour("signalGreen")
+				elseif entry.purchasable then
+					ui.status.Text = Format.price(entry.price) .. "  (live Roblox price)"
+					ui.status.TextColor3 = Theme.colour("brass")
+					ui.buy.setEnabled(true)
+					ui.buy.instance.Activated:Connect(function()
+						-- Disabled until Roblox reports the prompt closed, so a
+						-- double click cannot open two prompts.
+						ui.buy.setEnabled(false)
+						ui.buy.setText("Waiting for Roblox...")
+						local prompt = Net.invokeServer("ShopCommand", "prompt_robux", key)
+						if type(prompt) ~= "table" or not prompt.ok then
+							ui.buy.setText("Buy pass")
+							ui.buy.setEnabled(true)
+							local reason = if type(prompt) == "table" then tostring(prompt.error) else "no answer"
+							ui.status.Text = if reason == "BLOCKED" then "Purchases are paused right now." else "Could not open the purchase (" .. reason .. ")."
+							ui.status.TextColor3 = Theme.colour("signalRed")
+						end
+					end)
+				else
+					ui.status.Text = entry.unavailableReason or "Not available yet"
+				end
+			end
+		end)
+	end
+
+	-- A purchase closing, either way, returns the panel to a true state.
+	local connection: RBXScriptConnection? = nil
+	connection = Net.onClientEvent("PurchaseResult", function(payload)
+		if not frame.Parent then
+			if connection then
+				connection:Disconnect()
+			end
+			return
+		end
+		if type(payload) == "table" and payload.ok then
+			-- Ownership arrives with the profile once the server has asked
+			-- Roblox; rebuild a moment later to show it.
+			task.delay(2.5, rebuild)
+		else
+			rebuild()
+		end
+	end) :: any
+end
+
+return ArmoryPanel
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="94">
             <Properties>
               <string name="Name">Theme</string>
               <string name="Source"><![CDATA[--!strict
@@ -36409,7 +38421,7 @@ return Theme
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="90">
+          <Item class="ModuleScript" referent="95">
             <Properties>
               <string name="Name">Widgets</string>
               <string name="Source"><![CDATA[--!strict
@@ -37123,13 +39135,13 @@ return Widgets
       </Item>
     </Item>
   </Item>
-  <Item class="TextChatService" referent="91">
+  <Item class="TextChatService" referent="96">
     <Properties>
       <string name="Name">TextChatService</string>
       <token name="ChatVersion">1</token>
     </Properties>
   </Item>
-  <Item class="Workspace" referent="92">
+  <Item class="Workspace" referent="97">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>
@@ -37141,7 +39153,7 @@ return Widgets
       <int name="StreamingMinRadius">192</int>
       <int name="StreamingTargetRadius">640</int>
     </Properties>
-    <Item class="Terrain" referent="93">
+    <Item class="Terrain" referent="98">
       <Properties>
         <string name="Name">Terrain</string>
       </Properties>

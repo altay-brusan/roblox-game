@@ -251,6 +251,9 @@ local function actionFor(instance: Instance): (string?, string, string)
 	if instance:HasTag("StoresCounter") then
 		return "lobby", "Browse the stores", "Liveries, cosmetics and supplies"
 	end
+	if instance:HasTag("ArmoryRack") then
+		return "lobby", "Open the armory", "Premium weapons and the Conductor Collection"
+	end
 	if instance:HasTag("WorkshopBench") then
 		return "lobby", "Open your loadout", "Train, livery, weapon and appearance"
 	end

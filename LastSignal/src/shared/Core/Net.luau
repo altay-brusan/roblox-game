@@ -78,6 +78,9 @@ local MANIFEST: { [string]: RemoteSpec } = {
 	-- Combat ---------------------------------------------------------------
 	WeaponFire = { kind = "event", rate = { 16, 8 } },
 	WeaponReload = { kind = "event", rate = { 6, 2 } },
+	-- Arc Rail Projector: the moment the trigger went down. The server times
+	-- the charge from this, not from anything the client claims later.
+	WeaponCharge = { kind = "event", rate = { 8, 4 } },
 	WeaponEffect = { kind = "event" }, -- server -> client
 	MeleeSwing = { kind = "event", rate = { 10, 3 } },
 

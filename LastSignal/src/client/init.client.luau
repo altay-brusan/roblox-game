@@ -52,6 +52,7 @@ local BOOT_ORDER = {
 	{ name = "CabController", module = Controllers.CabController },
 	{ name = "TrainRideController", module = Controllers.TrainRideController },
 	{ name = "HorrorEffectsController", module = Controllers.HorrorEffectsController },
+	{ name = "LampController", module = Controllers.LampController },
 }
 
 local failures: { string } = {}

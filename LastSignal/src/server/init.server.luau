@@ -73,6 +73,8 @@ local BOOT_ORDER: { ServiceEntry } = {
 	{ name = "QuestService", module = Services.QuestService, stage = "Economy" },
 	{ name = "PurchaseService", module = Services.PurchaseService, stage = "Economy" },
 	{ name = "ShopService", module = Services.ShopService, stage = "Economy" },
+	{ name = "LoadoutService", module = Services.LoadoutService, stage = "Economy" },
+	{ name = "AppearanceService", module = Services.AppearanceService, stage = "Economy" },
 	{ name = "InventoryService", module = Services.InventoryService, stage = "Economy" },
 
 	{ name = "WorldService", module = Services.WorldService, stage = "World" },

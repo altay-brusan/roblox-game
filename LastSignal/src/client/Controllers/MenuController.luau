@@ -39,6 +39,7 @@ local WeaponRegistry = require(Shared.Registry.WeaponRegistry)
 local CosmeticRegistry = require(Shared.Registry.CosmeticRegistry)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local Widgets = require(script.Parent.Parent.UI.Widgets)
+local ArmoryPanel = require(script.Parent.Parent.UI.ArmoryPanel)
 local CameraController = require(script.Parent.CameraController)
 local InputController = require(script.Parent.InputController)
 local StateController = require(script.Parent.StateController)
@@ -97,6 +98,7 @@ local PANEL_TITLES: { [string]: string } = {
 	loadout = "Loadout",
 	inventory = "Inventory",
 	shop = "Stores",
+	armory = "Armory",
 	quests = "Orders",
 	rewards = "Rewards",
 	achievements = "Record",
@@ -215,6 +217,7 @@ builders.main = function(frame: Frame)
 		{ id = "crew", label = "Crew", detail = "Form a crew and depart." },
 		{ id = "loadout", label = "Loadout", detail = "Train, livery, weapons and appearance." },
 		{ id = "shop", label = "Stores", detail = "Liveries, cosmetics and supplies." },
+		{ id = "armory", label = "Armory", detail = "Inspect and equip weapons, and the passes." },
 		{ id = "quests", label = "Orders", detail = "Daily and weekly objectives." },
 		{ id = "rewards", label = "Rewards", detail = "Daily login and playtime." },
 		{ id = "achievements", label = "Record", detail = "Achievements and statistics." },
@@ -943,6 +946,18 @@ builders.shop = function(frame: Frame)
 	end)
 	local startIndex = table.find(ids, shopCategory) or 1
 	select(startIndex)
+end
+
+--------------------------------------------------------------------------
+-- Panel: armory
+--------------------------------------------------------------------------
+
+builders.armory = function(frame: Frame)
+	ArmoryPanel.build(frame, function()
+		if rebuild then
+			rebuild()
+		end
+	end)
 end
 
 --------------------------------------------------------------------------

@@ -246,3 +246,14 @@ cues are to be filled with the premium weapons work.
 Related variants share deliberately (footstep surfaces, rain intensities,
 door kinds). Two unrelated pairs remain: item_battery with train_rail_joint,
 and gun_dry with item_drop. They are listed here rather than hidden.
+
+## Premium weapon cues (2026-10-14)
+
+Eight cues added for the premium weapons. `arc_discharge` and `arc_impact` use
+Pro Sound Effects electrical bursts; `flare_burst` reuses the licensed
+`gun_flare` launch. `gun_carbine`, `reload_carbine`, `reload_launcher`,
+`arc_charge` and `arc_overheat` are silent: a search of the Roblox licensed
+libraries found no gunshot, reload or charge-up from Pro Sound Effects or APM,
+only unlicensed user uploads, which this project does not use. The gunshot has
+a subtitle, the overheat has a subtitle and a HUD readout. Filling these needs
+licensed audio uploaded to the experience. 69 of 91 cues are now configured.

@@ -34,6 +34,7 @@ local Format = require(Shared.Core.Format)
 local ItemRegistry = require(Shared.Registry.ItemRegistry)
 local Logger = require(Shared.Core.Logger)
 local Net = require(Shared.Core.Net)
+local WeaponRegistry = require(Shared.Registry.WeaponRegistry)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local Widgets = require(script.Parent.Parent.UI.Widgets)
 local InputController = require(script.Parent.InputController)
@@ -658,6 +659,9 @@ local function refreshQuickSlots()
 	end
 end
 
+-- When the last weapon state arrived, for cooling the arc readout locally.
+local weaponStampedAt: number? = nil
+
 local function refreshWeapon()
 	local weapon = StateController.get("weapon")
 	local panel = ammoPanel
@@ -676,6 +680,27 @@ local function refreshWeapon()
 	InputController.setTouchVisible("fire", true)
 	reticle.Visible = StateController.isOnExpedition() and not StateController.isDowned()
 
+	local arc = WeaponRegistry.get(weapon.equipped)
+	if arc and arc.arc and type(weapon.heat) == "number" then
+		-- The Arc Rail Projector has heat, not ammunition. The server sends
+		-- heat when it changes; it cools between updates, so cool it here too.
+		panel.Visible = true
+		InputController.setTouchVisible("reload", false)
+		if ammoLabel then
+			local since = os.clock() - (weaponStampedAt or os.clock())
+			local overheat = math.max(0, (weapon.overheatRemaining or 0) - since)
+			if overheat > 0 then
+				ammoLabel.Text = string.format("OVERHEATED %.0fs", math.ceil(overheat))
+				ammoLabel.TextColor3 = Theme.colour("signalRed")
+			else
+				local heat = math.max(0, weapon.heat - since * arc.arc.heatDecayPerSecond)
+				ammoLabel.Text = string.format("HEAT %d%%", math.floor(heat + 0.5))
+				ammoLabel.TextColor3 = if heat > 60 then Theme.colour("signalAmber") else Theme.colour("text")
+			end
+		end
+		return
+	end
+
 	if weapon.magazineSize then
 		panel.Visible = true
 		InputController.setTouchVisible("reload", true)
@@ -693,6 +718,16 @@ local function refreshWeapon()
 		InputController.setTouchVisible("reload", false)
 	end
 end
+
+task.spawn(function()
+	while true do
+		task.wait(0.25)
+		local weapon = StateController.get("weapon")
+		if weapon and type(weapon.heat) == "number" then
+			refreshWeapon()
+		end
+	end
+end)
 
 local function refreshDowned()
 	local vitals = StateController.get("vitals")
@@ -999,6 +1034,7 @@ function HUDController.start()
 		elseif key == "inventory" then
 			refreshQuickSlots()
 		elseif key == "weapon" then
+			weaponStampedAt = os.clock()
 			refreshWeapon()
 		elseif key == "crew" then
 			refreshCrew()

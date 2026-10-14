@@ -37,6 +37,7 @@
 
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage.LastSignal
@@ -62,7 +63,7 @@ PurchaseService.Purchased = Signal.new() :: Signal.Signal<Player, string, number
 
 -- GetProductInfo is a web call and is rate limited. Prices are cached, and the
 -- cache is what the shop displays, so the panel never blocks on the network.
-type PriceEntry = { price: number, name: string, fetchedAt: number, ok: boolean }
+type PriceEntry = { price: number, name: string, fetchedAt: number, ok: boolean, onSale: boolean }
 local priceCache: { [string]: PriceEntry } = {}
 local PRICE_TTL = 600
 
@@ -72,7 +73,7 @@ end
 
 --- Fetches the live price. Returns nil when the product is unconfigured or
 --- the lookup failed; callers must render that as Unavailable, never as free.
-function PurchaseService.getPrice(productKey: string): (number?, string?)
+function PurchaseService.getPrice(productKey: string): (number?, string?, boolean?)
 	local def = Monetization.get(productKey)
 	if not def or def.id <= 0 then
 		return nil, nil
@@ -81,7 +82,7 @@ function PurchaseService.getPrice(productKey: string): (number?, string?)
 	local key = cacheKey(def.kind, def.id)
 	local cached = priceCache[key]
 	if cached and cached.ok and (os.clock() - cached.fetchedAt) < PRICE_TTL then
-		return cached.price, cached.name
+		return cached.price, cached.name, cached.onSale
 	end
 
 	local infoType = if def.kind == "gamepass" then Enum.InfoType.GamePass else Enum.InfoType.Product
@@ -89,18 +90,23 @@ function PurchaseService.getPrice(productKey: string): (number?, string?)
 		return MarketplaceService:GetProductInfo(def.id, infoType)
 	end)
 
-	if ok and type(info) == "table" and type(info.PriceInRobux) == "number" then
+	if ok and type(info) == "table" and (type(info.PriceInRobux) == "number" or info.IsForSale == false) then
+		-- A pass taken off sale reports IsForSale = false and may have no
+		-- price at all. That is a state to show, not a failure.
+		local onSale = info.IsForSale ~= false
+		local price = if type(info.PriceInRobux) == "number" then info.PriceInRobux else 0
 		priceCache[key] = {
-			price = info.PriceInRobux,
+			price = price,
 			name = info.Name or def.name,
 			fetchedAt = os.clock(),
 			ok = true,
+			onSale = onSale,
 		}
-		return info.PriceInRobux, info.Name or def.name
+		return price, info.Name or def.name, onSale
 	end
 
 	log.warn(string.format("price lookup failed for %s (%s %d): %s", productKey, def.kind, def.id, tostring(info)))
-	priceCache[key] = { price = 0, name = def.name, fetchedAt = os.clock(), ok = false }
+	priceCache[key] = { price = 0, name = def.name, fetchedAt = os.clock(), ok = false, onSale = false }
 	return nil, nil
 end
 
@@ -140,6 +146,17 @@ local function applyGrants(player: Player, def: Monetization.ProductDef): { [str
 	for id in cosmeticIds do
 		if ProgressionService.grantUnlock(player, "cosmetic", id) then
 			table.insert(summary.cosmetics, id)
+		end
+	end
+
+	-- Weapons. A weapon pass grants the weapon itself; ammunition and the
+	-- current run's loadout follow the normal rules.
+	if type(grants.weapons) == "table" then
+		for _, id in grants.weapons do
+			if ProgressionService.grantUnlock(player, "weapon", id) then
+				summary.weapons = summary.weapons or {}
+				table.insert(summary.weapons, id)
+			end
 		end
 	end
 
@@ -279,18 +296,50 @@ end
 -- Game passes
 --------------------------------------------------------------------------
 
+--- Asks Roblox whether a player owns one pass. Studio can simulate ownership
+--- for testing, through a server-set attribute that clients cannot write and
+--- that does nothing outside Studio. Simulated grants are logged as such.
+local function queryPass(player: Player, def: Monetization.ProductDef): (boolean, any)
+	if RunService:IsStudio() and player:GetAttribute("SimulatePass_" .. def.key) == true then
+		log.warn(string.format("SIMULATED ownership of %s for %s (Studio test only)", def.key, player.Name))
+		return true, true
+	end
+	if def.id <= 0 then
+		return true, false
+	end
+	return Protect.call(function()
+		return MarketplaceService:UserOwnsGamePassAsync(player.UserId, def.id)
+	end)
+end
+
+-- Delays between attempts when Roblox cannot answer. Bounded: after the last
+-- one the player is told, and can ask again from the armory.
+local PASS_RETRY_DELAYS = { 2, 5, 12 }
+
 --- Queries Roblox for pass ownership and mirrors it into the profile.
 --- Only ever adds. A failed query must never revoke a pass.
+---
+--- Progress is published on the player as the PassCheck attribute
+--- ("checking", "ok" or "failed"), which the armory reads to show a checking
+--- state, and a failure with a retry button instead of a wrong "not owned".
 function PurchaseService.refreshPasses(player: Player)
-	local profile = DataService.getProfile(player)
-	if not profile then
+	if player:GetAttribute("PassCheck") == "checking" then
 		return
 	end
-	for _, def in Monetization.GamePasses do
-		if def.id > 0 then
-			local ok, owns = Protect.call(function()
-				return MarketplaceService:UserOwnsGamePassAsync(player.UserId, def.id)
-			end)
+	player:SetAttribute("PassCheck", "checking")
+	local attempt = 0
+	while true do
+		local profile = DataService.getProfile(player)
+		if not profile or not player.Parent then
+			player:SetAttribute("PassCheck", nil)
+			return
+		end
+		local failed = 0
+		for _, def in Monetization.All do
+			if def.kind ~= "gamepass" then
+				continue
+			end
+			local ok, owns = queryPass(player, def)
 			if ok and owns == true then
 				if (profile.purchases.products[def.key] or 0) <= 0 then
 					if recordPurchase(player, def, nil, 0) then
@@ -300,14 +349,27 @@ function PurchaseService.refreshPasses(player: Player)
 					end
 				else
 					-- Already mirrored, but re-apply grants so a pass bundle
-					-- that gained a new cosmetic in an update reaches players
-					-- who bought it before that update shipped.
+					-- that gained a new item in an update reaches players who
+					-- bought it before that update shipped.
 					applyGrants(player, def)
 				end
 			elseif not ok then
+				failed += 1
 				log.warn(string.format("pass check failed for %s / %s: %s", player.Name, def.key, tostring(owns)))
 			end
 		end
+		if failed == 0 then
+			player:SetAttribute("PassCheck", "ok")
+			ProgressionService.pushToClient(player)
+			return
+		end
+		attempt += 1
+		if attempt > #PASS_RETRY_DELAYS then
+			player:SetAttribute("PassCheck", "failed")
+			ProgressionService.pushToClient(player)
+			return
+		end
+		task.wait(PASS_RETRY_DELAYS[attempt])
 	end
 end
 
@@ -323,6 +385,11 @@ end
 -- Prompting
 --------------------------------------------------------------------------
 
+-- Players with a purchase prompt open, and since when. Cleared when Roblox
+-- reports the prompt closed; the time limit covers a close that never arrives.
+local promptOpen: { [number]: number } = {}
+local PROMPT_LOCK_SECONDS = 20
+
 --- Opens the Roblox purchase prompt. Returns false with a reason when the
 --- product is unconfigured, already owned, or prompts are currently blocked.
 function PurchaseService.prompt(player: Player, productKey: string, blockedReason: string?): (boolean, string?)
@@ -330,8 +397,17 @@ function PurchaseService.prompt(player: Player, productKey: string, blockedReaso
 	if not def then
 		return false, "UNKNOWN_PRODUCT"
 	end
+	if def.offered == false then
+		return false, "NOT_OFFERED"
+	end
 	if def.id <= 0 then
 		return false, "NOT_CONFIGURED"
+	end
+	-- One prompt at a time. A second press while the first prompt is open is
+	-- ignored rather than queued, so a double click never opens two prompts.
+	local openSince = promptOpen[player.UserId]
+	if openSince and os.clock() - openSince < PROMPT_LOCK_SECONDS then
+		return false, "PROMPT_OPEN"
 	end
 	if blockedReason then
 		-- Prompts are suppressed during cinematics, encounters and other
@@ -353,6 +429,7 @@ function PurchaseService.prompt(player: Player, productKey: string, blockedReaso
 		log.warn(string.format("prompt failed for %s: %s", productKey, tostring(err)))
 		return false, "PROMPT_FAILED"
 	end
+	promptOpen[player.UserId] = os.clock()
 	return true, nil
 end
 
@@ -373,6 +450,13 @@ function PurchaseService.start()
 	end
 
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, gamePassId, wasPurchased)
+		promptOpen[player.UserId] = nil
+		if not wasPurchased then
+			-- Cancelled or failed. Nothing is granted; the client is told so
+			-- the armory can return from its waiting state.
+			Net.fireClient("PurchaseResult", player, { ok = false, cancelled = true, gamePassId = gamePassId })
+			return
+		end
 		if wasPurchased then
 			-- Re-query rather than trusting the event, so the profile mirror
 			-- always reflects what Roblox actually believes.
@@ -382,6 +466,13 @@ function PurchaseService.start()
 				Net.fireClient("PurchaseResult", player, { ok = true, productKey = def.key, productName = def.name })
 			end
 		end
+	end)
+
+	MarketplaceService.PromptProductPurchaseFinished:Connect(function(userId)
+		promptOpen[userId] = nil
+	end)
+	Players.PlayerRemoving:Connect(function(player)
+		promptOpen[player.UserId] = nil
 	end)
 
 	DataService.ProfileLoaded:Connect(function(player)

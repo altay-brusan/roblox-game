@@ -1,0 +1,10 @@
+const fs = require("fs");
+const f = "server/Services/PurchaseService.luau";
+let s = fs.readFileSync(f, "utf8");
+const start = s.indexOf("--- Queries Roblox for pass ownership and mirrors it into the profile.");
+const end = s.indexOf("function PurchaseService.ownsProduct");
+if (start < 0 || end < 0) throw new Error("bounds");
+s = s.slice(0, start) + fs.readFileSync("../../tools/devsync/frag_refresh.luau", "utf8") + "\n" + s.slice(end);
+s = s.replace('local Players = game:GetService("Players")\n', 'local Players = game:GetService("Players")\nlocal RunService = game:GetService("RunService")\n');
+fs.writeFileSync(f, s);
+console.log("ok");

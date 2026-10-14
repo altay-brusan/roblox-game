@@ -21,6 +21,9 @@
 ]]
 
 local BuildKit = require(script.Parent.BuildKit)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local WeaponModels = require(ReplicatedStorage.LastSignal.Registry.WeaponModels)
+local WeaponRegistry = require(ReplicatedStorage.LastSignal.Registry.WeaponRegistry)
 
 local C = Color3.fromRGB
 local P = BuildKit.Palette
@@ -492,6 +495,63 @@ end
 --------------------------------------------------------------------------
 
 --------------------------------------------------------------------------
+-- Armory rack
+--------------------------------------------------------------------------
+
+-- A wall-mounted rack beside the stores hatch with the three premium weapons
+-- on it, built by the same code that builds them in your hands, so what is
+-- on the wall is exactly what you would carry. The rack opens the armory.
+local function buildArmory(cf: CFrame, parent: Instance, lights: { Light }): BasePart
+	local board = BuildKit.part({
+		name = "ArmoryBoard",
+		size = Vector3.new(12, 8, 0.6),
+		cf = cf * CFrame.new(0, 5.5, 0),
+		colour = C(52, 46, 40),
+		material = Enum.Material.WoodPlanks,
+		parent = parent,
+	})
+	board:AddTag("ArmoryRack")
+	for _, x in { -5.6, 5.6 } do
+		BuildKit.part({
+			name = "ArmoryPost",
+			size = Vector3.new(0.6, 10, 0.6),
+			cf = cf * CFrame.new(x, 5.0, 0.4),
+			colour = C(40, 36, 32),
+			material = Enum.Material.Wood,
+			parent = parent,
+		})
+	end
+	BuildKit.sign(cf * CFrame.new(0, 10.4, -0.35), 6, 1.2, "ARMORY", Enum.NormalId.Front, parent)
+	local display = { "nightwatch_carbine", "arc_projector", "flare_launcher" }
+	for i, id in display do
+		local def = WeaponRegistry.get(id)
+		if def then
+			local built = WeaponModels.build(def, nil)
+			built.model.Name = "Display_" .. id
+			-- Shown flat on pegs, side on, a little larger than life so they
+			-- read from across the yard.
+			built.model:ScaleTo(1.3)
+			built.root.Anchored = true
+			built.model:PivotTo(cf * CFrame.new(-0.2, 9.9 - i * 2.2, -0.6) * CFrame.Angles(0, math.rad(90), 0))
+			built.model.Parent = parent
+			for _, x in { -1.6, 1.6 } do
+				BuildKit.detail({
+					name = "Peg",
+					size = Vector3.new(0.15, 0.15, 0.5),
+					cf = cf * CFrame.new(x, 9.5 - i * 2.2, -0.45),
+					colour = C(150, 120, 64),
+					material = Enum.Material.Metal,
+					parent = parent,
+				})
+			end
+		end
+	end
+	local _, light = BuildKit.lamp(cf * CFrame.new(0, 11.4, -1.0), "bulkhead", C(255, 226, 180), 1.1, 18, parent)
+	table.insert(lights, light)
+	return board
+end
+
+--------------------------------------------------------------------------
 -- Platform 1
 --------------------------------------------------------------------------
 
@@ -860,6 +920,8 @@ function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): B
 	local workshopBench = buildWorkshop(originCF * CFrame.new(-86, 0, -20) * CFrame.Angles(0, math.rad(90), 0), model, lights, rng)
 	local crewBoard, noticeBoard = buildShelter(originCF * CFrame.new(52, 0, -30), model, lights)
 	local storesCounter = buildStoresHut(originCF * CFrame.new(74, 0, 60) * CFrame.Angles(0, math.rad(-90), 0), model, lights)
+	-- Facing the same way as the stores hatch, just past the hut's corner.
+	buildArmory(originCF * CFrame.new(88, 0, 79) * CFrame.Angles(0, math.rad(-90), 0), model, lights)
 
 	-- Water column by the departure road, the classic yard silhouette.
 	do

@@ -659,6 +659,8 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 			panel = "shop"
 		elseif target:HasTag("WorkshopBench") then
 			panel = "loadout"
+		elseif target:HasTag("ArmoryRack") then
+			panel = "armory"
 		end
 		if panel then
 			Net.fireClient("InteractResult", player, { ok = true, action = "open_panel", panel = panel })
@@ -1047,6 +1049,7 @@ function InteractionService.start()
 	wire("NoticeBoard", "Read", "Notice board", true)
 	wire("StoresCounter", "Browse", "Stores", true)
 	wire("WorkshopBench", "Open loadout", "Workshop bench", true)
+	wire("ArmoryRack", "Open armory", "Armory", true)
 
 	log.info("started")
 end

@@ -51,6 +51,10 @@ export type ProductDef = {
 	permanent: boolean,
 	-- Sort weight inside its shop category.
 	order: number,
+	-- False takes a product off sale: hidden in the shop and never prompted.
+	-- Used for a product whose benefit is not finished in the game, because
+	-- selling something that does not exist is not an option.
+	offered: boolean?,
 }
 
 --------------------------------------------------------------------------
@@ -63,7 +67,7 @@ local GAMEPASSES: { ProductDef } = {
 		kind = "gamepass",
 		id = 0,
 		name = "Signalman's Pass",
-		blurb = "Permanent: +25% credits and XP, a reserved cab seat cosmetic, the Signalman lantern skin, and a second daily quest slot.",
+		blurb = "Permanent: +25% credits and XP, the Signalman lamp and crew patch, and a second daily quest slot.",
 		suggestedPrice = 399,
 		category = "passes",
 		grants = {
@@ -97,7 +101,7 @@ local GAMEPASSES: { ProductDef } = {
 		kind = "gamepass",
 		id = 0,
 		name = "Workshop Access",
-		blurb = "Permanent: unlocks the lobby workshop bench for livery mixing, plus three exclusive interior kits.",
+		blurb = "Permanent: three exclusive carriage interior kits (brass, surveyor and ashwood), chosen at the workshop bench.",
 		suggestedPrice = 199,
 		category = "passes",
 		grants = {
@@ -106,6 +110,58 @@ local GAMEPASSES: { ProductDef } = {
 		},
 		permanent = true,
 		order = 3,
+	},
+
+	-- Premium weapons. Each grants permanent access to one weapon. Only one
+	-- primary weapon can be carried on a run, so owning all three never means
+	-- carrying all three.
+	{
+		key = "pass_nightwatch_carbine",
+		kind = "gamepass",
+		id = 0,
+		name = "Nightwatch Carbine",
+		blurb = "Permanent: the Nightwatch Carbine. Ten rounds, light recoil, the fastest drive-off in the game. Loud, uses scarce rifle rounds (20 to start each run), and cannot kill the Signal-Eater.",
+		suggestedPrice = 449,
+		category = "passes",
+		grants = { weapons = { "nightwatch_carbine" } },
+		permanent = true,
+		order = 4,
+	},
+	{
+		key = "pass_arc_projector",
+		kind = "gamepass",
+		id = 0,
+		name = "Arc Rail Projector",
+		blurb = "Permanent: the Arc Rail Projector. Hold to charge, release to stun everything in a short cone. No ammunition, but it overheats after three quick bursts, reaches 26 studs, and each stun on the Signal-Eater is shorter than the last.",
+		suggestedPrice = 449,
+		category = "passes",
+		grants = { weapons = { "arc_projector" } },
+		permanent = true,
+		order = 5,
+	},
+	{
+		key = "pass_flare_launcher",
+		kind = "gamepass",
+		id = 0,
+		name = "Signal Flare Launcher",
+		blurb = "Permanent: the Signal Flare Launcher. Flares hang over the target for 20 s, light the ground 85 studs around, outline the Signal-Eater for your crew, draw it away from you and deny the ground beneath. No damage. Six flares a run plus any you find.",
+		suggestedPrice = 299,
+		category = "passes",
+		grants = { weapons = { "flare_launcher" } },
+		permanent = true,
+		order = 6,
+	},
+	{
+		key = "pass_conductor",
+		kind = "gamepass",
+		id = 0,
+		name = "Conductor Collection",
+		blurb = "Permanent, appearance only: the Conductor finish (black enamel and brass on every weapon you carry), the Conductor's lamp (a brass lantern at your hip with a warm beam), and the Conductor's badge (an enamel plate above your head and beside your name on the crew board).",
+		suggestedPrice = 199,
+		category = "passes",
+		grants = { cosmetics = { "finish_conductor", "lantern_conductor", "badge_conductor" } },
+		permanent = true,
+		order = 7,
 	},
 }
 
@@ -164,7 +220,7 @@ local DEVELOPER_PRODUCTS: { ProductDef } = {
 	},
 	{
 		key = "livery_ember",
-		kind = "developerproduct",
+		kind = "gamepass",
 		id = 0,
 		name = "Livery: Ember Line",
 		blurb = "Permanent livery. Oxblood panels, brass trim, warm running lights that read clearly at distance in fog.",
@@ -176,7 +232,7 @@ local DEVELOPER_PRODUCTS: { ProductDef } = {
 	},
 	{
 		key = "livery_permafrost",
-		kind = "developerproduct",
+		kind = "gamepass",
 		id = 0,
 		name = "Livery: Permafrost",
 		blurb = "Permanent livery. Frost-bitten white over grey steel with ice-blue signal lamps.",
@@ -188,7 +244,7 @@ local DEVELOPER_PRODUCTS: { ProductDef } = {
 	},
 	{
 		key = "livery_nightpost",
-		kind = "developerproduct",
+		kind = "gamepass",
 		id = 0,
 		name = "Livery: Night Post",
 		blurb = "Permanent livery. Matte black with reflective hazard chevrons that catch your own headlights.",
@@ -200,7 +256,7 @@ local DEVELOPER_PRODUCTS: { ProductDef } = {
 	},
 	{
 		key = "lantern_kit",
-		kind = "developerproduct",
+		kind = "gamepass",
 		id = 0,
 		name = "Lamp Collection",
 		blurb = "Permanent: four cosmetic flashlight bodies, including the brass Dispatcher lamp with a warmer beam tint.",
@@ -212,9 +268,11 @@ local DEVELOPER_PRODUCTS: { ProductDef } = {
 	},
 	{
 		key = "crew_outfits",
-		kind = "developerproduct",
+		kind = "gamepass",
 		id = 0,
 		name = "Crew Wardrobe",
+		-- Outfits are not drawn on characters yet. Off sale until they are.
+		offered = false,
 		blurb = "Permanent: six crew outfits including the conductor's coat and the long-haul engineer's kit.",
 		suggestedPrice = 179,
 		category = "cosmetics",
@@ -233,7 +291,7 @@ local DEVELOPER_PRODUCTS: { ProductDef } = {
 	},
 	{
 		key = "tool_finishes",
-		kind = "developerproduct",
+		kind = "gamepass",
 		id = 0,
 		name = "Equipment Finishes",
 		blurb = "Permanent: worn brass, gunmetal and enamel finishes for your tools and weapons. Appearance only, no stat change.",
