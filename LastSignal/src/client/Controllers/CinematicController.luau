@@ -159,17 +159,24 @@ type Beat = { at: number, title: string?, subtitle: string?, fade: number? }
 -- the words land on the right shots. There is no closing fade here: the
 -- train running into the tunnel is the fade, sent by the server as a
 -- ScreenFade when it is actually inside.
+-- The prologue. The title is not here: it comes after the crossing, when
+-- the reply arrives (the server sends "title"). Lines in brackets describe
+-- sounds; the rest is the driver, who has no recorded voice yet.
 local BEATS: { Beat } = {
 	{ at = 0.0, fade = 0 },
-	{ at = 0.6, title = "LAST SIGNAL", subtitle = "A RIPGAMES production", fade = 1 },
-	{ at = 5.0, title = "", subtitle = "" },
-	{ at = 6.5, subtitle = "02:17. The last evacuation train out of Tolbridge Yard." },
-	{ at = 11.0, subtitle = "" },
-	{ at = 12.0, subtitle = "Regional communications failed eleven days ago." },
+	{ at = 0.4, subtitle = "02:17, Up Main. The last service out of Tolbridge Yard.", fade = 1 },
+	{ at = 2.2, subtitle = "ROLE" },
+	{ at = 3.8, subtitle = "[Driver, on the PA] Evening, all. Next stop Marrow Halt. Sit back, it's a quiet one." },
+	{ at = 6.6, subtitle = "" },
+	{ at = 6.8, subtitle = "[A heavy bang from the rear carriage]" },
+	{ at = 8.3, subtitle = "" },
+	{ at = 8.8, subtitle = "[The carriage is empty. Every seat.]" },
+	{ at = 11.6, subtitle = "[Driver] Control, this is the zero two seventeen. I've lost my passengers. Control?" },
 	{ at = 16.0, subtitle = "" },
-	{ at = 17.0, subtitle = "Ninety kilometres of line. Five stops. Do not trust every voice on the radio." },
-	{ at = 22.0, subtitle = "" },
 }
+
+-- Set from the play message: whether this player is the driver.
+local isDriver = false
 
 local function applyBeat(beat: Beat)
 	local info = Theme.tweenInfo(0.6)
@@ -178,7 +185,17 @@ local function applyBeat(beat: Beat)
 		TweenService:Create(titleLabel, info, { TextTransparency = if beat.title == "" then 1 else 0 }):Play()
 	end
 	if beat.subtitle ~= nil and subtitleLabel then
-		subtitleLabel.Text = beat.subtitle
+		local text = beat.subtitle
+		if text == "ROLE" then
+			-- One storyline in co-op: the crew leader is the driver, the rest
+			-- are conductors on the same doomed service.
+			text = if isDriver then "You are the driver tonight." else "You are a conductor tonight. The driver is up front."
+		end
+		-- Subtitles follow the setting; without them the scene still plays.
+		if text ~= "" and not StateController.setting("subtitles", true) then
+			text = ""
+		end
+		subtitleLabel.Text = text
 		TweenService:Create(subtitleLabel, info, { TextTransparency = if beat.subtitle == "" then 1 else 0 }):Play()
 	end
 	if beat.fade ~= nil and fadeFrame then
@@ -189,6 +206,30 @@ end
 --------------------------------------------------------------------------
 -- Lifecycle
 --------------------------------------------------------------------------
+
+local carriageModel: Model? = nil
+
+--- The title, after the crossing, over play: the reply has just come in.
+--- It does not take control away; it fades in and out over the world.
+local function titleCard()
+	local label = titleLabel
+	if not label or running then
+		return
+	end
+	if root then
+		root.Visible = true
+	end
+	label.Text = "LAST SIGNAL"
+	TweenService:Create(label, Theme.tweenInfo(1.6), { TextTransparency = 0 }):Play()
+	task.delay(4.5, function()
+		TweenService:Create(label, Theme.tweenInfo(1.6), { TextTransparency = 1 }):Play()
+		task.delay(1.7, function()
+			if root and not running then
+				root.Visible = false
+			end
+		end)
+	end)
+end
 
 local function setLetterbox(active: boolean)
 	local height = if active then UDim2.new(1, 0, 0.12, 0) else UDim2.new(1, 0, 0, 0)
@@ -259,7 +300,7 @@ local function begin(duration: number, skippableAfter: number, anchor: CFrame?, 
 
 	-- Reduced motion swaps the moving camera for held frames; the camera
 	-- controller handles that itself.
-	CameraController.startCinematic(duration, anchor, model)
+	CameraController.startCinematic(duration, anchor, model, carriageModel)
 
 	AudioController.loop("cinematic_music", "music_departure")
 
@@ -361,9 +402,13 @@ function CinematicController.start()
 		if payload.action == "play" then
 			local model = if typeof(payload.trainModel) == "Instance" and payload.trainModel:IsA("Model") then payload.trainModel else nil
 			local anchor = if typeof(payload.trainCFrame) == "CFrame" then payload.trainCFrame else nil
+			carriageModel = if typeof(payload.carriageModel) == "Instance" and payload.carriageModel:IsA("Model") then payload.carriageModel else nil
+			isDriver = payload.driverUserId == player.UserId
 			begin(payload.duration or GameConfig.CinematicSeconds, payload.skippableAfter or 2, anchor, model)
 		elseif payload.action == "stop" then
 			finish()
+		elseif payload.action == "title" then
+			titleCard()
 		elseif payload.action == "skipvote" and skipLabel and running then
 			skipLabel.Text = string.format("Skipping  %d of %d", payload.votes or 0, payload.needed or 1)
 		end

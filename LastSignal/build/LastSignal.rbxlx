@@ -14800,6 +14800,7 @@ local StationRegistry = require(Shared.Registry.StationRegistry)
 
 local CrewService = require(script.Parent.CrewService)
 local DepartureService = require(script.Parent.DepartureService)
+local Prologue = require(script.Parent.Parent.World.Prologue)
 local DataService = require(script.Parent.DataService)
 local InventoryService = require(script.Parent.InventoryService)
 local ProgressionService = require(script.Parent.ProgressionService)
@@ -15649,6 +15650,11 @@ function ExpeditionService.begin(crew: CrewService.Crew, members: { Player })
 			Net.fireClient("Notify", player, { kind = "info", title = "Platform 1", body = message, duration = 8 })
 		end
 	end)
+	if service then
+		-- The 02:17 is an ordinary service until the rear carriage: people
+		-- in the seats, visible from the platform and on the way aboard.
+		Prologue.seatPassengers(service.train)
+	end
 	if not service then
 		WorldService.releaseLane(lane)
 		abandonStart(
@@ -15781,8 +15787,20 @@ function ExpeditionService.begin(crew: CrewService.Crew, members: { Player })
 		skippableAfter = GameConfig.CinematicSkippableAfter,
 		trainModel = yard.train.built.model,
 		trainCFrame = yard.train.built.root.CFrame,
+		carriageModel = yard.train.built.carriages[1],
+		driverUserId = members[1] and members[1].UserId or 0,
 	})
-	ExpeditionService.fireRadio(expedition, "expedition_start")
+	-- The passengers go between the bang and the look back down the aisle.
+	-- Timed to the shots in CameraController; it happens even if the crew
+	-- skipped the sequence, because it happens to the train, not the camera.
+	task.delay(6.8, function()
+		local rear = yard.train.built.carriages[#yard.train.built.carriages] or yard.train.built.model
+		broadcast(expedition, "HorrorCue", { cue = "train_coupler", position = rear:GetPivot().Position })
+		broadcast(expedition, "HorrorCue", { cue = "lights_flicker", position = yard.train.built.root.Position, seconds = 2.6 })
+	end)
+	task.delay(8.3, function()
+		Prologue.vanish(yard.train)
+	end)
 
 	local platformDistance, tunnelDistance = DepartureService.lobbyGeometry()
 	-- Start streaming the line in for each member while the train is still
@@ -15903,13 +15921,36 @@ function ExpeditionService.arriveOnLine(expedition: Expedition)
 	TrainService.setStopDistance(expedition.train, StationRegistry.Stations[1].distance)
 	setState(expedition, "travelling")
 	ExpeditionService.takeCheckpoint(expedition)
+
+	-- The other side of the crossing: what is left, where the yard went,
+	-- and who answers.
+	Prologue.leaveBelongings(expedition.train)
+	Prologue.placeNameboard(expedition.train, expedition.lane.dropContainer)
 	notify(
 		expedition,
 		"info",
 		"02:17, Up Main",
-		"The yard pilot has handed her over. The cab is at the front: take the driver's seat.",
+		"Every passenger is gone. The cab is at the front: take the driver's seat.",
 		8
 	)
+	local function say(attribution: string, text: string, duration: number, source: string?)
+		broadcast(expedition, "RadioMessage", { id = "prologue", source = source or "crew", text = text, duration = duration, attribution = attribution, isFalse = false })
+	end
+	local steps: { { at: number, run: () -> () } } = {
+		{ at = 3, run = function() say("Driver", "Control, this is the zero two seventeen. My passengers are gone. All of them. Control, do you read?", 6) end },
+		{ at = 10, run = function() say("Radio", "[Static. Nothing from Control.]", 4, "recording") end },
+		{ at = 14, run = function() say("Driver", "That's our yard's nameboard. In the trees. Where's the yard?", 5) end },
+		{ at = 20, run = function() ExpeditionService.fireRadio(expedition, "expedition_start") end },
+		{ at = 23, run = function() broadcast(expedition, "Cinematic", { action = "title" }) end },
+		{ at = 40, run = function() say("Driver", "That answered before I'd finished asking. And it said we're the last one out. Out of where?", 7) end },
+	}
+	for _, step in steps do
+		task.delay(step.at, function()
+			if expedition.state ~= "closed" then
+				step.run()
+			end
+		end)
+	end
 end
 
 local cinematicSkipVotes: { [string]: { [number]: boolean } } = {}
@@ -29202,6 +29243,181 @@ return LobbyBuilder
         </Item>
         <Item class="ModuleScript" referent="75">
           <Properties>
+            <string name="Name">Prologue</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	Prologue
+	--------
+	The opening of the story, staged on the real train (V2 section 12).
+
+	The 02:17 leaves the yard as an ordinary service: passengers in the
+	seats, warm light, the driver on the PA. A bang from the rear carriage,
+	the lights stutter, and when the camera looks back down the aisle every
+	passenger is gone, their bags and hats and newspapers still on the seats.
+	The tunnel is the crossing. On the other side the belongings are still
+	there, the yard's own nameboard stands alone in the forest where the yard
+	should be, the driver calls Control and gets nothing, and then a reply
+	arrives that is too quick and too calm. Title. First task: take the
+	controls.
+
+	This module builds the people and things for that; ExpeditionService
+	runs the timing, and CinematicController and CameraController film it.
+]]
+
+local BuildKit = require(script.Parent.BuildKit)
+
+local C = Color3.fromRGB
+
+local Prologue = {}
+
+-- Coats, skin and hats for a carriage of ordinary people. Picked in turn,
+-- not at random, so the same seats always hold the same people.
+local COATS = { C(70, 64, 58), C(42, 52, 70), C(96, 70, 52), C(58, 66, 54), C(110, 40, 44), C(48, 48, 52), C(140, 120, 90) }
+local SKIN = { C(234, 192, 160), C(196, 150, 112), C(140, 96, 66), C(98, 64, 44), C(222, 180, 140) }
+local BELONGINGS = { "bag", "hat", "paper", "bag", "coat", "paper", "flask" }
+
+local function part(name: string, size: Vector3, cf: CFrame, colour: Color3, material: Enum.Material, parent: Instance, root: BasePart): Part
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Size = size
+	p.CFrame = cf
+	p.Color = colour
+	p.Material = material
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.Massless = true
+	p.Parent = parent
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = root
+	weld.Part1 = p
+	weld.Parent = p
+	return p
+end
+
+local function seats(train: any): { Seat }
+	local out: { Seat } = {}
+	for _, carriage in train.built.carriages do
+		for _, d in carriage:GetDescendants() do
+			if d:IsA("Seat") and d:HasTag("TrainSeat") then
+				table.insert(out, d)
+			end
+		end
+	end
+	table.sort(out, function(a, b)
+		return a:GetFullName() < b:GetFullName()
+	end)
+	return out
+end
+
+local function belonging(kind: string, seat: Seat, parent: Instance, root: BasePart, i: number)
+	local top = seat.CFrame * CFrame.new(0, seat.Size.Y * 0.5, 0)
+	if kind == "bag" then
+		part("Bag", Vector3.new(1.2, 0.9, 0.6), top * CFrame.new(0.2, 0.45, 0.1), COATS[(i % #COATS) + 1], Enum.Material.Fabric, parent, root)
+	elseif kind == "hat" then
+		part("HatBrim", Vector3.new(1.1, 0.08, 1.1), top * CFrame.new(-0.2, 0.06, 0), C(40, 36, 34), Enum.Material.Fabric, parent, root)
+		part("HatCrown", Vector3.new(0.7, 0.4, 0.7), top * CFrame.new(-0.2, 0.3, 0), C(40, 36, 34), Enum.Material.Fabric, parent, root)
+	elseif kind == "paper" then
+		part("Newspaper", Vector3.new(1.0, 0.04, 1.3), top * CFrame.new(0, 0.04, 0) * CFrame.Angles(0, math.rad(15 + i * 7), 0), C(214, 208, 192), Enum.Material.SmoothPlastic, parent, root)
+	elseif kind == "coat" then
+		part("FoldedCoat", Vector3.new(1.3, 0.3, 1.0), top * CFrame.new(0, 0.15, 0), COATS[((i + 3) % #COATS) + 1], Enum.Material.Fabric, parent, root)
+	else
+		part("Flask", Vector3.new(0.3, 0.7, 0.3), top * CFrame.new(0.3, 0.35, -0.2), C(150, 150, 154), Enum.Material.Metal, parent, root)
+	end
+end
+
+--- Fills every other seat with a passenger. Returns the folder they are in.
+function Prologue.seatPassengers(train: any): Folder
+	local folder = Instance.new("Folder")
+	folder.Name = "Passengers"
+	folder.Parent = train.built.model
+	local root = train.built.root
+	for i, seat in seats(train) do
+		if i % 2 == 1 and not seat.Occupant then
+			local person = Instance.new("Model")
+			person.Name = "Passenger"
+			local coat = COATS[(i % #COATS) + 1]
+			local skin = SKIN[(i % #SKIN) + 1]
+			local base = seat.CFrame * CFrame.new(0, seat.Size.Y * 0.5, 0)
+			part("Hips", Vector3.new(1.6, 0.7, 1.4), base * CFrame.new(0, 0.35, 0.1), C(44, 44, 50), Enum.Material.Fabric, person, root)
+			part("Torso", Vector3.new(1.7, 2.0, 1.0), base * CFrame.new(0, 1.7, 0.35), coat, Enum.Material.Fabric, person, root)
+			part("Head", Vector3.new(1.0, 1.1, 1.0), base * CFrame.new(0, 3.25, 0.3) * CFrame.Angles(math.rad(-6 + (i % 3) * 6), math.rad((i % 4 - 1.5) * 10), 0), skin, Enum.Material.SmoothPlastic, person, root)
+			for _, side in { -1, 1 } do
+				part("Thigh", Vector3.new(0.6, 0.6, 1.5), base * CFrame.new(side * 0.42, 0.45, -0.6), C(44, 44, 50), Enum.Material.Fabric, person, root)
+				part("Shin", Vector3.new(0.55, 1.5, 0.55), base * CFrame.new(side * 0.42, -0.45, -1.25), C(44, 44, 50), Enum.Material.Fabric, person, root)
+				part("Arm", Vector3.new(0.45, 1.7, 0.45), base * CFrame.new(side * 1.05, 1.5, 0.2) * CFrame.Angles(math.rad(-25), 0, 0), coat, Enum.Material.Fabric, person, root)
+			end
+			if i % 3 == 0 then
+				part("Hat", Vector3.new(1.1, 0.35, 1.1), base * CFrame.new(0, 3.95, 0.3), C(40, 36, 34), Enum.Material.Fabric, person, root)
+			end
+			person:SetAttribute("Belonging", BELONGINGS[(i % #BELONGINGS) + 1])
+			person:SetAttribute("Seat", seat:GetFullName())
+			person.Parent = folder
+		end
+	end
+	return folder
+end
+
+--- Every passenger is gone; what they had is left on the seat.
+function Prologue.vanish(train: any)
+	local folder = train.built.model:FindFirstChild("Passengers")
+	if not folder then
+		return
+	end
+	local left = Instance.new("Folder")
+	left.Name = "Belongings"
+	left.Parent = train.built.model
+	local bySeat: { [string]: Seat } = {}
+	for _, seat in seats(train) do
+		bySeat[seat:GetFullName()] = seat
+	end
+	for i, person in folder:GetChildren() do
+		local seat = bySeat[tostring(person:GetAttribute("Seat"))]
+		if seat then
+			belonging(tostring(person:GetAttribute("Belonging")), seat, left, train.built.root, i)
+		end
+	end
+	folder:Destroy()
+end
+
+--- The same belongings on the expedition train, so the crossing is seamless.
+function Prologue.leaveBelongings(train: any)
+	if train.built.model:FindFirstChild("Belongings") then
+		return
+	end
+	local left = Instance.new("Folder")
+	left.Name = "Belongings"
+	left.Parent = train.built.model
+	for i, seat in seats(train) do
+		if i % 2 == 1 then
+			belonging(BELONGINGS[(i % #BELONGINGS) + 1], seat, left, train.built.root, i)
+		end
+	end
+end
+
+--- The yard's nameboard, alone in the forest, ahead of where the train
+--- comes out of the crossing. The yard is not there.
+function Prologue.placeNameboard(train: any, parent: Instance)
+	local cf = train.origin * CFrame.new(10.5, 0, -(train.distance + 140)) * CFrame.Angles(0, math.rad(-90), 0)
+	for _, x in { -3.6, 3.6 } do
+		BuildKit.part({
+			name = "NameboardPost",
+			size = Vector3.new(0.5, 7, 0.5),
+			cf = cf * CFrame.new(x, 3.5, 0),
+			colour = C(60, 58, 54),
+			material = Enum.Material.CorrodedMetal,
+			parent = parent,
+		})
+	end
+	BuildKit.sign(cf * CFrame.new(0, 6.4, 0), 8.5, 1.6, "TOLBRIDGE YARD", Enum.NormalId.Front, parent)
+end
+
+return Prologue
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="76">
+          <Properties>
             <string name="Name">StationBuilder</string>
             <string name="Source"><![CDATA[--!strict
 --[[
@@ -30861,7 +31077,7 @@ return StationBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="76">
+        <Item class="ModuleScript" referent="77">
           <Properties>
             <string name="Name">TrainBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -33175,12 +33391,12 @@ return TrainBuilder
       </Item>
     </Item>
   </Item>
-  <Item class="ServerStorage" referent="77">
+  <Item class="ServerStorage" referent="78">
     <Properties>
       <string name="Name">ServerStorage</string>
     </Properties>
   </Item>
-  <Item class="SoundService" referent="78">
+  <Item class="SoundService" referent="79">
     <Properties>
       <string name="Name">SoundService</string>
       <float name="DistanceFactor">8</float>
@@ -33189,14 +33405,14 @@ return TrainBuilder
       <float name="RolloffScale">1.25</float>
     </Properties>
   </Item>
-  <Item class="StarterGui" referent="79">
+  <Item class="StarterGui" referent="80">
     <Properties>
       <string name="Name">StarterGui</string>
       <bool name="ResetPlayerGuiOnSpawn">false</bool>
       <token name="ScreenOrientation">4</token>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="80">
+  <Item class="StarterPlayer" referent="81">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <bool name="AutoJumpEnabled">false</bool>
@@ -33208,16 +33424,16 @@ return TrainBuilder
       <bool name="EnableMouseLockOption">false</bool>
       <bool name="LoadCharacterAppearance">true</bool>
     </Properties>
-    <Item class="StarterCharacterScripts" referent="81">
+    <Item class="StarterCharacterScripts" referent="82">
       <Properties>
         <string name="Name">StarterCharacterScripts</string>
       </Properties>
     </Item>
-    <Item class="StarterPlayerScripts" referent="82">
+    <Item class="StarterPlayerScripts" referent="83">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="83">
+      <Item class="LocalScript" referent="84">
         <Properties>
           <string name="Name">LastSignalClient</string>
           <string name="Source"><![CDATA[--!strict
@@ -33393,11 +33609,11 @@ else
 end
 ]]></string>
         </Properties>
-        <Item class="Folder" referent="84">
+        <Item class="Folder" referent="85">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="85">
+          <Item class="ModuleScript" referent="86">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--!strict
@@ -34054,7 +34270,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="86">
+          <Item class="ModuleScript" referent="87">
             <Properties>
               <string name="Name">CabController</string>
               <string name="Source"><![CDATA[--!strict
@@ -34611,7 +34827,7 @@ return CabController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="87">
+          <Item class="ModuleScript" referent="88">
             <Properties>
               <string name="Name">CameraController</string>
               <string name="Source"><![CDATA[--!strict
@@ -34847,10 +35063,12 @@ end
 --   train   relative to the moving train, so the camera travels with it
 --
 -- Offsets are in the train's own frame: -Z is ahead, +X is the platform side.
+--   carriage  inside the first carriage, from its floor at the centre;
+--           Z is in half-lengths of the carriage (1 is its rear end)
 type Shot = {
 	t0: number,
 	t1: number,
-	space: "world" | "train",
+	space: "world" | "train" | "carriage",
 	fromA: Vector3,
 	lookA: Vector3,
 	fromB: Vector3,
@@ -34861,36 +35079,48 @@ local SHOTS: { Shot } = {
 	-- Low on the platform ahead of the train as it begins to move.
 	{
 		t0 = 0,
-		t1 = 6,
+		t1 = 3.5,
 		space = "world",
 		fromA = Vector3.new(16, 6, -60),
 		lookA = Vector3.new(0, 7, 10),
 		fromB = Vector3.new(16, 6.5, -57),
 		lookB = Vector3.new(0, 7, 2),
 	},
-	-- Running alongside the cab.
+	-- Inside, from the front of the first carriage, facing the passengers:
+	-- people in the seats, warm light, an ordinary night.
 	{
-		t0 = 6,
-		t1 = 11,
-		space = "train",
-		fromA = Vector3.new(15, 8, 6),
-		lookA = Vector3.new(0, 7, -25),
-		fromB = Vector3.new(15, 8, -6),
-		lookB = Vector3.new(0, 7, -36),
+		t0 = 3.5,
+		t1 = 6.8,
+		space = "carriage",
+		fromA = Vector3.new(0, 5.6, -0.88),
+		lookA = Vector3.new(0, 4.2, 0.9),
+		fromB = Vector3.new(0, 5.4, -0.8),
+		lookB = Vector3.new(0.2, 4.0, 0.9),
 	},
-	-- High and ahead, looking back down the length of the train.
+	-- The bang: pushing in down the aisle towards the rear door.
 	{
-		t0 = 11,
-		t1 = 16,
-		space = "train",
-		fromA = Vector3.new(8, 24, -50),
-		lookA = Vector3.new(0, 6, 50),
-		fromB = Vector3.new(-8, 22, -46),
-		lookB = Vector3.new(0, 6, 60),
+		t0 = 6.8,
+		t1 = 8.4,
+		space = "carriage",
+		fromA = Vector3.new(0, 5.2, -0.4),
+		lookA = Vector3.new(0, 5.0, 1),
+		fromB = Vector3.new(0, 5.2, -0.2),
+		lookB = Vector3.new(0, 5.0, 1),
+	},
+	-- The same framing as before the bang: every seat empty, bags and hats
+	-- left behind.
+	{
+		t0 = 8.4,
+		t1 = 12,
+		space = "carriage",
+		fromA = Vector3.new(0, 5.6, -0.88),
+		lookA = Vector3.new(0, 4.2, 0.9),
+		fromB = Vector3.new(0, 5.4, -0.82),
+		lookB = Vector3.new(-0.2, 4.0, 0.9),
 	},
 	-- Beside the tunnel mouth as the train runs into the dark.
 	{
-		t0 = 16,
+		t0 = 12,
 		t1 = 30,
 		space = "world",
 		fromA = Vector3.new(24, 16, -230),
@@ -34900,10 +35130,13 @@ local SHOTS: { Shot } = {
 	},
 }
 
+local cinematicCarriage: Model? = nil
+
 local cinematicAnchor: CFrame? = nil
 local cinematicModel: Model? = nil
 
-function CameraController.startCinematic(duration: number, anchor: CFrame?, model: Model?)
+function CameraController.startCinematic(duration: number, anchor: CFrame?, model: Model?, carriage: Model?)
+	cinematicCarriage = carriage
 	cinematicStartedAt = os.clock()
 	cinematicDuration = duration
 	cinematicAnchor = anchor
@@ -34929,7 +35162,32 @@ local function cinematicCFrame(elapsed: number): CFrame
 	end
 
 	local anchor = start
-	if shot.space == "train" then
+	local fromA, lookA, fromB, lookB = shot.fromA, shot.lookA, shot.fromB, shot.lookB
+	if shot.space == "carriage" then
+		local carriage = cinematicCarriage
+		if carriage and carriage.Parent then
+			local cf, size = carriage:GetBoundingBox()
+			-- The floor, found by looking down inside the carriage: its box
+			-- includes the running gear, so the box's base is below the floor.
+			local params = RaycastParams.new()
+			params.FilterType = Enum.RaycastFilterType.Include
+			params.FilterDescendantsInstances = { carriage }
+			local hit = Workspace:Raycast(cf.Position + cf.UpVector * (size.Y * 0.3), -cf.UpVector * size.Y, params)
+			local floorY = if hit then cf:PointToObjectSpace(hit.Position).Y else -size.Y * 0.5
+			anchor = cf * CFrame.new(0, floorY, 0)
+			local half = size.Z * 0.5
+			local function scale(v: Vector3): Vector3
+				return Vector3.new(v.X, v.Y, v.Z * half)
+			end
+			fromA, lookA, fromB, lookB = scale(fromA), scale(lookA), scale(fromB), scale(lookB)
+		else
+			-- No carriage streamed in yet: hold the exterior framing instead.
+			local model = cinematicModel
+			local root = if model then model.PrimaryPart else nil
+			anchor = if root and root.Parent then root.CFrame else start
+			fromA, lookA, fromB, lookB = Vector3.new(15, 8, 6), Vector3.new(0, 7, -25), Vector3.new(15, 8, -6), Vector3.new(0, 7, -36)
+		end
+	elseif shot.space == "train" then
 		local model = cinematicModel
 		local root = if model then model.PrimaryPart else nil
 		if root and root.Parent then
@@ -34945,8 +35203,8 @@ local function cinematicCFrame(elapsed: number): CFrame
 		-- Smoothstep, so each move eases rather than starting and stopping hard.
 		alpha = alpha * alpha * (3 - 2 * alpha)
 	end
-	local from = anchor:PointToWorldSpace(shot.fromA:Lerp(shot.fromB, alpha))
-	local look = anchor:PointToWorldSpace(shot.lookA:Lerp(shot.lookB, alpha))
+	local from = anchor:PointToWorldSpace(fromA:Lerp(fromB, alpha))
+	local look = anchor:PointToWorldSpace(lookA:Lerp(lookB, alpha))
 	return CFrame.lookAt(from, look)
 end
 
@@ -35116,7 +35374,7 @@ return CameraController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="88">
+          <Item class="ModuleScript" referent="89">
             <Properties>
               <string name="Name">CinematicController</string>
               <string name="Source"><![CDATA[--!strict
@@ -35280,17 +35538,24 @@ type Beat = { at: number, title: string?, subtitle: string?, fade: number? }
 -- the words land on the right shots. There is no closing fade here: the
 -- train running into the tunnel is the fade, sent by the server as a
 -- ScreenFade when it is actually inside.
+-- The prologue. The title is not here: it comes after the crossing, when
+-- the reply arrives (the server sends "title"). Lines in brackets describe
+-- sounds; the rest is the driver, who has no recorded voice yet.
 local BEATS: { Beat } = {
 	{ at = 0.0, fade = 0 },
-	{ at = 0.6, title = "LAST SIGNAL", subtitle = "A RIPGAMES production", fade = 1 },
-	{ at = 5.0, title = "", subtitle = "" },
-	{ at = 6.5, subtitle = "02:17. The last evacuation train out of Tolbridge Yard." },
-	{ at = 11.0, subtitle = "" },
-	{ at = 12.0, subtitle = "Regional communications failed eleven days ago." },
+	{ at = 0.4, subtitle = "02:17, Up Main. The last service out of Tolbridge Yard.", fade = 1 },
+	{ at = 2.2, subtitle = "ROLE" },
+	{ at = 3.8, subtitle = "[Driver, on the PA] Evening, all. Next stop Marrow Halt. Sit back, it's a quiet one." },
+	{ at = 6.6, subtitle = "" },
+	{ at = 6.8, subtitle = "[A heavy bang from the rear carriage]" },
+	{ at = 8.3, subtitle = "" },
+	{ at = 8.8, subtitle = "[The carriage is empty. Every seat.]" },
+	{ at = 11.6, subtitle = "[Driver] Control, this is the zero two seventeen. I've lost my passengers. Control?" },
 	{ at = 16.0, subtitle = "" },
-	{ at = 17.0, subtitle = "Ninety kilometres of line. Five stops. Do not trust every voice on the radio." },
-	{ at = 22.0, subtitle = "" },
 }
+
+-- Set from the play message: whether this player is the driver.
+local isDriver = false
 
 local function applyBeat(beat: Beat)
 	local info = Theme.tweenInfo(0.6)
@@ -35299,7 +35564,17 @@ local function applyBeat(beat: Beat)
 		TweenService:Create(titleLabel, info, { TextTransparency = if beat.title == "" then 1 else 0 }):Play()
 	end
 	if beat.subtitle ~= nil and subtitleLabel then
-		subtitleLabel.Text = beat.subtitle
+		local text = beat.subtitle
+		if text == "ROLE" then
+			-- One storyline in co-op: the crew leader is the driver, the rest
+			-- are conductors on the same doomed service.
+			text = if isDriver then "You are the driver tonight." else "You are a conductor tonight. The driver is up front."
+		end
+		-- Subtitles follow the setting; without them the scene still plays.
+		if text ~= "" and not StateController.setting("subtitles", true) then
+			text = ""
+		end
+		subtitleLabel.Text = text
 		TweenService:Create(subtitleLabel, info, { TextTransparency = if beat.subtitle == "" then 1 else 0 }):Play()
 	end
 	if beat.fade ~= nil and fadeFrame then
@@ -35310,6 +35585,30 @@ end
 --------------------------------------------------------------------------
 -- Lifecycle
 --------------------------------------------------------------------------
+
+local carriageModel: Model? = nil
+
+--- The title, after the crossing, over play: the reply has just come in.
+--- It does not take control away; it fades in and out over the world.
+local function titleCard()
+	local label = titleLabel
+	if not label or running then
+		return
+	end
+	if root then
+		root.Visible = true
+	end
+	label.Text = "LAST SIGNAL"
+	TweenService:Create(label, Theme.tweenInfo(1.6), { TextTransparency = 0 }):Play()
+	task.delay(4.5, function()
+		TweenService:Create(label, Theme.tweenInfo(1.6), { TextTransparency = 1 }):Play()
+		task.delay(1.7, function()
+			if root and not running then
+				root.Visible = false
+			end
+		end)
+	end)
+end
 
 local function setLetterbox(active: boolean)
 	local height = if active then UDim2.new(1, 0, 0.12, 0) else UDim2.new(1, 0, 0, 0)
@@ -35380,7 +35679,7 @@ local function begin(duration: number, skippableAfter: number, anchor: CFrame?, 
 
 	-- Reduced motion swaps the moving camera for held frames; the camera
 	-- controller handles that itself.
-	CameraController.startCinematic(duration, anchor, model)
+	CameraController.startCinematic(duration, anchor, model, carriageModel)
 
 	AudioController.loop("cinematic_music", "music_departure")
 
@@ -35482,9 +35781,13 @@ function CinematicController.start()
 		if payload.action == "play" then
 			local model = if typeof(payload.trainModel) == "Instance" and payload.trainModel:IsA("Model") then payload.trainModel else nil
 			local anchor = if typeof(payload.trainCFrame) == "CFrame" then payload.trainCFrame else nil
+			carriageModel = if typeof(payload.carriageModel) == "Instance" and payload.carriageModel:IsA("Model") then payload.carriageModel else nil
+			isDriver = payload.driverUserId == player.UserId
 			begin(payload.duration or GameConfig.CinematicSeconds, payload.skippableAfter or 2, anchor, model)
 		elseif payload.action == "stop" then
 			finish()
+		elseif payload.action == "title" then
+			titleCard()
 		elseif payload.action == "skipvote" and skipLabel and running then
 			skipLabel.Text = string.format("Skipping  %d of %d", payload.votes or 0, payload.needed or 1)
 		end
@@ -35534,7 +35837,7 @@ return CinematicController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="89">
+          <Item class="ModuleScript" referent="90">
             <Properties>
               <string name="Name">HUDController</string>
               <string name="Source"><![CDATA[--!strict
@@ -36612,7 +36915,7 @@ return HUDController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="90">
+          <Item class="ModuleScript" referent="91">
             <Properties>
               <string name="Name">HorrorEffectsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -36890,7 +37193,7 @@ return HorrorEffectsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="91">
+          <Item class="ModuleScript" referent="92">
             <Properties>
               <string name="Name">InputController</string>
               <string name="Source"><![CDATA[--!strict
@@ -37263,7 +37566,7 @@ return InputController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="92">
+          <Item class="ModuleScript" referent="93">
             <Properties>
               <string name="Name">InteractionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -37655,6 +37958,10 @@ function InteractionController.start()
 		if prompt.Style ~= Enum.ProximityPromptStyle.Custom then
 			return
 		end
+		-- Nothing to press during a cutscene.
+		if StateController.ui("cinematic") == true then
+			return
+		end
 		activePrompt = prompt
 		local parent = promptTarget(prompt)
 		if not parent then
@@ -37862,7 +38169,7 @@ return InteractionController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="93">
+          <Item class="ModuleScript" referent="94">
             <Properties>
               <string name="Name">JourneyController</string>
               <string name="Source"><![CDATA[--!strict
@@ -37947,7 +38254,7 @@ return JourneyController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="94">
+          <Item class="ModuleScript" referent="95">
             <Properties>
               <string name="Name">LampController</string>
               <string name="Source"><![CDATA[--!strict
@@ -37986,7 +38293,7 @@ return LampController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="95">
+          <Item class="ModuleScript" referent="96">
             <Properties>
               <string name="Name">MenuController</string>
               <string name="Source"><![CDATA[--!strict
@@ -39730,7 +40037,7 @@ return MenuController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="96">
+          <Item class="ModuleScript" referent="97">
             <Properties>
               <string name="Name">SignalController</string>
               <string name="Source"><![CDATA[--!strict
@@ -40143,7 +40450,7 @@ return SignalController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="97">
+          <Item class="ModuleScript" referent="98">
             <Properties>
               <string name="Name">StateController</string>
               <string name="Source"><![CDATA[--!strict
@@ -40398,7 +40705,7 @@ return StateController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="98">
+          <Item class="ModuleScript" referent="99">
             <Properties>
               <string name="Name">TrainRideController</string>
               <string name="Source"><![CDATA[--!strict
@@ -40790,7 +41097,7 @@ return TrainRideController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="99">
+          <Item class="ModuleScript" referent="100">
             <Properties>
               <string name="Name">WeaponController</string>
               <string name="Source"><![CDATA[--!strict
@@ -41550,11 +41857,11 @@ return WeaponController
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="100">
+        <Item class="Folder" referent="101">
           <Properties>
             <string name="Name">UI</string>
           </Properties>
-          <Item class="ModuleScript" referent="101">
+          <Item class="ModuleScript" referent="102">
             <Properties>
               <string name="Name">ArmoryPanel</string>
               <string name="Source"><![CDATA[--!strict
@@ -41935,7 +42242,7 @@ return ArmoryPanel
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="102">
+          <Item class="ModuleScript" referent="103">
             <Properties>
               <string name="Name">JourneyUI</string>
               <string name="Source"><![CDATA[--!strict
@@ -42113,7 +42420,7 @@ return JourneyUI
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="103">
+          <Item class="ModuleScript" referent="104">
             <Properties>
               <string name="Name">Theme</string>
               <string name="Source"><![CDATA[--!strict
@@ -42387,7 +42694,7 @@ return Theme
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="104">
+          <Item class="ModuleScript" referent="105">
             <Properties>
               <string name="Name">Widgets</string>
               <string name="Source"><![CDATA[--!strict
@@ -43101,13 +43408,13 @@ return Widgets
       </Item>
     </Item>
   </Item>
-  <Item class="TextChatService" referent="105">
+  <Item class="TextChatService" referent="106">
     <Properties>
       <string name="Name">TextChatService</string>
       <token name="ChatVersion">1</token>
     </Properties>
   </Item>
-  <Item class="Workspace" referent="106">
+  <Item class="Workspace" referent="107">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>
@@ -43119,7 +43426,7 @@ return Widgets
       <int name="StreamingMinRadius">192</int>
       <int name="StreamingTargetRadius">640</int>
     </Properties>
-    <Item class="Terrain" referent="107">
+    <Item class="Terrain" referent="108">
       <Properties>
         <string name="Name">Terrain</string>
       </Properties>

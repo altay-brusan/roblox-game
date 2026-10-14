@@ -387,6 +387,10 @@ function InteractionController.start()
 		if prompt.Style ~= Enum.ProximityPromptStyle.Custom then
 			return
 		end
+		-- Nothing to press during a cutscene.
+		if StateController.ui("cinematic") == true then
+			return
+		end
 		activePrompt = prompt
 		local parent = promptTarget(prompt)
 		if not parent then

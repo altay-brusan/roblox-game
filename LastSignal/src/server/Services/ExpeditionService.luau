@@ -51,6 +51,7 @@ local StationRegistry = require(Shared.Registry.StationRegistry)
 
 local CrewService = require(script.Parent.CrewService)
 local DepartureService = require(script.Parent.DepartureService)
+local Prologue = require(script.Parent.Parent.World.Prologue)
 local DataService = require(script.Parent.DataService)
 local InventoryService = require(script.Parent.InventoryService)
 local ProgressionService = require(script.Parent.ProgressionService)
@@ -900,6 +901,11 @@ function ExpeditionService.begin(crew: CrewService.Crew, members: { Player })
 			Net.fireClient("Notify", player, { kind = "info", title = "Platform 1", body = message, duration = 8 })
 		end
 	end)
+	if service then
+		-- The 02:17 is an ordinary service until the rear carriage: people
+		-- in the seats, visible from the platform and on the way aboard.
+		Prologue.seatPassengers(service.train)
+	end
 	if not service then
 		WorldService.releaseLane(lane)
 		abandonStart(
@@ -1032,8 +1038,20 @@ function ExpeditionService.begin(crew: CrewService.Crew, members: { Player })
 		skippableAfter = GameConfig.CinematicSkippableAfter,
 		trainModel = yard.train.built.model,
 		trainCFrame = yard.train.built.root.CFrame,
+		carriageModel = yard.train.built.carriages[1],
+		driverUserId = members[1] and members[1].UserId or 0,
 	})
-	ExpeditionService.fireRadio(expedition, "expedition_start")
+	-- The passengers go between the bang and the look back down the aisle.
+	-- Timed to the shots in CameraController; it happens even if the crew
+	-- skipped the sequence, because it happens to the train, not the camera.
+	task.delay(6.8, function()
+		local rear = yard.train.built.carriages[#yard.train.built.carriages] or yard.train.built.model
+		broadcast(expedition, "HorrorCue", { cue = "train_coupler", position = rear:GetPivot().Position })
+		broadcast(expedition, "HorrorCue", { cue = "lights_flicker", position = yard.train.built.root.Position, seconds = 2.6 })
+	end)
+	task.delay(8.3, function()
+		Prologue.vanish(yard.train)
+	end)
 
 	local platformDistance, tunnelDistance = DepartureService.lobbyGeometry()
 	-- Start streaming the line in for each member while the train is still
@@ -1154,13 +1172,36 @@ function ExpeditionService.arriveOnLine(expedition: Expedition)
 	TrainService.setStopDistance(expedition.train, StationRegistry.Stations[1].distance)
 	setState(expedition, "travelling")
 	ExpeditionService.takeCheckpoint(expedition)
+
+	-- The other side of the crossing: what is left, where the yard went,
+	-- and who answers.
+	Prologue.leaveBelongings(expedition.train)
+	Prologue.placeNameboard(expedition.train, expedition.lane.dropContainer)
 	notify(
 		expedition,
 		"info",
 		"02:17, Up Main",
-		"The yard pilot has handed her over. The cab is at the front: take the driver's seat.",
+		"Every passenger is gone. The cab is at the front: take the driver's seat.",
 		8
 	)
+	local function say(attribution: string, text: string, duration: number, source: string?)
+		broadcast(expedition, "RadioMessage", { id = "prologue", source = source or "crew", text = text, duration = duration, attribution = attribution, isFalse = false })
+	end
+	local steps: { { at: number, run: () -> () } } = {
+		{ at = 3, run = function() say("Driver", "Control, this is the zero two seventeen. My passengers are gone. All of them. Control, do you read?", 6) end },
+		{ at = 10, run = function() say("Radio", "[Static. Nothing from Control.]", 4, "recording") end },
+		{ at = 14, run = function() say("Driver", "That's our yard's nameboard. In the trees. Where's the yard?", 5) end },
+		{ at = 20, run = function() ExpeditionService.fireRadio(expedition, "expedition_start") end },
+		{ at = 23, run = function() broadcast(expedition, "Cinematic", { action = "title" }) end },
+		{ at = 40, run = function() say("Driver", "That answered before I'd finished asking. And it said we're the last one out. Out of where?", 7) end },
+	}
+	for _, step in steps do
+		task.delay(step.at, function()
+			if expedition.state ~= "closed" then
+				step.run()
+			end
+		end)
+	end
 end
 
 local cinematicSkipVotes: { [string]: { [number]: boolean } } = {}
