@@ -106,6 +106,9 @@ local MANIFEST: { [string]: RemoteSpec } = {
 	-- Night runs: preferences, progress and in-run choices.
 	JourneyCommand = { kind = "function", rate = { 10, 2 } },
 	JourneyChoice = { kind = "event" }, -- server -> client
+	-- Signal Integrity Analyzer: crew commands, and the shared notebook.
+	SignalCommand = { kind = "function", rate = { 12, 3 } },
+	SignalState = { kind = "event" }, -- server -> client
 	PurchaseResult = { kind = "event" }, -- server -> client
 
 	-- Live events --------------------------------------------------------------

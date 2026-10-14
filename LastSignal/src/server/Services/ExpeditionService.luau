@@ -144,6 +144,8 @@ ExpeditionService.Retried = Signal.new() :: Signal.Signal<Expedition>
 -- Set by JourneyService: adds the night-run report to each player's results.
 -- A hook rather than a require, because JourneyService depends on this file.
 ExpeditionService.resultsExtra = nil :: ((Expedition, Player, boolean) -> any)?
+-- Set by SignalService: the signal calls of the run, for the report.
+ExpeditionService.resultsSignals = nil :: ((Expedition) -> any)?
 
 --------------------------------------------------------------------------
 -- Helpers
@@ -1252,6 +1254,7 @@ function ExpeditionService.finish(expedition: Expedition, success: boolean)
 			levelsGained = result.levelsGained,
 			difficulty = expedition.difficulty,
 			journey = if ExpeditionService.resultsExtra then ExpeditionService.resultsExtra(expedition, player, success) else nil,
+			signals = if ExpeditionService.resultsSignals then ExpeditionService.resultsSignals(expedition) else nil,
 		})
 	end
 

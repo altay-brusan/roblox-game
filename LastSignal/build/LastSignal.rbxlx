@@ -2491,6 +2491,9 @@ local MANIFEST: { [string]: RemoteSpec } = {
 	-- Night runs: preferences, progress and in-run choices.
 	JourneyCommand = { kind = "function", rate = { 10, 2 } },
 	JourneyChoice = { kind = "event" }, -- server -> client
+	-- Signal Integrity Analyzer: crew commands, and the shared notebook.
+	SignalCommand = { kind = "function", rate = { 12, 3 } },
+	SignalState = { kind = "event" }, -- server -> client
 	PurchaseResult = { kind = "event" }, -- server -> client
 
 	-- Live events --------------------------------------------------------------
@@ -8480,6 +8483,7 @@ local BOOT_ORDER: { ServiceEntry } = {
 	{ name = "HorrorDirector", module = Services.HorrorDirector, stage = "Gameplay" },
 	{ name = "SignatureMoments", module = Services.SignatureMoments, stage = "Gameplay" },
 	{ name = "JourneyService", module = Services.JourneyService, stage = "Gameplay" },
+	{ name = "SignalService", module = Services.SignalService, stage = "Gameplay" },
 
 	{ name = "EventService", module = Services.EventService, stage = "Live" },
 	{ name = "AdminService", module = Services.AdminService, stage = "Live" },
@@ -9176,12 +9180,442 @@ return Events
 ]]></string>
           </Properties>
         </Item>
+        <Item class="ModuleScript" referent="42">
+          <Properties>
+            <string name="Name">SignalRegistry</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	SignalRegistry
+	--------------
+	The authored signal calls that the Signal Integrity Analyzer works on.
+
+	Every call has a hidden truth: a real HUMAN, an ECHO (a recording of
+	someone who is not there), a MIMIC (something using a voice), or an
+	ANOMALY (no one at all). The truth lives only in this file and on the
+	server; clients only ever receive the evidence a crew has gathered.
+
+	Evidence comes from six channels, and no single channel decides a call:
+	  bearing     two sweeps from different spots are triangulated by the
+	              server from the call's real source; compared with where the
+	              caller claims to be. Pure geometry, not authored.
+	  waveform    what the signal looks like (authored per call)
+	  timing      timestamp, dispatch ID, kilometre post (authored)
+	  challenge   ask the caller a question, hear the reply (authored)
+	  clue        a physical clue at the place the caller names (authored)
+	  compare     two calls side by side: shared phrasing (authored links)
+
+	Each authored item carries `weight`, its support for
+	{ human, echo, mimic, anomaly }. The confidence label is computed from the
+	weights of the evidence a crew has actually collected.
+
+	Some calls are built to be hard: a real child behind heavy interference,
+	a mimic that spoofs a clean waveform. Cautious investigation solves both.
+]]
+
+local TableUtil = require(game:GetService("ReplicatedStorage").LastSignal.Core.TableUtil)
+
+export type Truth = "human" | "echo" | "mimic" | "anomaly"
+-- Support for { human, echo, mimic, anomaly }.
+export type Weight = { number }
+
+export type Evidence = { text: string, weight: Weight }
+
+export type Question = { ask: string, reply: string, weight: Weight }
+
+export type CallDef = {
+	id: string,
+	station: number,
+	-- Seconds after arriving at the station.
+	delay: number,
+	caller: string, -- how the notebook labels it before anyone knows
+	transcript: { string },
+	-- Where the caller says they are: a landmark id at this station.
+	claims: string,
+	-- Where the signal really comes from: a landmark id, plus an offset in
+	-- studs (a mimic is usually out in the trees, not where it says).
+	source: string,
+	sourceOffset: Vector3,
+	-- Interference (steel structures, a dead handset) scatters bearings.
+	interference: number,
+	truth: Truth,
+	waveform: Evidence,
+	waveShape: string, -- what the analyzer screen draws
+	timing: Evidence,
+	questions: { Question },
+	-- The physical clue, placed at the claimed landmark.
+	clue: Evidence,
+	-- Phrases shared with other calls, for the compare channel.
+	phrases: { string },
+	-- What happens. `go`: someone answered the call in person. `mark`:
+	-- the crew marked it a mimic.
+	onGo: string,
+	onMark: string,
+}
+
+local H, E, M, A = 1, 2, 3, 4
+local function w(h: number, e: number, m: number, a: number): Weight
+	local out = { 0, 0, 0, 0 }
+	out[H], out[E], out[M], out[A] = h, e, m, a
+	return out
+end
+
+local CALLS: { CallDef } = {
+	----------------------------------------------------------------------
+	-- Marrow Halt: the tutorial. One real person, one harmless anomaly.
+	----------------------------------------------------------------------
+	{
+		id = "marrow_porter",
+		station = 1,
+		delay = 20,
+		caller = "Woman, station house",
+		transcript = {
+			"Is someone there? On the radio? This is Marrow Halt, I'm in the station house.",
+			"The door's jammed from the outside. I've been in here since the lights went. Please.",
+		},
+		claims = "station_house",
+		source = "station_house",
+		sourceOffset = Vector3.new(0, 0, 0),
+		interference = 0,
+		truth = "human",
+		waveform = { text = "Ordinary speech: uneven breathing, natural pitch drift, a voice that cracks.", weight = w(2, 1, 0, 0) },
+		waveShape = "clean",
+		timing = { text = "Timestamp 02:33, two minutes after you stopped. Handset ID matches the halt's own line.", weight = w(2, 0, 0, 0) },
+		questions = {
+			{ ask = "What's painted on the station house door?", reply = "A two. A white number two, half flaked off. Why does that matter?", weight = w(2, 0, -1, 0) },
+			{ ask = "How long have you been in there?", reply = "Since the lights went. I stopped counting. Days. Is it days?", weight = w(1, 0, 0, 0) },
+		},
+		clue = { text = "Fresh footprints in the dust of the station house step, one set, going in. The door is wedged shut with a fallen sign.", weight = w(2, -1, -1, 0) },
+		phrases = {},
+		onGo = "survivor:Edith Marr, relief porter. She has been here eleven days.",
+		onMark = "lost:Nobody calls from the station house again.",
+	},
+	{
+		id = "marrow_tannoy",
+		station = 1,
+		delay = 75,
+		caller = "Announcement",
+		transcript = {
+			"The. Zero. Two. Seventeen. Is. Delayed. We apologise. For. The.",
+		},
+		claims = "water_tower",
+		source = "water_tower",
+		sourceOffset = Vector3.new(0, 0, 0),
+		interference = 0.2,
+		truth = "anomaly",
+		waveform = { text = "No breath, no voice: stitched recorded words with machine gaps. A tannoy, not a person.", weight = w(-1, 1, 0, 2) },
+		waveShape = "mechanical",
+		timing = { text = "No timestamp at all. The tannoy circuit has no clock.", weight = w(0, 0, 0, 1) },
+		questions = {
+			{ ask = "Who is this?", reply = "[No reply. The announcement starts again from the beginning.]", weight = w(-1, 1, 0, 1) },
+		},
+		clue = { text = "A tannoy horn on the water tower, wires chewed through, still humming.", weight = w(0, 0, 0, 2) },
+		phrases = {},
+		onGo = "anomaly:Just the old tannoy, talking to nobody.",
+		onMark = "anomaly:Just the old tannoy. Nothing was listening.",
+	},
+
+	----------------------------------------------------------------------
+	-- Tolbridge Camp: the first real dilemma.
+	----------------------------------------------------------------------
+	{
+		id = "tolbridge_saw",
+		station = 2,
+		delay = 25,
+		caller = "Man, saw shed",
+		transcript = {
+			"Help me. I'm trapped in the saw shed. There's fuel in here, cans of it, all you can carry.",
+			"Come alone, it's quicker. Come alone.",
+		},
+		claims = "sawshed",
+		source = "sawshed",
+		sourceOffset = Vector3.new(-90, 0, 70),
+		interference = 0,
+		truth = "mimic",
+		waveform = { text = "Clean speech, but every breath is identical: the same breath, copied.", weight = w(-1, 1, 2, 0) },
+		waveShape = "loop",
+		timing = { text = "Timestamp 02:51, eleven minutes in the future.", weight = w(-2, 0, 2, 1) },
+		questions = {
+			{ ask = "Which way does the saw shed door face?", reply = "The door faces the door. Come alone. It's quicker.", weight = w(-2, 0, 2, 0) },
+			{ ask = "What's your name?", reply = "A name. Yes. Come alone.", weight = w(-2, 0, 2, 0) },
+		},
+		clue = { text = "The saw shed handset is thick with dust. Nobody has lifted it in days.", weight = w(-2, 0, 2, 0) },
+		phrases = { "come alone" },
+		onGo = "trap:Nobody in the shed. Something was out in the trees, and now it knows where you are.",
+		onMark = "cache:Marked as a mimic. With nothing waiting, the fuel in the saw shed is there to take.",
+	},
+	{
+		id = "tolbridge_loader",
+		station = 2,
+		delay = 70,
+		caller = "Men, the loader",
+		transcript = {
+			"Loader's jammed again, Pete, give it a kick. No, the other side. There.",
+			"[The same nine seconds, again.] Loader's jammed again, Pete...",
+		},
+		claims = "loader",
+		source = "loader",
+		sourceOffset = Vector3.new(0, 0, 0),
+		interference = 0.1,
+		truth = "echo",
+		waveform = { text = "Two natural voices, but the same nine seconds repeat exactly: a tape loop.", weight = w(0, 3, 0, 0) },
+		waveShape = "loop",
+		timing = { text = "Timestamp eleven days old: the night the line went quiet.", weight = w(-1, 2, 0, 0) },
+		questions = {
+			{ ask = "Pete? Can you hear me?", reply = "[No reply. 'Loader's jammed again, Pete...']", weight = w(-1, 2, 0, 0) },
+		},
+		clue = { text = "A dictaphone on the loader seat, the tape worn thin, still turning.", weight = w(0, 3, -1, 0) },
+		phrases = {},
+		onGo = "echo:A dictaphone on the loader seat. The last shift at Tolbridge, on a loop.",
+		onMark = "echo:It was only a recording. Nothing was using it.",
+	},
+	{
+		id = "tolbridge_child",
+		station = 2,
+		delay = 120,
+		caller = "Child, very faint",
+		transcript = {
+			"...can anyone... I'm in the... bunkhouse... my dad went to the line and...",
+			"...please don't be the other voice...",
+		},
+		claims = "bunkhouse",
+		source = "bunkhouse",
+		sourceOffset = Vector3.new(0, 0, 0),
+		interference = 1.0,
+		truth = "human",
+		waveform = { text = "Heavy interference, a handheld set on a flat battery. Under the noise: uneven, natural breathing.", weight = w(1, 0, 0, 0) },
+		waveShape = "noise",
+		timing = { text = "No timestamp: a toy radio with no clock. Nothing to check, either way.", weight = w(0, 0, 0, 0) },
+		questions = {
+			{ ask = "What's your dad's name?", reply = "Tom. Tom Adey. He drives the loader. Did you see him?", weight = w(2, 0, -1, 0) },
+			{ ask = "Come to the train on your own.", reply = "No! It said that too. The other voice. It says come alone.", weight = w(2, 0, -1, 0) },
+		},
+		clue = { text = "Small boots in the dust of the bunkhouse floor, going in, not out. A half-eaten ration. 'T. ADEY' stencilled on a locker.", weight = w(3, -1, -1, 0) },
+		phrases = { "come alone" },
+		onGo = "survivor:Lily Adey, nine. She has been hiding from the other voice.",
+		onMark = "lost:The bunkhouse radio goes quiet. It does not come back.",
+	},
+
+	----------------------------------------------------------------------
+	-- Ninety-Three: the mimic learns Control's voice; a recording that
+	-- should not exist.
+	----------------------------------------------------------------------
+	{
+		id = "ninetythree_control",
+		station = 3,
+		delay = 30,
+		caller = "Control?",
+		transcript = {
+			"Control to the zero two seventeen. Leave the train and walk to the gantry. I will meet you there.",
+			"You are the last one out. Out. Out.",
+		},
+		claims = "gantry",
+		source = "gantry",
+		sourceOffset = Vector3.new(110, 0, -60),
+		interference = 0,
+		truth = "mimic",
+		waveform = { text = "A clean, convincing waveform. Too clean: no line noise at all on a hundred miles of wire.", weight = w(0, 0, 1, 0) },
+		waveShape = "clean",
+		timing = { text = "Dispatch ID 4471. Control signs as 0217-C. 4471 is not a Control ID.", weight = w(-2, 0, 2, 0) },
+		questions = {
+			{ ask = "Control, what did you say as we left the yard?", reply = "You are the last one out. Out. Out. Out.", weight = w(-1, 1, 2, 0) },
+		},
+		clue = { text = "The gantry ladder is rusted solid. Nobody has climbed it to meet anyone.", weight = w(-1, 0, 2, 0) },
+		phrases = { "the last one out" },
+		onGo = "trap:Nobody at the gantry. The voice was Control's, and it was not Control.",
+		onMark = "cache:Marked as a mimic. The relay spares in the gantry cabinet are yours.",
+	},
+	{
+		id = "ninetythree_crew",
+		station = 3,
+		delay = 85,
+		caller = "Your own crew?",
+		transcript = {
+			"This is the zero two seventeen. We're at Hallow Bridge. The span is down and the pumps won't prime.",
+			"If anyone gets this: do not trust the voice at Ward Hill. Do not.",
+		},
+		claims = "relay_room",
+		source = "relay_room",
+		sourceOffset = Vector3.new(0, 0, 0),
+		interference = 0.2,
+		truth = "echo",
+		waveform = { text = "Natural voices, recorded: tape hiss under them. One of them sounds like you.", weight = w(0, 2, 0, 0) },
+		waveShape = "clean",
+		timing = { text = "Timestamp: tonight, forty minutes from now. Recorded at Hallow Bridge, which you have not reached.", weight = w(-1, 2, 0, 1) },
+		questions = {
+			{ ask = "Who is speaking?", reply = "[No reply. 'This is the zero two seventeen. We're at Hallow Bridge...']", weight = w(-1, 2, 0, 0) },
+		},
+		clue = { text = "A reel recorder in the relay room, its reel labelled in your handwriting: 'HALLOW. PLAY AT 93.'", weight = w(0, 3, 0, 0) },
+		phrases = { "the zero two seventeen" },
+		onGo = "echo:A reel labelled in your own handwriting. Someone on this train will record it, later tonight.",
+		onMark = "echo:It was a recording. Of you.",
+	},
+
+	----------------------------------------------------------------------
+	-- Hallow Bridge: steel bends bearings; the river talks.
+	----------------------------------------------------------------------
+	{
+		id = "hallow_ganger",
+		station = 4,
+		delay = 30,
+		caller = "Man, pump house",
+		transcript = {
+			"Permanent way gang. I'm in the pump house. I can prime the pumps if you get the depot open.",
+			"Code's on the depot door. I chalked it before I hid.",
+		},
+		claims = "pump_house",
+		source = "pump_house",
+		sourceOffset = Vector3.new(0, 0, 0),
+		interference = 0.7,
+		truth = "human",
+		waveform = { text = "Natural speech, distorted: the bridge steel is scattering the signal.", weight = w(1, 0, 0, 0) },
+		waveShape = "noise",
+		timing = { text = "Timestamp 03:20, now. Kilometre post 10.4, the bridge.", weight = w(2, 0, 0, 0) },
+		questions = {
+			{ ask = "What's the depot code?", reply = "Four, one, one. Same as the old line number.", weight = w(2, 0, -1, 0) },
+		},
+		clue = { text = "Chalk on the depot door: 411. The chalk is fresh.", weight = w(2, 0, -1, 0) },
+		phrases = {},
+		onGo = "survivor:Ray Okafor, ganger. He kept the pumps alive as long as he could.",
+		onMark = "lost:The pump house goes silent.",
+	},
+	{
+		id = "hallow_river",
+		station = 4,
+		delay = 80,
+		caller = "Someone in the water",
+		transcript = {
+			"I fell. I'm in the water under the span. Jump. It's not deep. Jump in.",
+		},
+		claims = "span",
+		source = "span",
+		sourceOffset = Vector3.new(60, -10, 40),
+		interference = 0.3,
+		truth = "mimic",
+		waveform = { text = "Phase reversed: the words arrive before the breath that should carry them.", weight = w(-2, 0, 3, 0) },
+		waveShape = "phase",
+		timing = { text = "Kilometre post 11.8. That post is on the far bank, a kilometre away.", weight = w(-1, 0, 1, 1) },
+		questions = {
+			{ ask = "How did you fall?", reply = "Jump. It's not deep. How did you fall?", weight = w(-2, 0, 2, 0) },
+		},
+		clue = { text = "Wet handprints on the span rail, on the outside, going down. None coming up.", weight = w(-1, 0, 2, 0) },
+		phrases = {},
+		onGo = "trap:The river was empty. The span was not.",
+		onMark = "cache:Marked as a mimic. The depot's flood locker is safe to open.",
+	},
+	{
+		id = "hallow_telemetry",
+		station = 4,
+		delay = 130,
+		caller = "Tones",
+		transcript = {
+			"[Three rising tones. A pause. Three rising tones.]",
+		},
+		claims = "span",
+		source = "span",
+		sourceOffset = Vector3.new(0, 0, 0),
+		interference = 0.5,
+		truth = "anomaly",
+		waveform = { text = "Pure machine tones on a schedule: the span's lift telemetry, still reporting.", weight = w(-1, 0, 0, 3) },
+		waveShape = "mechanical",
+		timing = { text = "Every ninety seconds exactly, since eleven days ago.", weight = w(0, 1, 0, 1) },
+		questions = {
+			{ ask = "Is anyone there?", reply = "[Three rising tones.]", weight = w(-1, 0, 0, 1) },
+		},
+		clue = { text = "A telemetry box on the span, its lamp blinking in time with the tones.", weight = w(0, 0, 0, 3) },
+		phrases = {},
+		onGo = "anomaly:The bridge, talking to a control room that no longer listens.",
+		onMark = "anomaly:Only telemetry. Nothing heard you.",
+	},
+
+	----------------------------------------------------------------------
+	-- Ward Hill: the truth, and the last voice.
+	----------------------------------------------------------------------
+	{
+		id = "wardhill_engineer",
+		station = 5,
+		delay = 25,
+		caller = "Woman, accommodation",
+		transcript = {
+			"I'm in the accommodation block. The voice in the relay hall isn't Control. It's a loop. I made it.",
+			"I recorded his last shift so the trains would keep moving. Don't trust the loop.",
+		},
+		claims = "accommodation",
+		source = "accommodation",
+		sourceOffset = Vector3.new(0, 0, 0),
+		interference = 0.1,
+		truth = "human",
+		waveform = { text = "Natural speech, a smoker's rasp, crying at the end of a sentence.", weight = w(2, 0, 0, 0) },
+		waveShape = "clean",
+		timing = { text = "Timestamp now. Handset ID: Ward Hill accommodation, extension 4.", weight = w(2, 0, 0, 0) },
+		questions = {
+			{ ask = "Whose voice is on the loop?", reply = "My husband's. He was Control. He went out to the mast and didn't come back.", weight = w(2, 0, -1, 0) },
+		},
+		clue = { text = "A bed slept in recently. Tins opened this week. A photograph of a man in a dispatcher's jacket.", weight = w(3, -1, -1, 0) },
+		phrases = {},
+		onGo = "survivor:Ann Hale, relay engineer. She made the recording that guided you.",
+		onMark = "lost:The accommodation block goes dark.",
+	},
+	{
+		id = "wardhill_crewvoice",
+		station = 5,
+		delay = 90,
+		caller = "Your crew, outside",
+		transcript = {
+			"It's us. It's the crew. We're outside the mast door, open it. Come alone, it's quicker.",
+		},
+		claims = "mast",
+		source = "mast",
+		sourceOffset = Vector3.new(-120, 0, 30),
+		interference = 0,
+		truth = "mimic",
+		waveform = { text = "Clean speech in a familiar voice, but the syllables don't line up with the breath.", weight = w(-1, 0, 2, 0) },
+		waveShape = "phase",
+		timing = { text = "Handset ID 0217: the train's own cab radio. Your cab radio is not transmitting.", weight = w(-2, 0, 2, 0) },
+		questions = {
+			{ ask = "What did we find at Tolbridge?", reply = "Fuel. All you can carry. Come alone, it's quicker.", weight = w(-2, 0, 3, 0) },
+		},
+		clue = { text = "No footprints at the mast door. The mud there is unbroken.", weight = w(-2, 0, 2, 0) },
+		phrases = { "come alone" },
+		onGo = "trap:Nobody at the mast door. Your crew was behind you the whole time.",
+		onMark = "cache:Marked as a mimic. The mast store is open, and nothing is waiting in it.",
+	},
+}
+
+local SignalRegistry = {}
+
+SignalRegistry.Calls = TableUtil.deepFreeze(CALLS) :: { CallDef }
+
+SignalRegistry.TruthNames = { "human", "echo", "mimic", "anomaly" }
+
+function SignalRegistry.get(id: string): CallDef?
+	for _, def in CALLS do
+		if def.id == id then
+			return def
+		end
+	end
+	return nil
+end
+
+function SignalRegistry.forStation(index: number): { CallDef }
+	local out = {}
+	for _, def in CALLS do
+		if def.station == index then
+			table.insert(out, def)
+		end
+	end
+	return out
+end
+
+return SignalRegistry
+]]></string>
+          </Properties>
+        </Item>
       </Item>
-      <Item class="Folder" referent="42">
+      <Item class="Folder" referent="43">
         <Properties>
           <string name="Name">Services</string>
         </Properties>
-        <Item class="ModuleScript" referent="43">
+        <Item class="ModuleScript" referent="44">
           <Properties>
             <string name="Name">AdminService</string>
             <string name="Source"><![CDATA[--!strict
@@ -9842,7 +10276,7 @@ return AdminService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="44">
+        <Item class="ModuleScript" referent="45">
           <Properties>
             <string name="Name">AnalyticsService</string>
             <string name="Source"><![CDATA[--!strict
@@ -10160,7 +10594,7 @@ return AnalyticsService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="45">
+        <Item class="ModuleScript" referent="46">
           <Properties>
             <string name="Name">AppearanceService</string>
             <string name="Source"><![CDATA[--!strict
@@ -10392,7 +10826,7 @@ return AppearanceService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="46">
+        <Item class="ModuleScript" referent="47">
           <Properties>
             <string name="Name">CombatService</string>
             <string name="Source"><![CDATA[--!strict
@@ -11122,7 +11556,7 @@ return CombatService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="47">
+        <Item class="ModuleScript" referent="48">
           <Properties>
             <string name="Name">CreatureService</string>
             <string name="Source"><![CDATA[--!strict
@@ -11860,7 +12294,7 @@ return CreatureService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="48">
+        <Item class="ModuleScript" referent="49">
           <Properties>
             <string name="Name">CrewService</string>
             <string name="Source"><![CDATA[--!strict
@@ -12645,7 +13079,7 @@ return CrewService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="49">
+        <Item class="ModuleScript" referent="50">
           <Properties>
             <string name="Name">DataService</string>
             <string name="Source"><![CDATA[--!strict
@@ -13215,7 +13649,7 @@ return DataService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="50">
+        <Item class="ModuleScript" referent="51">
           <Properties>
             <string name="Name">DepartureService</string>
             <string name="Source"><![CDATA[--!strict
@@ -13675,7 +14109,7 @@ return DepartureService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="51">
+        <Item class="ModuleScript" referent="52">
           <Properties>
             <string name="Name">EventService</string>
             <string name="Source"><![CDATA[--!strict
@@ -14310,7 +14744,7 @@ return EventService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="52">
+        <Item class="ModuleScript" referent="53">
           <Properties>
             <string name="Name">ExpeditionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -14459,6 +14893,8 @@ ExpeditionService.Retried = Signal.new() :: Signal.Signal<Expedition>
 -- Set by JourneyService: adds the night-run report to each player's results.
 -- A hook rather than a require, because JourneyService depends on this file.
 ExpeditionService.resultsExtra = nil :: ((Expedition, Player, boolean) -> any)?
+-- Set by SignalService: the signal calls of the run, for the report.
+ExpeditionService.resultsSignals = nil :: ((Expedition) -> any)?
 
 --------------------------------------------------------------------------
 -- Helpers
@@ -15567,6 +16003,7 @@ function ExpeditionService.finish(expedition: Expedition, success: boolean)
 			levelsGained = result.levelsGained,
 			difficulty = expedition.difficulty,
 			journey = if ExpeditionService.resultsExtra then ExpeditionService.resultsExtra(expedition, player, success) else nil,
+			signals = if ExpeditionService.resultsSignals then ExpeditionService.resultsSignals(expedition) else nil,
 		})
 	end
 
@@ -15885,7 +16322,7 @@ return ExpeditionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="53">
+        <Item class="ModuleScript" referent="54">
           <Properties>
             <string name="Name">HorrorDirector</string>
             <string name="Source"><![CDATA[--!strict
@@ -16634,7 +17071,7 @@ return HorrorDirector
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="54">
+        <Item class="ModuleScript" referent="55">
           <Properties>
             <string name="Name">InteractionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -17753,7 +18190,7 @@ return InteractionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="55">
+        <Item class="ModuleScript" referent="56">
           <Properties>
             <string name="Name">InventoryService</string>
             <string name="Source"><![CDATA[--!strict
@@ -18339,7 +18776,7 @@ return InventoryService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="56">
+        <Item class="ModuleScript" referent="57">
           <Properties>
             <string name="Name">JourneyService</string>
             <string name="Source"><![CDATA[--!strict
@@ -19288,7 +19725,7 @@ return JourneyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="57">
+        <Item class="ModuleScript" referent="58">
           <Properties>
             <string name="Name">LeaderboardService</string>
             <string name="Source"><![CDATA[--!strict
@@ -19585,7 +20022,7 @@ return LeaderboardService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="58">
+        <Item class="ModuleScript" referent="59">
           <Properties>
             <string name="Name">LoadoutService</string>
             <string name="Source"><![CDATA[--!strict
@@ -19713,7 +20150,7 @@ return LoadoutService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="59">
+        <Item class="ModuleScript" referent="60">
           <Properties>
             <string name="Name">ProfileSchema</string>
             <string name="Source"><![CDATA[--!strict
@@ -20183,7 +20620,7 @@ return ProfileSchema
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="60">
+        <Item class="ModuleScript" referent="61">
           <Properties>
             <string name="Name">ProgressionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -20713,7 +21150,7 @@ return ProgressionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="61">
+        <Item class="ModuleScript" referent="62">
           <Properties>
             <string name="Name">PurchaseService</string>
             <string name="Source"><![CDATA[--!strict
@@ -21220,7 +21657,7 @@ return PurchaseService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="62">
+        <Item class="ModuleScript" referent="63">
           <Properties>
             <string name="Name">QuestService</string>
             <string name="Source"><![CDATA[--!strict
@@ -21601,7 +22038,7 @@ return QuestService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="63">
+        <Item class="ModuleScript" referent="64">
           <Properties>
             <string name="Name">RewardService</string>
             <string name="Source"><![CDATA[--!strict
@@ -21907,7 +22344,7 @@ return RewardService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="64">
+        <Item class="ModuleScript" referent="65">
           <Properties>
             <string name="Name">ShopService</string>
             <string name="Source"><![CDATA[--!strict
@@ -22364,7 +22801,735 @@ return ShopService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="65">
+        <Item class="ModuleScript" referent="66">
+          <Properties>
+            <string name="Name">SignalService</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	SignalService
+	-------------
+	The Signal Integrity Analyzer, server side: signal calls at stations, the
+	evidence a crew gathers, the confidence it supports, and what happens
+	when the crew acts on a call.
+
+	FAIRNESS
+	--------
+	The truth of a call never leaves the server. Clients receive the caller's
+	words, the evidence the crew has gathered, and a label computed only from
+	that evidence. The bearing channel is real geometry: two sweeps from
+	different places are triangulated against the call's actual source, with
+	noise from the analyzer's fidelity and the call's interference. A careful
+	crew can always reach the right answer; a hasty one can be fooled.
+
+	EVERY CHANNEL WORKS SOLO
+	------------------------
+	Sweeping, analysing, asking, examining and comparing are all one-player
+	actions. Nothing needs two people.
+
+	CONSEQUENCES
+	------------
+	  Go     the crew answers the call in person at the place the caller
+	         named: a survivor, a recording, a harmless anomaly, or a trap.
+	  Mark   the crew marks it a mimic: correct, and the bait it was using is
+	         safe to take; wrong, and a real person is lost.
+	  Leave  nothing happens.
+	A verdict that matches the truth pays 15 RIP Coin, once per call per run,
+	and counts towards the analyzer's fidelity upgrade.
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local Shared = ReplicatedStorage.LastSignal
+
+local Guard = require(Shared.Core.Guard)
+local Logger = require(Shared.Core.Logger)
+local Net = require(Shared.Core.Net)
+local Protect = require(Shared.Core.Protect)
+local StationRegistry = require(Shared.Registry.StationRegistry)
+
+local CreatureService = require(script.Parent.CreatureService)
+local DataService = require(script.Parent.DataService)
+local ExpeditionService = require(script.Parent.ExpeditionService)
+local HorrorDirector = require(script.Parent.HorrorDirector)
+local InteractionService = require(script.Parent.InteractionService)
+local InventoryService = require(script.Parent.InventoryService)
+local ProgressionService = require(script.Parent.ProgressionService)
+local WorldService = require(script.Parent.WorldService)
+local SignalRegistry = require(script.Parent.Parent.Journey.SignalRegistry)
+
+local log = Logger.new("SignalService")
+local C = Color3.fromRGB
+
+local SignalService = {}
+
+-- Bearing noise in degrees, by analyzer fidelity. Fidelity 2 is earned by
+-- reaching the right verdict on five calls.
+local FIDELITY_NOISE = { 12, 5 }
+local FIDELITY_2_AFTER = 5
+local VERIFY_REWARD = 15
+local INTERFERENCE_NOISE = 22
+
+type EvidenceItem = { channel: string, text: string, weight: { number } }
+
+type Call = {
+	def: SignalRegistry.CallDef,
+	status: string, -- "live" | "resolved"
+	outcome: string?,
+	verdict: string?,
+	correct: boolean?,
+	evidence: { EvidenceItem },
+	readings: { { position: Vector3, bearing: number, strength: number } },
+	estimate: Vector3?,
+	uncertainty: number?,
+	asked: { [number]: boolean },
+	compared: { [string]: boolean },
+	analysed: { [string]: boolean },
+	sourcePosition: Vector3,
+	claimPosition: Vector3,
+	props: { Instance },
+}
+
+type State = {
+	calls: { [string]: Call },
+	order: { string },
+	rescued: { string },
+	paid: { [string]: boolean },
+	traps: number,
+}
+
+local states: { [string]: State } = {}
+
+--------------------------------------------------------------------------
+-- Helpers
+--------------------------------------------------------------------------
+
+local function stateFor(expedition: any): State
+	local s = states[expedition.id]
+	if not s then
+		s = { calls = {}, order = {}, rescued = {}, paid = {}, traps = 0 }
+		states[expedition.id] = s
+	end
+	return s
+end
+
+local function ground(position: Vector3): Vector3
+	local hit = Workspace:Raycast(position + Vector3.new(0, 60, 0), Vector3.new(0, -160, 0))
+	return if hit then hit.Position else position
+end
+
+local function landmark(expedition: any, stationIndex: number, id: string): (Vector3?, string)
+	local built = expedition.lane.stations[stationIndex]
+	local def = StationRegistry.byIndex(stationIndex)
+	local name = id
+	if def then
+		for _, mark in def.layout.landmarks do
+			if mark.id == id then
+				name = mark.name
+			end
+		end
+	end
+	if built and built.landmarks[id] then
+		return built.landmarks[id], name
+	end
+	return nil, name
+end
+
+local function nearestLandmark(expedition: any, stationIndex: number, position: Vector3): (string, number)
+	local def = StationRegistry.byIndex(stationIndex)
+	local built = expedition.lane.stations[stationIndex]
+	local bestName, bestDistance = "nowhere", math.huge
+	if def and built then
+		for _, mark in def.layout.landmarks do
+			local p = built.landmarks[mark.id]
+			if p then
+				local d = (Vector3.new(p.X, 0, p.Z) - Vector3.new(position.X, 0, position.Z)).Magnitude
+				if d < bestDistance then
+					bestName, bestDistance = mark.name, d
+				end
+			end
+		end
+	end
+	return bestName, bestDistance
+end
+
+local function fidelityOf(player: Player): number
+	local profile = DataService.getProfile(player)
+	local verified = if profile then (profile.stats.calls_verified or 0) else 0
+	return if verified >= FIDELITY_2_AFTER then 2 else 1
+end
+
+--- The label is an inference from the evidence gathered, nothing more.
+local function confidence(call: Call): (string, { number })
+	local totals = { 0, 0, 0, 0 }
+	for _, item in call.evidence do
+		for i = 1, 4 do
+			totals[i] += item.weight[i] or 0
+		end
+	end
+	if #call.evidence < 2 then
+		return "Unverified", totals
+	end
+	local order = { 1, 2, 3, 4 }
+	table.sort(order, function(a, b)
+		return totals[a] > totals[b]
+	end)
+	local best, second = totals[order[1]], totals[order[2]]
+	if best <= 1 then
+		return "Unknown", totals
+	end
+	if best - second < 1.5 then
+		return "Inconsistent", totals
+	end
+	local labels = { "Likely human", "Likely a recording", "Likely a mimic", "Likely an anomaly" }
+	return labels[order[1]], totals
+end
+
+local function addEvidence(call: Call, channel: string, text: string, weight: { number })
+	-- One entry per channel (and per question/compare), replaced if retaken.
+	for i, item in call.evidence do
+		if item.channel == channel then
+			call.evidence[i] = { channel = channel, text = text, weight = weight }
+			return
+		end
+	end
+	table.insert(call.evidence, { channel = channel, text = text, weight = weight })
+end
+
+local function snapshot(expedition: any, viewer: Player?): any
+	local s = states[expedition.id]
+	if not s then
+		return { calls = {} }
+	end
+	local calls = {}
+	for _, id in s.order do
+		local call = s.calls[id]
+		local def = call.def
+		local label = confidence(call)
+		local evidence = {}
+		for _, item in call.evidence do
+			table.insert(evidence, { channel = item.channel, text = item.text })
+		end
+		local questions = {}
+		for i, q in def.questions do
+			table.insert(questions, { ask = q.ask, asked = call.asked[i] == true })
+		end
+		local readings = {}
+		for _, r in call.readings do
+			table.insert(readings, { bearing = r.bearing, strength = r.strength })
+		end
+		local _, claimName = landmark(expedition, def.station, def.claims)
+		table.insert(calls, {
+			id = id,
+			caller = def.caller,
+			transcript = def.transcript,
+			claims = claimName,
+			status = call.status,
+			outcome = call.outcome,
+			verdict = call.verdict,
+			label = label,
+			evidence = evidence,
+			questions = questions,
+			readings = readings,
+			estimate = call.estimate,
+			uncertainty = call.uncertainty,
+			waveShape = if call.analysed.waveform then def.waveShape else nil,
+			analysed = { waveform = call.analysed.waveform == true, timing = call.analysed.timing == true },
+		})
+	end
+	return {
+		calls = calls,
+		fidelity = if viewer then fidelityOf(viewer) else 1,
+	}
+end
+
+local function push(expedition: any)
+	for _, player in ExpeditionService.playersOf(expedition) do
+		Net.fireClient("SignalState", player, snapshot(expedition, player))
+	end
+end
+
+local function radio(expedition: any, attribution: string, text: string, duration: number?)
+	Net.fireClients("RadioMessage", ExpeditionService.playersOf(expedition), {
+		id = "signal",
+		source = "other",
+		text = text,
+		duration = duration or 6,
+		attribution = attribution,
+		isFalse = false,
+	})
+end
+
+local function notify(expedition: any, kind: string, title: string, body: string)
+	Net.fireClients("Notify", ExpeditionService.playersOf(expedition), { kind = kind, title = title, body = body, duration = 7 })
+end
+
+local function prop(name: string, size: Vector3, cf: CFrame, colour: Color3, material: Enum.Material, parent: Instance): Part
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Size = size
+	p.CFrame = cf
+	p.Color = colour
+	p.Material = material
+	p.Anchored = true
+	p.CanCollide = false
+	p.Parent = parent
+	return p
+end
+
+--------------------------------------------------------------------------
+-- Calls
+--------------------------------------------------------------------------
+
+local function cleanupCall(call: Call)
+	for _, p in call.props do
+		p:Destroy()
+	end
+	call.props = {}
+end
+
+local function startCall(expedition: any, def: SignalRegistry.CallDef)
+	local s = stateFor(expedition)
+	if s.calls[def.id] then
+		return
+	end
+	local claimPos = landmark(expedition, def.station, def.claims)
+	local sourcePos = landmark(expedition, def.station, def.source)
+	if not claimPos or not sourcePos then
+		log.warn("call " .. def.id .. " has no landmark here; skipped")
+		return
+	end
+	local call: Call = {
+		def = def,
+		status = "live",
+		evidence = {},
+		readings = {},
+		asked = {},
+		compared = {},
+		analysed = {},
+		sourcePosition = ground(sourcePos + def.sourceOffset) + Vector3.new(0, 3, 0),
+		claimPosition = ground(claimPos) + Vector3.new(0, 0.5, 0),
+		props = {},
+	}
+	s.calls[def.id] = call
+	table.insert(s.order, def.id)
+
+	-- The physical clue at the place the caller names.
+	local clue = prop("SignalClue", Vector3.new(2, 2, 2), CFrame.new(call.claimPosition + Vector3.new(3, 1, 0)), C(120, 110, 90), Enum.Material.Fabric, expedition.lane.dropContainer)
+	clue.Transparency = 0.6
+	clue:SetAttribute("SignalCall", def.id)
+	clue:SetAttribute("SignalRole", "clue")
+	clue:SetAttribute("TaskLabel", "Examine for signs")
+	clue:SetAttribute("TaskDetail", "Where the caller says they are")
+	clue:SetAttribute("TaskSeconds", 2)
+	clue:AddTag("RunTask")
+	table.insert(call.props, clue)
+
+	for i, line in def.transcript do
+		task.delay((i - 1) * 6.5, function()
+			if call.status == "live" then
+				radio(expedition, "Unknown signal", line, 6)
+			end
+		end)
+	end
+	notify(expedition, "info", "Signal received: " .. def.caller, "Open the Signal Integrity Analyzer (V) to examine it before you act.")
+	push(expedition)
+	log.info(string.format("%s: call %s started", expedition.id, def.id))
+end
+
+local function resolve(expedition: any, call: Call, verdict: string, by: Player?)
+	if call.status ~= "live" then
+		return
+	end
+	local def = call.def
+	local s = stateFor(expedition)
+	call.status = "resolved"
+	call.verdict = verdict
+	local truth = def.truth
+	local correct = (verdict == "go" and truth ~= "mimic") or (verdict == "mark" and truth == "mimic")
+	call.correct = if verdict == "leave" then nil else correct
+	local result = if verdict == "mark" then def.onMark elseif verdict == "go" then def.onGo else "left:Nobody answered."
+	local kind, text = string.match(result, "^(%a+):(.*)$")
+	call.outcome = text or result
+	cleanupCall(call)
+
+	if kind == "survivor" then
+		table.insert(s.rescued, def.caller)
+		-- A survivor rides with the crew for the rest of the run, and brings
+		-- what they had.
+		local carriage = expedition.train.built.carriages[1]
+		if carriage then
+			local seat
+			for _, d in carriage:GetDescendants() do
+				if d:IsA("Seat") and not d.Occupant and not d:GetAttribute("SurvivorSeat") then
+					seat = d
+					break
+				end
+			end
+			if seat then
+				seat:SetAttribute("SurvivorSeat", true)
+				local figure = prop("Survivor", Vector3.new(1.8, 3.4, 1.0), seat.CFrame * CFrame.new(0, 2.1, 0.2), C(110, 96, 80), Enum.Material.Fabric, carriage)
+				figure.Anchored = false
+				figure.Massless = true
+				local weld = Instance.new("WeldConstraint")
+				weld.Part0 = expedition.train.built.root
+				weld.Part1 = figure
+				weld.Parent = figure
+				local head = prop("SurvivorHead", Vector3.new(1, 1.2, 1), figure.CFrame * CFrame.new(0, 2.3, 0), C(196, 166, 138), Enum.Material.SmoothPlastic, figure)
+				head.Anchored = false
+				head.Massless = true
+				local hw = Instance.new("WeldConstraint")
+				hw.Part0 = figure
+				hw.Part1 = head
+				hw.Parent = head
+			end
+		end
+		if by then
+			InventoryService.add(by, "bandage", 2, true)
+			InventoryService.add(by, "battery", 1, true)
+		end
+		notify(expedition, "info", "Survivor found", call.outcome or "")
+	elseif kind == "trap" then
+		s.traps += 1
+		HorrorDirector.addThreat(expedition.id, 25)
+		CreatureService.hearNoise(expedition.id, call.claimPosition, 14)
+		Net.fireClients("HorrorCue", ExpeditionService.playersOf(expedition), { cue = "creature_near", position = call.claimPosition })
+		notify(expedition, "danger", "It was not a person", call.outcome or "")
+	elseif kind == "cache" then
+		-- The bait was real; with the mimic named, it is safe to take.
+		local container = expedition.lane.dropContainer
+		WorldService.buildDroppedItem("fuel_can", 1, CFrame.new(call.claimPosition + Vector3.new(0, 1, 2)), container)
+		WorldService.buildDroppedItem("relay", 1, CFrame.new(call.claimPosition + Vector3.new(2, 1, 0)), container)
+		notify(expedition, "info", "Mimic named", call.outcome or "")
+	elseif kind == "lost" then
+		notify(expedition, "warning", "The call goes quiet", call.outcome or "")
+	else
+		notify(expedition, "info", "Signal resolved", call.outcome or "")
+	end
+
+	if correct and verdict ~= "leave" and not s.paid[def.id] then
+		s.paid[def.id] = true
+		for _, player in ExpeditionService.playersOf(expedition) do
+			ProgressionService.award(player, { credits = VERIFY_REWARD, source = "signal:" .. def.id }, expedition.crewSize)
+			ProgressionService.addStat(player, "calls_verified", 1)
+		end
+	end
+	log.info(string.format("%s: call %s %s (truth %s, %s)", expedition.id, def.id, verdict, truth, if correct then "correct" else "wrong"))
+	push(expedition)
+end
+
+--- Leaving a station ends its calls unanswered.
+local function closeStation(expedition: any, stationIndex: number)
+	local s = states[expedition.id]
+	if not s then
+		return
+	end
+	for _, call in s.calls do
+		if call.status == "live" and call.def.station == stationIndex then
+			call.status = "resolved"
+			call.verdict = "leave"
+			call.outcome = "The train left. Nobody answered."
+			cleanupCall(call)
+		end
+	end
+	push(expedition)
+end
+
+--------------------------------------------------------------------------
+-- Channels
+--------------------------------------------------------------------------
+
+local function bearingTo(from: Vector3, to: Vector3): number
+	local d = to - from
+	return math.deg(math.atan2(d.X, -d.Z)) % 360
+end
+
+local function triangulate(call: Call): (Vector3?, number?)
+	local r = call.readings
+	if #r < 2 then
+		return nil, nil
+	end
+	-- The most recent reading against the earlier one with the widest
+	-- baseline: two rays in XZ, intersected.
+	local last = r[#r]
+	local best, baseline = nil, 0
+	for i = 1, #r - 1 do
+		local b = (Vector3.new(r[i].position.X, 0, r[i].position.Z) - Vector3.new(last.position.X, 0, last.position.Z)).Magnitude
+		if b > baseline then
+			best, baseline = r[i], b
+		end
+	end
+	if not best or baseline < 15 then
+		return nil, nil
+	end
+	local function dir(deg: number): Vector2
+		local rad = math.rad(deg)
+		return Vector2.new(math.sin(rad), -math.cos(rad))
+	end
+	local p1 = Vector2.new(best.position.X, best.position.Z)
+	local p2 = Vector2.new(last.position.X, last.position.Z)
+	local d1, d2 = dir(best.bearing), dir(last.bearing)
+	local denom = d1.X * d2.Y - d1.Y * d2.X
+	if math.abs(denom) < 0.08 then
+		return nil, nil -- nearly parallel: move further across, not along
+	end
+	local t = ((p2.X - p1.X) * d2.Y - (p2.Y - p1.Y) * d2.X) / denom
+	if t < 0 then
+		return nil, nil
+	end
+	local hit = p1 + d1 * t
+	local uncertainty = math.clamp(t * 0.25, 8, 120)
+	return Vector3.new(hit.X, last.position.Y, hit.Y), uncertainty
+end
+
+local function command(player: Player, rawCommand: any, rawCall: any, rawArg: any): any
+	local commandName: string? = Guard.enum(rawCommand, { "state", "sweep", "waveform", "timing", "challenge", "compare", "verdict" })
+	local expedition = ExpeditionService.forPlayer(player)
+	if not commandName or not expedition then
+		return { ok = false, error = "NO_EXPEDITION" }
+	end
+	if commandName == "state" then
+		return { ok = true, state = snapshot(expedition, player) }
+	end
+	local s = states[expedition.id]
+	local callId = Guard.string(rawCall, 64)
+	local call = if s and callId then s.calls[callId] else nil
+	if not call then
+		return { ok = false, error = "NO_CALL" }
+	end
+	local def = call.def
+	if call.status ~= "live" and commandName ~= "compare" then
+		return { ok = false, error = "RESOLVED" }
+	end
+
+	local which: string = tostring(commandName)
+	if which == "sweep" then
+		local root = Guard.aliveRoot(player)
+		if not root then
+			return { ok = false, error = "NOT_ALIVE" }
+		end
+		local last = call.readings[#call.readings]
+		if last and (root.Position - last.position).Magnitude < 4 then
+			return { ok = false, error = "MOVE_FIRST" }
+		end
+		local noise = FIDELITY_NOISE[fidelityOf(player)] + def.interference * INTERFERENCE_NOISE
+		local trueBearing = bearingTo(root.Position, call.sourcePosition)
+		local bearing = (trueBearing + (math.random() * 2 - 1) * noise) % 360
+		local distance = (root.Position - call.sourcePosition).Magnitude
+		table.insert(call.readings, { position = root.Position, bearing = bearing, strength = math.clamp(120 / math.max(distance, 1), 0.05, 1) })
+		while #call.readings > 6 do
+			table.remove(call.readings, 1)
+		end
+		local estimate, uncertainty = triangulate(call)
+		if estimate then
+			call.estimate = estimate
+			call.uncertainty = uncertainty
+			local near, nearDistance = nearestLandmark(expedition, def.station, estimate)
+			local _, claimName = landmark(expedition, def.station, def.claims)
+			local claimDistance = (Vector3.new(estimate.X, 0, estimate.Z) - Vector3.new(call.claimPosition.X, 0, call.claimPosition.Z)).Magnitude
+			local text, weight
+			if claimDistance <= math.max(35, (uncertainty or 0)) then
+				text = string.format("Triangulated near %s (within about %d studs): where the caller says they are.", claimName, math.floor(uncertainty or 0))
+				weight = { 1, 1, -1, 0 }
+			elseif nearDistance > 70 then
+				text = string.format("Triangulated out in the trees, nowhere near %s (within about %d studs).", claimName, math.floor(uncertainty or 0))
+				weight = { -1, 0, 2, 0 }
+			else
+				text = string.format("Triangulated near %s, not %s as claimed (within about %d studs).", near, claimName, math.floor(uncertainty or 0))
+				weight = { -1, 0, 2, 0 }
+			end
+			addEvidence(call, "bearing", text, weight)
+		end
+		push(expedition)
+		return { ok = true, bearing = bearing, needsMore = estimate == nil }
+	elseif which == "waveform" then
+		call.analysed.waveform = true
+		addEvidence(call, "waveform", def.waveform.text, def.waveform.weight)
+	elseif which == "timing" then
+		call.analysed.timing = true
+		addEvidence(call, "timing", def.timing.text, def.timing.weight)
+	elseif which == "challenge" then
+		local index = tonumber(rawArg)
+		local q = if index then def.questions[index] else nil
+		if not q or call.asked[index :: number] then
+			return { ok = false, error = "BAD_QUESTION" }
+		end
+		call.asked[index :: number] = true
+		radio(expedition, player.DisplayName, q.ask, 4)
+		task.delay(3, function()
+			radio(expedition, "Unknown signal", q.reply, 6)
+		end)
+		addEvidence(call, "challenge:" .. tostring(index), string.format("Asked \"%s\" Reply: \"%s\"", q.ask, q.reply), q.weight)
+	elseif which == "compare" then
+		local otherId = Guard.string(rawArg, 64)
+		local other = if otherId and s then s.calls[otherId] else nil
+		if not other or other == call then
+			return { ok = false, error = "BAD_COMPARE" }
+		end
+		local shared = nil
+		for _, p in def.phrases do
+			if table.find(other.def.phrases, p) then
+				shared = p
+			end
+		end
+		local text, weight
+		if shared and def.truth == "human" then
+			-- A real person can repeat what they heard, as a warning.
+			text = string.format("Shares \"%s\" with %s, but here it is quoted, as a warning.", shared, other.def.caller)
+			weight = { 1, 0, -1, 0 }
+		elseif shared then
+			text = string.format("Uses the same phrase as %s: \"%s\". Different callers, the same words.", other.def.caller, shared)
+			weight = { -1, 1, 2, 0 }
+		else
+			text = string.format("Nothing in common with %s.", other.def.caller)
+			weight = { 0, 0, 0, 0 }
+		end
+		if call.status == "live" then
+			addEvidence(call, "compare:" .. other.def.id, text, weight)
+		end
+	elseif which == "verdict" then
+		local verdict = Guard.enum(rawArg, { "go", "mark", "leave" })
+		if not verdict then
+			return { ok = false, error = "BAD_VERDICT" }
+		end
+		if verdict == "go" then
+			-- Going is physical: a meeting point at the place the caller
+			-- named, which resolves the call when someone reaches it.
+			if call.verdict == "going" then
+				return { ok = true }
+			end
+			call.verdict = "going"
+			local point = prop("SignalMeeting", Vector3.new(1.6, 4, 1.6), CFrame.new(call.claimPosition + Vector3.new(-3, 2, 0)), C(255, 200, 120), Enum.Material.Neon, expedition.lane.dropContainer)
+			point.Transparency = 0.5
+			point:SetAttribute("SignalCall", def.id)
+			point:SetAttribute("SignalRole", "meeting")
+			point:SetAttribute("TaskLabel", "Answer the call here")
+			point:SetAttribute("TaskDetail", def.caller)
+			point:SetAttribute("TaskSeconds", 2)
+			point:AddTag("RunTask")
+			local light = Instance.new("PointLight")
+			light.Color = C(255, 200, 120)
+			light.Range = 14
+			light.Parent = point
+			table.insert(call.props, point)
+			notify(expedition, "info", "Answering " .. def.caller, "Go to the marked place the caller named.")
+		else
+			resolve(expedition, call, verdict, player)
+			return { ok = true }
+		end
+	end
+	push(expedition)
+	return { ok = true }
+end
+
+--------------------------------------------------------------------------
+
+function SignalService.summary(expedition: any): any
+	local s = states[expedition.id]
+	if not s then
+		return nil
+	end
+	local total, correct, answered = 0, 0, 0
+	for _, call in s.calls do
+		total += 1
+		if call.verdict and call.verdict ~= "leave" then
+			answered += 1
+		end
+		if call.correct then
+			correct += 1
+		end
+	end
+	return { calls = total, answered = answered, correct = correct, rescued = s.rescued, traps = s.traps }
+end
+
+function SignalService.start()
+	ExpeditionService.resultsSignals = SignalService.summary
+
+	ExpeditionService.StationReached:Connect(function(expedition, index)
+		for _, def in SignalRegistry.forStation(index) do
+			task.delay(def.delay, function()
+				if expedition.state ~= "closed" and expedition.stationIndex == index and (expedition.state == "onstation" or expedition.state == "climax") then
+					Protect.call(startCall, expedition, def)
+				end
+			end)
+		end
+	end)
+
+	ExpeditionService.StateChanged:Connect(function(expedition, state)
+		if state == "travelling" and expedition.stationIndex > 0 then
+			closeStation(expedition, expedition.stationIndex)
+		end
+	end)
+
+	-- A retry plays the station again, calls included.
+	ExpeditionService.Retried:Connect(function(expedition)
+		local s = states[expedition.id]
+		if not s then
+			return
+		end
+		for i = #s.order, 1, -1 do
+			local id = s.order[i]
+			local call = s.calls[id]
+			if call.def.station >= expedition.stationIndex then
+				cleanupCall(call)
+				s.calls[id] = nil
+				s.paid[id] = s.paid[id]
+				table.remove(s.order, i)
+			end
+		end
+		push(expedition)
+		local index = expedition.stationIndex
+		for _, def in SignalRegistry.forStation(index) do
+			task.delay(def.delay, function()
+				if expedition.state ~= "closed" and expedition.stationIndex == index then
+					Protect.call(startCall, expedition, def)
+				end
+			end)
+		end
+	end)
+
+	ExpeditionService.Ended:Connect(function(expedition)
+		local s = states[expedition.id]
+		if s then
+			for _, call in s.calls do
+				cleanupCall(call)
+			end
+		end
+		states[expedition.id] = nil
+	end)
+
+	-- Examining the clue, and reaching a meeting point.
+	InteractionService.RunTaskDone:Connect(function(player, part)
+		local id = part:GetAttribute("SignalCall")
+		if type(id) ~= "string" then
+			return
+		end
+		local expedition = ExpeditionService.forPlayer(player)
+		local s = if expedition then states[expedition.id] else nil
+		local call = if s then s.calls[id] else nil
+		if not expedition or not call or call.status ~= "live" then
+			return
+		end
+		if part:GetAttribute("SignalRole") == "clue" then
+			addEvidence(call, "clue", call.def.clue.text, call.def.clue.weight)
+			part:RemoveTag("RunTask")
+			push(expedition)
+		elseif part:GetAttribute("SignalRole") == "meeting" then
+			resolve(expedition, call, "go", player)
+		end
+	end)
+
+	Net.onServerInvoke("SignalCommand", command)
+
+	Players.PlayerAdded:Connect(function() end)
+	log.info(string.format("started with %d authored calls", #SignalRegistry.Calls))
+end
+
+return SignalService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="67">
           <Properties>
             <string name="Name">SignatureMoments</string>
             <string name="Source"><![CDATA[--!strict
@@ -22715,7 +23880,7 @@ return SignatureMoments
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="66">
+        <Item class="ModuleScript" referent="68">
           <Properties>
             <string name="Name">SurvivalService</string>
             <string name="Source"><![CDATA[--!strict
@@ -23619,7 +24784,7 @@ return SurvivalService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="67">
+        <Item class="ModuleScript" referent="69">
           <Properties>
             <string name="Name">TrainService</string>
             <string name="Source"><![CDATA[--!strict
@@ -24488,7 +25653,7 @@ return TrainService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="68">
+        <Item class="ModuleScript" referent="70">
           <Properties>
             <string name="Name">WorldService</string>
             <string name="Source"><![CDATA[--!strict
@@ -25062,11 +26227,11 @@ return WorldService
           </Properties>
         </Item>
       </Item>
-      <Item class="Folder" referent="69">
+      <Item class="Folder" referent="71">
         <Properties>
           <string name="Name">World</string>
         </Properties>
-        <Item class="ModuleScript" referent="70">
+        <Item class="ModuleScript" referent="72">
           <Properties>
             <string name="Name">BuildKit</string>
             <string name="Source"><![CDATA[--!strict
@@ -26254,7 +27419,7 @@ return BuildKit
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="71">
+        <Item class="ModuleScript" referent="73">
           <Properties>
             <string name="Name">ForestBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -26808,7 +27973,7 @@ return ForestBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="72">
+        <Item class="ModuleScript" referent="74">
           <Properties>
             <string name="Name">LobbyBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -28035,7 +29200,7 @@ return LobbyBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="73">
+        <Item class="ModuleScript" referent="75">
           <Properties>
             <string name="Name">StationBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -29696,7 +30861,7 @@ return StationBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="74">
+        <Item class="ModuleScript" referent="76">
           <Properties>
             <string name="Name">TrainBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -32010,12 +33175,12 @@ return TrainBuilder
       </Item>
     </Item>
   </Item>
-  <Item class="ServerStorage" referent="75">
+  <Item class="ServerStorage" referent="77">
     <Properties>
       <string name="Name">ServerStorage</string>
     </Properties>
   </Item>
-  <Item class="SoundService" referent="76">
+  <Item class="SoundService" referent="78">
     <Properties>
       <string name="Name">SoundService</string>
       <float name="DistanceFactor">8</float>
@@ -32024,14 +33189,14 @@ return TrainBuilder
       <float name="RolloffScale">1.25</float>
     </Properties>
   </Item>
-  <Item class="StarterGui" referent="77">
+  <Item class="StarterGui" referent="79">
     <Properties>
       <string name="Name">StarterGui</string>
       <bool name="ResetPlayerGuiOnSpawn">false</bool>
       <token name="ScreenOrientation">4</token>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="78">
+  <Item class="StarterPlayer" referent="80">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <bool name="AutoJumpEnabled">false</bool>
@@ -32043,16 +33208,16 @@ return TrainBuilder
       <bool name="EnableMouseLockOption">false</bool>
       <bool name="LoadCharacterAppearance">true</bool>
     </Properties>
-    <Item class="StarterCharacterScripts" referent="79">
+    <Item class="StarterCharacterScripts" referent="81">
       <Properties>
         <string name="Name">StarterCharacterScripts</string>
       </Properties>
     </Item>
-    <Item class="StarterPlayerScripts" referent="80">
+    <Item class="StarterPlayerScripts" referent="82">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="81">
+      <Item class="LocalScript" referent="83">
         <Properties>
           <string name="Name">LastSignalClient</string>
           <string name="Source"><![CDATA[--!strict
@@ -32111,6 +33276,7 @@ local BOOT_ORDER = {
 	{ name = "HorrorEffectsController", module = Controllers.HorrorEffectsController },
 	{ name = "LampController", module = Controllers.LampController },
 	{ name = "JourneyController", module = Controllers.JourneyController },
+	{ name = "SignalController", module = Controllers.SignalController },
 }
 
 local failures: { string } = {}
@@ -32227,11 +33393,11 @@ else
 end
 ]]></string>
         </Properties>
-        <Item class="Folder" referent="82">
+        <Item class="Folder" referent="84">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="83">
+          <Item class="ModuleScript" referent="85">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--!strict
@@ -32888,7 +34054,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="84">
+          <Item class="ModuleScript" referent="86">
             <Properties>
               <string name="Name">CabController</string>
               <string name="Source"><![CDATA[--!strict
@@ -33445,7 +34611,7 @@ return CabController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="85">
+          <Item class="ModuleScript" referent="87">
             <Properties>
               <string name="Name">CameraController</string>
               <string name="Source"><![CDATA[--!strict
@@ -33950,7 +35116,7 @@ return CameraController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="86">
+          <Item class="ModuleScript" referent="88">
             <Properties>
               <string name="Name">CinematicController</string>
               <string name="Source"><![CDATA[--!strict
@@ -34368,7 +35534,7 @@ return CinematicController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="87">
+          <Item class="ModuleScript" referent="89">
             <Properties>
               <string name="Name">HUDController</string>
               <string name="Source"><![CDATA[--!strict
@@ -35446,7 +36612,7 @@ return HUDController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="88">
+          <Item class="ModuleScript" referent="90">
             <Properties>
               <string name="Name">HorrorEffectsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -35724,7 +36890,7 @@ return HorrorEffectsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="89">
+          <Item class="ModuleScript" referent="91">
             <Properties>
               <string name="Name">InputController</string>
               <string name="Source"><![CDATA[--!strict
@@ -35792,6 +36958,7 @@ local ACTIONS: { ActionDef } = {
 	{ id = "sprint", label = "Sprint", description = "Run, while you have the stamina.", key = Enum.KeyCode.LeftShift, gamepad = Enum.KeyCode.ButtonL3, touch = "primary", held = true },
 	{ id = "crouch", label = "Crouch", description = "Move slowly and quietly.", key = Enum.KeyCode.C, gamepad = Enum.KeyCode.ButtonB, touch = "secondary", held = true },
 	{ id = "flashlight", label = "Lamp", description = "Toggle your lamp.", key = Enum.KeyCode.F, gamepad = Enum.KeyCode.DPadUp, touch = "primary" },
+	{ id = "analyzer", label = "Analyzer", description = "Open the Signal Integrity Analyzer.", key = Enum.KeyCode.V, gamepad = Enum.KeyCode.ButtonR3 },
 	{ id = "fire", label = "Attack", description = "Fire or swing your equipped weapon.", gamepad = Enum.KeyCode.ButtonR2, touch = "primary", held = true },
 	{ id = "aim", label = "Aim", description = "Steady your aim.", gamepad = Enum.KeyCode.ButtonL2, touch = "secondary", held = true },
 	{ id = "reload", label = "Reload", description = "Reload the equipped firearm.", key = Enum.KeyCode.R, gamepad = Enum.KeyCode.ButtonY, touch = "secondary" },
@@ -36096,7 +37263,7 @@ return InputController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="90">
+          <Item class="ModuleScript" referent="92">
             <Properties>
               <string name="Name">InteractionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -36695,7 +37862,7 @@ return InteractionController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="91">
+          <Item class="ModuleScript" referent="93">
             <Properties>
               <string name="Name">JourneyController</string>
               <string name="Source"><![CDATA[--!strict
@@ -36780,7 +37947,7 @@ return JourneyController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="92">
+          <Item class="ModuleScript" referent="94">
             <Properties>
               <string name="Name">LampController</string>
               <string name="Source"><![CDATA[--!strict
@@ -36819,7 +37986,7 @@ return LampController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="93">
+          <Item class="ModuleScript" referent="95">
             <Properties>
               <string name="Name">MenuController</string>
               <string name="Source"><![CDATA[--!strict
@@ -38283,6 +39450,16 @@ builders.results = function(frame: Frame)
 
 	JourneyUI.results(scroll, 15, results.journey)
 
+	local signals = results.signals
+	if type(signals) == "table" and (signals.calls or 0) > 0 then
+		Widgets.divider(scroll, 25)
+		Widgets.statRow(scroll, "Signal calls", string.format("%d heard, %d acted on, %d judged right", signals.calls, signals.answered or 0, signals.correct or 0), 26)
+		Widgets.statRow(scroll, "Survivors brought aboard", if #(signals.rescued or {}) > 0 then table.concat(signals.rescued, ", ") else "none", 27)
+		if (signals.traps or 0) > 0 then
+			Widgets.statRow(scroll, "Traps walked into", tostring(signals.traps), 28)
+		end
+	end
+
 	Widgets.button({
 		text = "Back to the yard",
 		primary = true,
@@ -38553,7 +39730,420 @@ return MenuController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="94">
+          <Item class="ModuleScript" referent="96">
+            <Properties>
+              <string name="Name">SignalController</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	SignalController
+	----------------
+	The Signal Integrity Analyzer on screen: a dispatcher's instrument with a
+	bearing dial and a waveform screen, and the crew's shared notebook of
+	calls. Opened with V (or the right stick press).
+
+	The analyzer only shows what the server has established from the crew's
+	own evidence. It never knows the truth of a call, so it never says it.
+	The movement keys keep working while it is open, because triangulation
+	means walking between sweeps.
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage:WaitForChild("LastSignal")
+
+local Logger = require(Shared.Core.Logger)
+local Net = require(Shared.Core.Net)
+
+local InputController = require(script.Parent.InputController)
+local Theme = require(script.Parent.Parent.UI.Theme)
+local Widgets = require(script.Parent.Parent.UI.Widgets)
+
+local log = Logger.new("SignalController")
+local C = Color3.fromRGB
+local player = Players.LocalPlayer
+
+local SignalController = {}
+
+local GREEN = C(120, 255, 160)
+local DIM = C(40, 90, 60)
+local LABEL_COLOURS: { [string]: Color3 } = {
+	["Unverified"] = C(170, 170, 170),
+	["Unknown"] = C(170, 170, 170),
+	["Inconsistent"] = C(240, 190, 80),
+	["Likely human"] = C(120, 220, 140),
+	["Likely a recording"] = C(140, 180, 255),
+	["Likely a mimic"] = C(255, 110, 90),
+	["Likely an anomaly"] = C(200, 160, 255),
+}
+
+local gui: ScreenGui? = nil
+local state: any = { calls = {}, fidelity = 1 }
+local selected: string? = nil
+local needle: Frame? = nil
+local bars: { Frame } = {}
+local lastBearing: number? = nil
+local currentShape: string? = nil
+local message = ""
+
+local render: () -> ()
+
+local function call(command: string, a: any?, b: any?): any
+	local result = Net.invokeServer("SignalCommand", command, a, b)
+	if type(result) == "table" and result.ok == false then
+		local errors: { [string]: string } = {
+			MOVE_FIRST = "Move at least a few studs before sweeping again.",
+			RESOLVED = "That call is over.",
+			NO_EXPEDITION = "No signals out here.",
+		}
+		message = errors[tostring(result.error)] or tostring(result.error)
+	end
+	return result
+end
+
+local function selectedCall(): any
+	for _, c in state.calls or {} do
+		if c.id == selected then
+			return c
+		end
+	end
+	return nil
+end
+
+local function cameraYaw(): number
+	local camera = Workspace.CurrentCamera
+	if not camera then
+		return 0
+	end
+	local look = camera.CFrame.LookVector
+	return math.deg(math.atan2(look.X, -look.Z))
+end
+
+local function close()
+	if gui then
+		gui:Destroy()
+		gui = nil
+	end
+	needle = nil
+	bars = {}
+end
+
+local function instrument(parent: Instance, c: any, order: number)
+	local row = Instance.new("Frame")
+	row.Name = "Instrument"
+	row.BackgroundTransparency = 1
+	row.Size = UDim2.new(1, 0, 0, 120)
+	row.LayoutOrder = order
+	row.Parent = parent
+
+	-- The bearing dial. The needle points along the last sweep, turned to
+	-- the player's own heading, so it shows which way to walk.
+	local dial = Instance.new("Frame")
+	dial.Name = "Dial"
+	dial.Size = UDim2.fromOffset(110, 110)
+	dial.Position = UDim2.fromOffset(4, 5)
+	dial.BackgroundColor3 = C(8, 22, 14)
+	dial.Parent = row
+	local round = Instance.new("UICorner")
+	round.CornerRadius = UDim.new(1, 0)
+	round.Parent = dial
+	local ring = Instance.new("UIStroke")
+	ring.Color = DIM
+	ring.Thickness = 2
+	ring.Parent = dial
+	for i = 0, 7 do
+		local tick = Instance.new("Frame")
+		tick.Size = UDim2.fromOffset(2, 8)
+		tick.AnchorPoint = Vector2.new(0.5, 0.5)
+		local a = math.rad(i * 45)
+		tick.Position = UDim2.new(0.5, math.sin(a) * 48, 0.5, -math.cos(a) * 48)
+		tick.Rotation = i * 45
+		tick.BackgroundColor3 = DIM
+		tick.BorderSizePixel = 0
+		tick.Parent = dial
+	end
+	local n = Instance.new("Frame")
+	n.Name = "Needle"
+	n.AnchorPoint = Vector2.new(0.5, 1)
+	n.Position = UDim2.fromScale(0.5, 0.5)
+	n.Size = UDim2.fromOffset(3, 46)
+	n.BackgroundColor3 = GREEN
+	n.BorderSizePixel = 0
+	n.Visible = #c.readings > 0
+	n.Parent = dial
+	needle = n
+	local reading = c.readings[#c.readings]
+	lastBearing = if reading then reading.bearing else nil
+	local hub = Instance.new("TextLabel")
+	hub.BackgroundTransparency = 1
+	hub.Size = UDim2.fromScale(1, 0.3)
+	hub.Position = UDim2.fromScale(0, 0.7)
+	hub.Font = Enum.Font.Code
+	hub.TextColor3 = GREEN
+	hub.TextSize = 11
+	hub.Text = if reading then string.format("%03d  %d%%", math.floor(reading.bearing), math.floor(reading.strength * 100)) else "NO FIX"
+	hub.Parent = dial
+
+	-- The waveform screen.
+	local screen = Instance.new("Frame")
+	screen.Name = "Waveform"
+	screen.Size = UDim2.new(1, -128, 0, 110)
+	screen.Position = UDim2.fromOffset(124, 5)
+	screen.BackgroundColor3 = C(8, 22, 14)
+	screen.ClipsDescendants = true
+	screen.Parent = row
+	local sc = Instance.new("UICorner")
+	sc.CornerRadius = UDim.new(0, 6)
+	sc.Parent = screen
+	bars = {}
+	for i = 1, 28 do
+		local bar = Instance.new("Frame")
+		bar.AnchorPoint = Vector2.new(0, 0.5)
+		bar.Position = UDim2.new((i - 1) / 28, 1, 0.5, 0)
+		bar.Size = UDim2.new(1 / 28, -2, 0, 2)
+		bar.BackgroundColor3 = GREEN
+		bar.BorderSizePixel = 0
+		bar.Parent = screen
+		table.insert(bars, bar)
+	end
+	currentShape = c.waveShape
+	local caption = Instance.new("TextLabel")
+	caption.BackgroundTransparency = 1
+	caption.Size = UDim2.new(1, -8, 0, 14)
+	caption.Position = UDim2.fromOffset(4, 2)
+	caption.Font = Enum.Font.Code
+	caption.TextSize = 11
+	caption.TextXAlignment = Enum.TextXAlignment.Left
+	caption.TextColor3 = DIM
+	caption.Text = if currentShape then "SPECTRUM: " .. string.upper(currentShape) else "SPECTRUM: NOT ANALYSED"
+	caption.Parent = screen
+end
+
+local function button(parent: Instance, text: string, order: number, onClick: () -> (), primary: boolean?, enabled: boolean?)
+	Widgets.button({
+		text = text,
+		primary = primary,
+		enabled = enabled ~= false,
+		parent = parent,
+		layoutOrder = order,
+		fit = true,
+		onClick = function()
+			onClick()
+			render()
+		end,
+	})
+end
+
+--- A column that is as tall as its contents (Widgets.column fills its parent).
+local function column(parent: Instance, gap: number, order: number): Frame
+	local c = Widgets.column(parent, gap)
+	c.Size = UDim2.new(1, 0, 0, 0)
+	c.AutomaticSize = Enum.AutomaticSize.Y
+	c.LayoutOrder = order
+	return c
+end
+
+function render()
+	if not gui then
+		return
+	end
+	local root = gui:FindFirstChild("Panel")
+	if root then
+		root:Destroy()
+	end
+	local panel = Widgets.panel({
+		name = "Panel",
+		size = UDim2.new(0, 400, 1, -140),
+		position = UDim2.new(0, 16, 0, 70),
+		padding = 0.8,
+		background = C(14, 18, 16),
+		parent = gui,
+	})
+	local scroll = Widgets.scroll(panel, 0.5)
+	scroll.Size = UDim2.fromScale(1, 1)
+
+	local top = Widgets.row(scroll, 0.5)
+	top.LayoutOrder = 1
+	Widgets.label({ text = "SIGNAL INTEGRITY ANALYZER", size = "small", font = Theme.Font.mono, colour = GREEN, parent = top, width = UDim.new(1, -70) })
+	local closeButton = Widgets.button({ text = "Close", width = UDim.new(0, 64), parent = top, onClick = close })
+	-- A modal button frees the mouse from first-person lock while open.
+	closeButton.instance.Modal = true
+
+	Widgets.caption(scroll, string.format("Fidelity %d of 2. %s", state.fidelity or 1, if (state.fidelity or 1) < 2 then "Five correct verdicts sharpen the bearing." else "Bearing at full resolution."), 2)
+
+	local calls = state.calls or {}
+	if #calls == 0 then
+		Widgets.caption(scroll, "No signals logged. Calls arrive at stations; this notebook is shared with your crew.", 3)
+		return
+	end
+
+	local tabs = column(scroll, 0.3, 3)
+	for i, c in calls do
+		local mark = if c.status == "live" then "LIVE" else "closed"
+		button(tabs, string.format("%s   [%s]   %s", c.caller, mark, c.label), i, function()
+			selected = c.id
+		end, c.id == selected)
+	end
+
+	local c = selectedCall()
+	if not c then
+		Widgets.caption(scroll, "Select a call.", 4)
+		return
+	end
+
+	Widgets.divider(scroll, 5)
+	Widgets.label({ text = c.label, size = "heading", font = Theme.Font.heading, colour = LABEL_COLOURS[c.label] or GREEN, parent = scroll, layoutOrder = 6 })
+	Widgets.label({ text = "\"" .. table.concat(c.transcript, " ") .. "\"", size = "small", wrap = true, colour = Theme.colour("textMuted"), parent = scroll, layoutOrder = 7 })
+	Widgets.caption(scroll, "Claims to be at " .. tostring(c.claims) .. ".", 8)
+
+	instrument(scroll, c, 9)
+	if message ~= "" then
+		Widgets.caption(scroll, message, 10)
+	end
+
+	local live = c.status == "live"
+	if live then
+		local channels = column(scroll, 0.3, 11)
+		button(channels, if #c.readings == 0 then "Sweep for bearing here" else "Sweep again from a new spot", 1, function()
+			message = ""
+			local r = call("sweep", c.id)
+			if type(r) == "table" and r.ok then
+				message = if r.needsMore then "Bearing taken. Move well to one side and sweep again to triangulate." else "Source triangulated."
+			end
+		end)
+		button(channels, "Analyse waveform", 2, function()
+			call("waveform", c.id)
+		end, false, not c.analysed.waveform)
+		button(channels, "Check time, ID and kilometre post", 3, function()
+			call("timing", c.id)
+		end, false, not c.analysed.timing)
+		for qi, q in c.questions do
+			button(channels, "Ask: " .. q.ask, 3 + qi, function()
+				call("challenge", c.id, qi)
+			end, false, not q.asked)
+		end
+		local k = 10
+		for _, other in calls do
+			if other.id ~= c.id then
+				k += 1
+				button(channels, "Compare with: " .. other.caller, k, function()
+					call("compare", c.id, other.id)
+				end)
+			end
+		end
+	end
+
+	Widgets.label({ text = "Evidence", size = "small", font = Theme.Font.heading, parent = scroll, layoutOrder = 12 })
+	if #c.evidence == 0 then
+		Widgets.caption(scroll, "Nothing gathered yet. Sweep, analyse, ask, and examine the place the caller names.", 13)
+	else
+		local lines = {}
+		for _, e in c.evidence do
+			table.insert(lines, "• " .. e.text)
+		end
+		Widgets.label({ text = table.concat(lines, "\n"), size = "small", wrap = true, parent = scroll, layoutOrder = 13 })
+	end
+
+	if live then
+		local verdicts = column(scroll, 0.3, 14)
+		if c.verdict == "going" then
+			Widgets.caption(verdicts, "Answering: go to the marked place the caller named.", 1)
+		else
+			button(verdicts, "Answer it: go to " .. tostring(c.claims), 1, function()
+				call("verdict", c.id, "go")
+			end, true)
+		end
+		button(verdicts, "Mark it as a mimic", 2, function()
+			call("verdict", c.id, "mark")
+		end)
+		button(verdicts, "Leave it", 3, function()
+			call("verdict", c.id, "leave")
+		end)
+	else
+		Widgets.label({ text = tostring(c.outcome or ""), size = "small", wrap = true, colour = GREEN, parent = scroll, layoutOrder = 14 })
+	end
+end
+
+local function open()
+	local playerGui = player:FindFirstChildOfClass("PlayerGui")
+	if not playerGui then
+		return
+	end
+	gui = Widgets.screen("SignalAnalyzer", 25, playerGui)
+	message = ""
+	local result = Net.invokeServer("SignalCommand", "state")
+	if type(result) == "table" and result.ok then
+		state = result.state
+	end
+	if not selected and state.calls and #state.calls > 0 then
+		selected = state.calls[#state.calls].id
+	end
+	render()
+end
+
+function SignalController.start()
+	InputController.Action:Connect(function(actionId, pressed)
+		if actionId ~= "analyzer" or not pressed then
+			return
+		end
+		if gui then
+			close()
+		else
+			open()
+		end
+	end)
+
+	Net.onClientEvent("SignalState", function(payload)
+		if type(payload) ~= "table" then
+			return
+		end
+		state = payload
+		if not selected and #(payload.calls or {}) > 0 then
+			selected = payload.calls[#payload.calls].id
+		end
+		if gui then
+			render()
+		end
+	end)
+
+	-- The dial and the screen are alive while the analyzer is open.
+	RunService.RenderStepped:Connect(function()
+		if not gui then
+			return
+		end
+		local n = needle
+		if n and lastBearing then
+			n.Rotation = lastBearing - cameraYaw()
+		end
+		local t = os.clock()
+		for i, bar in bars do
+			local h = 2
+			local shape = currentShape
+			if shape == "clean" then
+				h = 10 + math.abs(math.sin(t * 3 + i * 0.5)) * 40 * (0.6 + 0.4 * math.noise(i * 0.3, t))
+			elseif shape == "loop" then
+				-- The same pattern, exactly, over and over.
+				h = 10 + math.abs(math.sin((i % 7) * 0.9 + math.floor(t * 2) * 0)) * 45
+			elseif shape == "phase" then
+				h = 10 + math.abs(math.sin(t * 3 - i * 0.5)) * 40 * (if i % 2 == 0 then 1 else 0.3)
+			elseif shape == "noise" then
+				h = 4 + math.random() * 60
+			elseif shape == "mechanical" then
+				h = if math.floor(t * 2 + i / 4) % 2 == 0 then 50 else 6
+			end
+			bar.Size = UDim2.new(1 / 28, -2, 0, h)
+		end
+	end)
+
+	log.info("started")
+end
+
+return SignalController
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="97">
             <Properties>
               <string name="Name">StateController</string>
               <string name="Source"><![CDATA[--!strict
@@ -38808,7 +40398,7 @@ return StateController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="95">
+          <Item class="ModuleScript" referent="98">
             <Properties>
               <string name="Name">TrainRideController</string>
               <string name="Source"><![CDATA[--!strict
@@ -39200,7 +40790,7 @@ return TrainRideController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="96">
+          <Item class="ModuleScript" referent="99">
             <Properties>
               <string name="Name">WeaponController</string>
               <string name="Source"><![CDATA[--!strict
@@ -39960,11 +41550,11 @@ return WeaponController
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="97">
+        <Item class="Folder" referent="100">
           <Properties>
             <string name="Name">UI</string>
           </Properties>
-          <Item class="ModuleScript" referent="98">
+          <Item class="ModuleScript" referent="101">
             <Properties>
               <string name="Name">ArmoryPanel</string>
               <string name="Source"><![CDATA[--!strict
@@ -40345,7 +41935,7 @@ return ArmoryPanel
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="99">
+          <Item class="ModuleScript" referent="102">
             <Properties>
               <string name="Name">JourneyUI</string>
               <string name="Source"><![CDATA[--!strict
@@ -40523,7 +42113,7 @@ return JourneyUI
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="100">
+          <Item class="ModuleScript" referent="103">
             <Properties>
               <string name="Name">Theme</string>
               <string name="Source"><![CDATA[--!strict
@@ -40797,7 +42387,7 @@ return Theme
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="101">
+          <Item class="ModuleScript" referent="104">
             <Properties>
               <string name="Name">Widgets</string>
               <string name="Source"><![CDATA[--!strict
@@ -41511,13 +43101,13 @@ return Widgets
       </Item>
     </Item>
   </Item>
-  <Item class="TextChatService" referent="102">
+  <Item class="TextChatService" referent="105">
     <Properties>
       <string name="Name">TextChatService</string>
       <token name="ChatVersion">1</token>
     </Properties>
   </Item>
-  <Item class="Workspace" referent="103">
+  <Item class="Workspace" referent="106">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>
@@ -41529,7 +43119,7 @@ return Widgets
       <int name="StreamingMinRadius">192</int>
       <int name="StreamingTargetRadius">640</int>
     </Properties>
-    <Item class="Terrain" referent="104">
+    <Item class="Terrain" referent="107">
       <Properties>
         <string name="Name">Terrain</string>
       </Properties>

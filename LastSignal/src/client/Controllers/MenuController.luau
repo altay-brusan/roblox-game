@@ -1459,6 +1459,16 @@ builders.results = function(frame: Frame)
 
 	JourneyUI.results(scroll, 15, results.journey)
 
+	local signals = results.signals
+	if type(signals) == "table" and (signals.calls or 0) > 0 then
+		Widgets.divider(scroll, 25)
+		Widgets.statRow(scroll, "Signal calls", string.format("%d heard, %d acted on, %d judged right", signals.calls, signals.answered or 0, signals.correct or 0), 26)
+		Widgets.statRow(scroll, "Survivors brought aboard", if #(signals.rescued or {}) > 0 then table.concat(signals.rescued, ", ") else "none", 27)
+		if (signals.traps or 0) > 0 then
+			Widgets.statRow(scroll, "Traps walked into", tostring(signals.traps), 28)
+		end
+	end
+
 	Widgets.button({
 		text = "Back to the yard",
 		primary = true,

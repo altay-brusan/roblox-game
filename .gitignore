@@ -26,3 +26,4 @@ tools/devsync/fix_*.js
 tools/devsync/scale_*.js
 tools/devsync/rename_*.js
 tools/devsync/set_prices.js
+tools/devsync/fix_sia_*.js

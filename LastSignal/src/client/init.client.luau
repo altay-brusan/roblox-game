@@ -54,6 +54,7 @@ local BOOT_ORDER = {
 	{ name = "HorrorEffectsController", module = Controllers.HorrorEffectsController },
 	{ name = "LampController", module = Controllers.LampController },
 	{ name = "JourneyController", module = Controllers.JourneyController },
+	{ name = "SignalController", module = Controllers.SignalController },
 }
 
 local failures: { string } = {}
