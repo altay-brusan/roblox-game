@@ -602,6 +602,8 @@ function TrainService.applyControl(player: Player, state: TrainState, control: s
 		return true, nil
 	elseif control == "wipers" then
 		state.wipers = not state.wipers
+		-- Clients sweep the arms themselves; see TrainRideController.
+		state.built.model:SetAttribute("Wipers", state.wipers)
 		return true, nil
 	elseif control == "doors" then
 		local now = os.clock()

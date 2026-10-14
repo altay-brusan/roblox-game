@@ -3,11 +3,11 @@
     <Properties>
       <string name="Name">Lighting</string>
       <Color3 name="Ambient">
-        <R>0.06</R>
-        <G>0.065</G>
-        <B>0.08</B>
+        <R>0.08</R>
+        <G>0.085</G>
+        <B>0.1</B>
       </Color3>
-      <float name="Brightness">1.1</float>
+      <float name="Brightness">3</float>
       <float name="ClockTime">2.2833</float>
       <Color3 name="ColorShift_Bottom">
         <R>0.02</R>
@@ -21,7 +21,7 @@
       </Color3>
       <float name="EnvironmentDiffuseScale">0.25</float>
       <float name="EnvironmentSpecularScale">0.2</float>
-      <float name="ExposureCompensation">0.9</float>
+      <float name="ExposureCompensation">0.45</float>
       <Color3 name="FogColor">
         <R>0.043</R>
         <G>0.051</G>
@@ -32,9 +32,9 @@
       <float name="GeographicLatitude">62</float>
       <bool name="GlobalShadows">true</bool>
       <Color3 name="OutdoorAmbient">
-        <R>0.085</R>
-        <G>0.095</G>
-        <B>0.125</B>
+        <R>0.2</R>
+        <G>0.22</G>
+        <B>0.29</B>
       </Color3>
       <float name="ShadowSoftness">0.35</float>
       <token name="Technology">4</token>
@@ -52,7 +52,7 @@
           <G>0.133</G>
           <B>0.173</B>
         </Color3>
-        <float name="Density">0.42</float>
+        <float name="Density">0.32</float>
         <float name="Glare">0</float>
         <float name="Haze">1.6</float>
         <float name="Offset">0.1</float>
@@ -20572,6 +20572,8 @@ function TrainService.applyControl(player: Player, state: TrainState, control: s
 		return true, nil
 	elseif control == "wipers" then
 		state.wipers = not state.wipers
+		-- Clients sweep the arms themselves; see TrainRideController.
+		state.built.model:SetAttribute("Wipers", state.wipers)
 		return true, nil
 	elseif control == "doors" then
 		local now = os.clock()
@@ -23686,6 +23688,18 @@ local function buildPlatform(originCF: CFrame, parent: Instance, lights: { Light
 			parent = parent,
 		})
 		for _, side in { -1, 1 } do
+			-- Posts at each end of the rail, so it stands rather than floats.
+			for _, along in { 0.45, -0.45 } do
+				BuildKit.detail({
+					name = "RampRailPost",
+					size = Vector3.new(0.2, 2.8, 0.2),
+					cf = deckCF
+						* CFrame.new(PLATFORM_WIDTH * 0.5 + rampLength * 0.5 + along * rampLength, 0.6 + (PLATFORM_TOP - 0.6) * (0.5 - along) + 1.4, z + side * 4.1),
+					colour = C(150, 124, 52),
+					material = Enum.Material.Metal,
+					parent = parent,
+				})
+			end
 			BuildKit.detail({
 				name = "RampRail",
 				size = Vector3.new(rampLength, 0.2, 0.2),
@@ -23722,7 +23736,7 @@ local function buildPlatform(originCF: CFrame, parent: Instance, lights: { Light
 			parent = parent,
 		})
 		if i % 2 == 0 then
-			local _, light = BuildKit.lamp(deckCF * CFrame.new(-1, canopyHeight - 1.6, z), "pendant", C(255, 214, 160), 3, 36, parent)
+			local _, light = BuildKit.lamp(deckCF * CFrame.new(-1, canopyHeight - 1.6, z), "pendant", C(255, 214, 160), 2.2, 34, parent)
 			table.insert(lights, light)
 		end
 	end
@@ -23753,7 +23767,7 @@ local function buildPlatform(originCF: CFrame, parent: Instance, lights: { Light
 			material = Enum.Material.Metal,
 			parent = parent,
 		})
-		local _, light = BuildKit.lamp(deckCF * CFrame.new(2.4, PLATFORM_TOP + 10.6, z), "pendant", C(255, 206, 150), 3, 40, parent)
+		local _, light = BuildKit.lamp(deckCF * CFrame.new(2.4, PLATFORM_TOP + 10.6, z), "pendant", C(255, 206, 150), 2.2, 38, parent)
 		table.insert(lights, light)
 	end
 
@@ -23847,11 +23861,21 @@ local function buildPlatform(originCF: CFrame, parent: Instance, lights: { Light
 
 	-- The departure post: the same crew panel as the board in the shelter,
 	-- right beside the train, at a height where its prompt is actually seen.
+	-- A board on a pole, at eye height, so its label is whole and its
+	-- prompt is in view of a player standing in front of it.
+	BuildKit.part({
+		name = "DeparturePole",
+		size = Vector3.new(0.4, 6.2, 0.4),
+		cf = deckCF * CFrame.new(2.2, PLATFORM_TOP + 3.1, -14),
+		colour = C(52, 70, 62),
+		material = Enum.Material.Metal,
+		parent = parent,
+	})
 	local post = BuildKit.part({
 		name = "DeparturePost",
-		size = Vector3.new(1.4, 4.6, 2.4),
-		cf = deckCF * CFrame.new(2.2, PLATFORM_TOP + 2.3, -14),
-		colour = C(52, 70, 62),
+		size = Vector3.new(0.35, 2.6, 4.2),
+		cf = deckCF * CFrame.new(2.45, PLATFORM_TOP + 4.6, -14),
+		colour = C(32, 44, 38),
 		material = Enum.Material.Metal,
 		parent = parent,
 	})
@@ -24415,6 +24439,10 @@ type BuildContext = {
 	doors: { Model },
 	rng: Random,
 }
+
+-- Distance from the track centre to a platform edge: just clear of the
+-- widest fixed part of a train (locomotive handrails at 6.45).
+local PLATFORM_EDGE = 6.7
 
 local function buildPlatform(cf: CFrame, size: Vector3, ctx: BuildContext)
 	BuildKit.part({
@@ -25580,7 +25608,21 @@ function StationBuilder.build(def: StationRegistry.StationDef, originCF: CFrame,
 		local kind = spec.kind
 
 		if kind == "platform" then
-			buildPlatform(cf, spec.size, ctx)
+			-- Platforms reach in to the train. As laid out they stopped nine
+			-- studs short of the carriage side, leaving a drop to the ballast at
+			-- every door. Each is widened inward so its edge sits just clear of
+			-- the train, like Platform 1 in the yard; the outer edge, where the
+			-- buildings are, stays where it was.
+			local size = spec.size
+			local x = spec.position.X
+			if spec.rotation % 180 == 0 and math.abs(x) > 0 then
+				local outer = math.abs(x) + size.X * 0.5
+				local inner = math.min(PLATFORM_EDGE, math.abs(x) - size.X * 0.5)
+				local side = if x > 0 then 1 else -1
+				size = Vector3.new(outer - inner, size.Y, size.Z)
+				cf = originCF * CFrame.new(side * (inner + size.X * 0.5), spec.position.Y, spec.position.Z)
+			end
+			buildPlatform(cf, size, ctx)
 		elseif kind == "water_tower" then
 			buildWaterTower(cf, spec.size, ctx)
 		elseif kind == "signal_tower" then
@@ -34679,11 +34721,43 @@ local function carryCharacter(model: Model, pose: CFrame, previous: CFrame)
 	root.AssemblyLinearVelocity = velocity
 end
 
+-- Wiper arms are articulated joints (see TrainBuilder). The server only
+-- says whether the wipers are on; each client sweeps them locally, which
+-- costs no network traffic and is smooth at any frame rate.
+local WIPER_SWEEP = math.rad(52)
+local wiperArms: { [Model]: { Weld }? } = {}
+local function sweepWipers(model: Model)
+	local arms: { Weld } = wiperArms[model] or {}
+	if not wiperArms[model] then
+		for _, part in model:GetDescendants() do
+			if part:IsA("BasePart") and part:HasTag("WiperArm") then
+				local joint = part:FindFirstChild("Articulation")
+				if joint and joint:IsA("Weld") then
+					table.insert(arms, joint)
+				end
+			end
+		end
+		wiperArms[model] = arms
+	end
+	local on = model:GetAttribute("Wipers") == true
+	local angle = if on then math.sin(os.clock() * math.pi * 2 / 1.35) * WIPER_SWEEP else 0
+	for _, joint in arms do
+		local base = joint:GetAttribute("BaseC0")
+		if typeof(base) == "CFrame" then
+			joint.C0 = base * CFrame.Angles(0, 0, angle)
+		end
+	end
+end
+
 local function onRender(dt: number)
 	for model, state in tracked do
 		if not model.Parent then
 			tracked[model] = nil
+			wiperArms[model] = nil
 			continue
+		end
+		if model:GetAttribute("Wipers") ~= nil then
+			sweepWipers(model)
 		end
 		local root = rootOf(model)
 		local pose, previous = advance(model, state, dt)
@@ -36118,12 +36192,18 @@ function Widgets.meter(parent: Instance, colour: Color3, height: number?, label:
 		text = Widgets.label({
 			text = label,
 			size = "tiny",
-			colour = Theme.colour("textMuted"),
+			colour = Theme.colour("text"),
 			align = Enum.TextXAlignment.Left,
 			parent = container,
 			name = "MeterText",
 		})
 		local resolved = text :: TextLabel
+		-- The label sits on the bar, so it needs to read against both the
+		-- fill colour and the empty track: light text with a dark outline,
+		-- drawn above the fill. It was muted grey under the fill before.
+		resolved.TextStrokeTransparency = 0.35
+		resolved.TextStrokeColor3 = Color3.new(0, 0, 0)
+		resolved.ZIndex = fill.ZIndex + 1
 		resolved.Position = UDim2.new(0, Theme.space(0.5), 0, 0)
 		resolved.Size = UDim2.new(1, -Theme.space(1), 1, 0)
 		resolved.TextYAlignment = Enum.TextYAlignment.Center

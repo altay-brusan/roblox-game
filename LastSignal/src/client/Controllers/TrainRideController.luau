@@ -202,11 +202,43 @@ local function carryCharacter(model: Model, pose: CFrame, previous: CFrame)
 	root.AssemblyLinearVelocity = velocity
 end
 
+-- Wiper arms are articulated joints (see TrainBuilder). The server only
+-- says whether the wipers are on; each client sweeps them locally, which
+-- costs no network traffic and is smooth at any frame rate.
+local WIPER_SWEEP = math.rad(52)
+local wiperArms: { [Model]: { Weld }? } = {}
+local function sweepWipers(model: Model)
+	local arms: { Weld } = wiperArms[model] or {}
+	if not wiperArms[model] then
+		for _, part in model:GetDescendants() do
+			if part:IsA("BasePart") and part:HasTag("WiperArm") then
+				local joint = part:FindFirstChild("Articulation")
+				if joint and joint:IsA("Weld") then
+					table.insert(arms, joint)
+				end
+			end
+		end
+		wiperArms[model] = arms
+	end
+	local on = model:GetAttribute("Wipers") == true
+	local angle = if on then math.sin(os.clock() * math.pi * 2 / 1.35) * WIPER_SWEEP else 0
+	for _, joint in arms do
+		local base = joint:GetAttribute("BaseC0")
+		if typeof(base) == "CFrame" then
+			joint.C0 = base * CFrame.Angles(0, 0, angle)
+		end
+	end
+end
+
 local function onRender(dt: number)
 	for model, state in tracked do
 		if not model.Parent then
 			tracked[model] = nil
+			wiperArms[model] = nil
 			continue
+		end
+		if model:GetAttribute("Wipers") ~= nil then
+			sweepWipers(model)
 		end
 		local root = rootOf(model)
 		local pose, previous = advance(model, state, dt)

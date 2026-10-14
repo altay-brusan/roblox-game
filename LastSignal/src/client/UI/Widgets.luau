@@ -444,12 +444,18 @@ function Widgets.meter(parent: Instance, colour: Color3, height: number?, label:
 		text = Widgets.label({
 			text = label,
 			size = "tiny",
-			colour = Theme.colour("textMuted"),
+			colour = Theme.colour("text"),
 			align = Enum.TextXAlignment.Left,
 			parent = container,
 			name = "MeterText",
 		})
 		local resolved = text :: TextLabel
+		-- The label sits on the bar, so it needs to read against both the
+		-- fill colour and the empty track: light text with a dark outline,
+		-- drawn above the fill. It was muted grey under the fill before.
+		resolved.TextStrokeTransparency = 0.35
+		resolved.TextStrokeColor3 = Color3.new(0, 0, 0)
+		resolved.ZIndex = fill.ZIndex + 1
 		resolved.Position = UDim2.new(0, Theme.space(0.5), 0, 0)
 		resolved.Size = UDim2.new(1, -Theme.space(1), 1, 0)
 		resolved.TextYAlignment = Enum.TextYAlignment.Center

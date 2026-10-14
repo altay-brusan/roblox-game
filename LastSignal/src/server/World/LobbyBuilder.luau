@@ -561,6 +561,18 @@ local function buildPlatform(originCF: CFrame, parent: Instance, lights: { Light
 			parent = parent,
 		})
 		for _, side in { -1, 1 } do
+			-- Posts at each end of the rail, so it stands rather than floats.
+			for _, along in { 0.45, -0.45 } do
+				BuildKit.detail({
+					name = "RampRailPost",
+					size = Vector3.new(0.2, 2.8, 0.2),
+					cf = deckCF
+						* CFrame.new(PLATFORM_WIDTH * 0.5 + rampLength * 0.5 + along * rampLength, 0.6 + (PLATFORM_TOP - 0.6) * (0.5 - along) + 1.4, z + side * 4.1),
+					colour = C(150, 124, 52),
+					material = Enum.Material.Metal,
+					parent = parent,
+				})
+			end
 			BuildKit.detail({
 				name = "RampRail",
 				size = Vector3.new(rampLength, 0.2, 0.2),
@@ -597,7 +609,7 @@ local function buildPlatform(originCF: CFrame, parent: Instance, lights: { Light
 			parent = parent,
 		})
 		if i % 2 == 0 then
-			local _, light = BuildKit.lamp(deckCF * CFrame.new(-1, canopyHeight - 1.6, z), "pendant", C(255, 214, 160), 3, 36, parent)
+			local _, light = BuildKit.lamp(deckCF * CFrame.new(-1, canopyHeight - 1.6, z), "pendant", C(255, 214, 160), 2.2, 34, parent)
 			table.insert(lights, light)
 		end
 	end
@@ -628,7 +640,7 @@ local function buildPlatform(originCF: CFrame, parent: Instance, lights: { Light
 			material = Enum.Material.Metal,
 			parent = parent,
 		})
-		local _, light = BuildKit.lamp(deckCF * CFrame.new(2.4, PLATFORM_TOP + 10.6, z), "pendant", C(255, 206, 150), 3, 40, parent)
+		local _, light = BuildKit.lamp(deckCF * CFrame.new(2.4, PLATFORM_TOP + 10.6, z), "pendant", C(255, 206, 150), 2.2, 38, parent)
 		table.insert(lights, light)
 	end
 
@@ -722,11 +734,21 @@ local function buildPlatform(originCF: CFrame, parent: Instance, lights: { Light
 
 	-- The departure post: the same crew panel as the board in the shelter,
 	-- right beside the train, at a height where its prompt is actually seen.
+	-- A board on a pole, at eye height, so its label is whole and its
+	-- prompt is in view of a player standing in front of it.
+	BuildKit.part({
+		name = "DeparturePole",
+		size = Vector3.new(0.4, 6.2, 0.4),
+		cf = deckCF * CFrame.new(2.2, PLATFORM_TOP + 3.1, -14),
+		colour = C(52, 70, 62),
+		material = Enum.Material.Metal,
+		parent = parent,
+	})
 	local post = BuildKit.part({
 		name = "DeparturePost",
-		size = Vector3.new(1.4, 4.6, 2.4),
-		cf = deckCF * CFrame.new(2.2, PLATFORM_TOP + 2.3, -14),
-		colour = C(52, 70, 62),
+		size = Vector3.new(0.35, 2.6, 4.2),
+		cf = deckCF * CFrame.new(2.45, PLATFORM_TOP + 4.6, -14),
+		colour = C(32, 44, 38),
 		material = Enum.Material.Metal,
 		parent = parent,
 	})

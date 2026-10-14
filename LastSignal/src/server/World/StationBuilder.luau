@@ -201,6 +201,10 @@ type BuildContext = {
 	rng: Random,
 }
 
+-- Distance from the track centre to a platform edge: just clear of the
+-- widest fixed part of a train (locomotive handrails at 6.45).
+local PLATFORM_EDGE = 6.7
+
 local function buildPlatform(cf: CFrame, size: Vector3, ctx: BuildContext)
 	BuildKit.part({
 		name = "PlatformDeck",
@@ -1365,7 +1369,21 @@ function StationBuilder.build(def: StationRegistry.StationDef, originCF: CFrame,
 		local kind = spec.kind
 
 		if kind == "platform" then
-			buildPlatform(cf, spec.size, ctx)
+			-- Platforms reach in to the train. As laid out they stopped nine
+			-- studs short of the carriage side, leaving a drop to the ballast at
+			-- every door. Each is widened inward so its edge sits just clear of
+			-- the train, like Platform 1 in the yard; the outer edge, where the
+			-- buildings are, stays where it was.
+			local size = spec.size
+			local x = spec.position.X
+			if spec.rotation % 180 == 0 and math.abs(x) > 0 then
+				local outer = math.abs(x) + size.X * 0.5
+				local inner = math.min(PLATFORM_EDGE, math.abs(x) - size.X * 0.5)
+				local side = if x > 0 then 1 else -1
+				size = Vector3.new(outer - inner, size.Y, size.Z)
+				cf = originCF * CFrame.new(side * (inner + size.X * 0.5), spec.position.Y, spec.position.Z)
+			end
+			buildPlatform(cf, size, ctx)
 		elseif kind == "water_tower" then
 			buildWaterTower(cf, spec.size, ctx)
 		elseif kind == "signal_tower" then
