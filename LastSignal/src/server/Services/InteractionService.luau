@@ -901,8 +901,11 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		end
 		local stationId = part:GetAttribute("StationId")
 		local stationDef = if type(stationId) == "string" then StationRegistry.byId(stationId) else nil
-		local hint = ""
-		local name = discoveryId
+		-- A discovery placed by a scripted moment carries its own words.
+		local ownHint = part:GetAttribute("DiscoveryBody")
+		local ownName = part:GetAttribute("DiscoveryTitle")
+		local hint = if type(ownHint) == "string" then ownHint else ""
+		local name = if type(ownName) == "string" then ownName else discoveryId
 		if stationDef then
 			for _, entry in stationDef.discoveries do
 				if entry.id == discoveryId then

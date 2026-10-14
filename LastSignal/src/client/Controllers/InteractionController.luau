@@ -417,6 +417,16 @@ function InteractionController.start()
 		if not action then
 			return
 		end
+		-- A humanoid that thinks it is climbing (beside the lattice of Hallow
+		-- Bridge, for one) cannot be seated. Stand it up before asking for the
+		-- seat, so "Take the controls" never silently fails.
+		if action == "sit" then
+			local character = player.Character
+			local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
+			if humanoid and humanoid:GetState() == Enum.HumanoidStateType.Climbing then
+				humanoid:ChangeState(Enum.HumanoidStateType.Running)
+			end
+		end
 		-- The first send tells the server we are starting; it replies with the
 		-- duration, and the hold bar runs from that.
 		Net.fireServer("Interact", parent, action)

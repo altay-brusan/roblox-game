@@ -261,6 +261,14 @@ function TrainService.setDoorsPose(built: TrainBuilder.BuiltTrain, open: boolean
 	end
 end
 
+--- Sets one door to an angle, immediately. Used by horror events that open a
+--- single door; like every door, it moves through its joint, never by CFrame.
+function TrainService.setDoorAngle(door: { hinge: BasePart }, angle: number)
+	door.hinge:SetAttribute("SwingToken", (tonumber(door.hinge:GetAttribute("SwingToken")) or 0) + 1)
+	door.hinge:SetAttribute("OpenAngle", angle)
+	TrainBuilder.pose(door.hinge, CFrame.Angles(0, angle, 0))
+end
+
 function TrainService.applyDoors(state: TrainState, immediate: boolean?)
 	TrainService.setDoorsPose(state.built, state.doorsOpen, immediate)
 	TrainService.DoorsToggled:Fire(state, state.doorsOpen)

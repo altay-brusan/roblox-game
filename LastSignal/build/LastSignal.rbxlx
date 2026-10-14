@@ -7562,6 +7562,7 @@ local BOOT_ORDER: { ServiceEntry } = {
 	{ name = "CreatureService", module = Services.CreatureService, stage = "Gameplay" },
 	{ name = "CombatService", module = Services.CombatService, stage = "Gameplay" },
 	{ name = "HorrorDirector", module = Services.HorrorDirector, stage = "Gameplay" },
+	{ name = "SignatureMoments", module = Services.SignatureMoments, stage = "Gameplay" },
 
 	{ name = "EventService", module = Services.EventService, stage = "Live" },
 	{ name = "AdminService", module = Services.AdminService, stage = "Live" },
@@ -14141,15 +14142,13 @@ local EVENTS: { DirectorEvent } = {
 				return false
 			end
 			local door = doors[math.random(1, #doors)]
-			local closed = door.model:GetAttribute("ClosedCFrame")
-			if typeof(closed) ~= "CFrame" then
-				return false
-			end
-			door.model:PivotTo((closed :: CFrame) * CFrame.Angles(0, math.rad(70), 0))
+			-- Through the door's joint. This used to PivotTo the door model,
+			-- which moved the entire welded train.
+			TrainService.setDoorAngle(door, math.rad(70))
 			cue(expedition, inside, "door_moves", door.hinge.Position)
 			task.delay(9, function()
-				if expedition.state ~= "closed" then
-					door.model:PivotTo(closed :: CFrame)
+				if expedition.state ~= "closed" and not train.doorsOpen then
+					TrainService.setDoorAngle(door, 0)
 				end
 			end)
 			return true
@@ -15575,8 +15574,11 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		end
 		local stationId = part:GetAttribute("StationId")
 		local stationDef = if type(stationId) == "string" then StationRegistry.byId(stationId) else nil
-		local hint = ""
-		local name = discoveryId
+		-- A discovery placed by a scripted moment carries its own words.
+		local ownHint = part:GetAttribute("DiscoveryBody")
+		local ownName = part:GetAttribute("DiscoveryTitle")
+		local hint = if type(ownHint) == "string" then ownHint else ""
+		local name = if type(ownName) == "string" then ownName else discoveryId
 		if stationDef then
 			for _, entry in stationDef.discoveries do
 				if entry.id == discoveryId then
@@ -19063,6 +19065,357 @@ return ShopService
         </Item>
         <Item class="ModuleScript" referent="58">
           <Properties>
+            <string name="Name">SignatureMoments</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	SignatureMoments
+	----------------
+	Three scripted beats, one per act of the journey. The horror director
+	handles ambient dread; these are the moments a player describes afterwards.
+	Each has a setup, a payoff and a consequence that touches the story or how
+	you play, and each fires once per run on a fixed trigger, so it is the same
+	beat for every crew and can be tested.
+
+	1  THE SECOND DISPATCHER  (on the line between Marrow Halt and Tolbridge)
+	   Setup: Control gives a routine instruction. Payoff: five seconds later
+	   the same words arrive again, from "Unknown", under failing lights.
+	   Control then says plainly that it was not him. Consequence: the false-
+	   transmission tells (callsign, attribution) are taught here, before the
+	   first station where a false instruction can cost the crew.
+
+	2  THE PASSENGER  (on the line after Ninety-Three)
+	   Setup: a figure is sitting in the first carriage, facing forward. Payoff:
+	   it is gone when anybody goes to look, the lights fail, and on the seat
+	   is a ticket for the 02:17, punched, dated eleven days ago. Consequence:
+	   a discovery for the record, and the first hint that this train has made
+	   this journey before.
+
+	3  THE RECORDING  (arriving at Ward Hill)
+	   Setup: the dispatcher's very first line, from the yard. Payoff: at Ward
+	   Hill the same line plays again, from a set in the relay room, and stops,
+	   and starts again. The voice that guided the crew was a recording made
+	   before the eleven days began. Consequence: it recontextualises every
+	   instruction since the yard, and sends the crew to the transmitter.
+
+	Every moment is cancelled by the run ending, and the Passenger is cleared
+	and re-armed by a retry so the beat is never left half-played.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage.LastSignal
+
+local Logger = require(Shared.Core.Logger)
+local Net = require(Shared.Core.Net)
+local Protect = require(Shared.Core.Protect)
+local StationRegistry = require(Shared.Registry.StationRegistry)
+
+local ExpeditionService = require(script.Parent.ExpeditionService)
+local TrainService = require(script.Parent.TrainService)
+
+local log = Logger.new("SignatureMoments")
+
+local SignatureMoments = {}
+
+-- Where on the line each moment fires, as train distance.
+local SECOND_DISPATCHER_AT = 2700 -- between Marrow Halt (1750) and Tolbridge (4200)
+local PASSENGER_AT = 7700 -- just after leaving Ninety-Three (7100)
+
+-- Per-expedition props that must be cleaned up.
+local passengers: { [string]: Model } = {}
+
+local function players(expedition: ExpeditionService.Expedition): { Player }
+	return ExpeditionService.playersOf(expedition)
+end
+
+local function say(expedition: ExpeditionService.Expedition, source: string, attribution: string, text: string, duration: number, cue: string?)
+	Net.fireClients("RadioMessage", players(expedition), {
+		id = "signature",
+		source = source,
+		text = text,
+		duration = duration,
+		cue = cue,
+		attribution = attribution,
+		isFalse = source == "other",
+	})
+end
+
+local function flicker(expedition: ExpeditionService.Expedition, seconds: number)
+	local train = expedition.train
+	Net.fireClients("HorrorCue", players(expedition), { cue = "lights_flicker", position = train.built.root.Position, seconds = seconds })
+	local wasOn = train.interiorLights
+	train.interiorLights = false
+	TrainService.applyLights(train)
+	task.delay(seconds, function()
+		if expedition.state ~= "closed" then
+			train.interiorLights = wasOn
+			TrainService.applyLights(train)
+		end
+	end)
+end
+
+local function alive(expedition: ExpeditionService.Expedition): boolean
+	return expedition.state ~= "closed" and expedition.state ~= "ending" and expedition.state ~= "failed"
+end
+
+--------------------------------------------------------------------------
+-- 1. The second dispatcher
+--------------------------------------------------------------------------
+
+local function secondDispatcher(expedition: ExpeditionService.Expedition)
+	expedition.firedBeats.sig_second_dispatcher = true
+	log.info(string.format("%s: the second dispatcher", expedition.id))
+	local words = "Signal at Tolbridge is showing clear. Proceed at line speed, and keep the doors shut."
+	say(expedition, "dispatch", "Dispatch", "Control to the zero two seventeen. " .. words, 6)
+	task.wait(11)
+	if not alive(expedition) then
+		return
+	end
+	flicker(expedition, 4.5)
+	Net.fireClients("HorrorCue", players(expedition), { cue = "radio_distort", position = expedition.train.built.root.Position })
+	say(expedition, "other", "Unknown", words, 6)
+	task.wait(9)
+	if not alive(expedition) then
+		return
+	end
+	say(
+		expedition,
+		"dispatch",
+		"Dispatch",
+		"Control. That second one was not me. Listen for the callsign. If it does not say Control, it is not Control.",
+		7
+	)
+end
+
+--------------------------------------------------------------------------
+-- 2. The passenger
+--------------------------------------------------------------------------
+
+local function buildPassenger(seat: BasePart, root: BasePart): Model
+	local model = Instance.new("Model")
+	model.Name = "Passenger"
+	local dark = Color3.fromRGB(14, 14, 16)
+	local cf = seat.CFrame * CFrame.new(0, 0.4, 0)
+	local function piece(name: string, size: Vector3, offset: CFrame)
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.CFrame = cf * offset
+		p.Color = dark
+		p.Material = Enum.Material.Fabric
+		p.CanCollide = false
+		p.CanQuery = false
+		p.CanTouch = false
+		p.CastShadow = true
+		p.Anchored = false
+		p.Parent = model
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = root
+		weld.Part1 = p
+		weld.Parent = p
+	end
+	-- Seated, very still, a little too tall for the seat.
+	piece("Coat", Vector3.new(1.9, 3.6, 1.1), CFrame.new(0, 2.0, 0.4))
+	piece("Head", Vector3.new(1.1, 1.4, 1.0), CFrame.new(0, 4.6, 0.3) * CFrame.Angles(math.rad(14), 0, 0))
+	piece("Hat", Vector3.new(1.6, 0.25, 1.6), CFrame.new(0, 5.35, 0.25))
+	for _, side in { -1, 1 } do
+		piece("Leg", Vector3.new(0.6, 0.6, 2.4), CFrame.new(side * 0.45, 0.4, -0.8))
+		piece("Hand", Vector3.new(0.35, 0.35, 0.9), CFrame.new(side * 0.8, 0.9, -0.6))
+	end
+	model.Parent = root.Parent
+	return model
+end
+
+local function leaveTicket(expedition: ExpeditionService.Expedition, seat: BasePart)
+	local ticket = Instance.new("Part")
+	ticket.Name = "Ticket"
+	ticket.Size = Vector3.new(0.9, 0.05, 0.5)
+	ticket.Color = Color3.fromRGB(196, 182, 140)
+	ticket.Material = Enum.Material.SmoothPlastic
+	ticket.CFrame = seat.CFrame * CFrame.new(0.3, 0.27, 0) * CFrame.Angles(0, math.rad(17), 0)
+	ticket.Anchored = false
+	ticket.CanCollide = false
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = expedition.train.built.root
+	weld.Part1 = ticket
+	weld.Parent = ticket
+	ticket:SetAttribute("DiscoveryId", "eleven_day_ticket")
+	ticket:SetAttribute("DiscoveryTitle", "A ticket for the 02:17")
+	ticket:SetAttribute("DiscoveryBody", "Tolbridge Yard to Ward Hill, single. Punched. Dated eleven days ago, the night the line went quiet.")
+	-- Station discoveries get their prompt from the station builder; this one
+	-- is placed at run time, so it brings its own.
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.ActionText = "Look closer"
+	prompt.ObjectText = "Ticket"
+	prompt.MaxActivationDistance = 8
+	prompt.RequiresLineOfSight = false
+	prompt.Style = Enum.ProximityPromptStyle.Custom
+	prompt.Parent = ticket
+	ticket:AddTag("Discovery")
+	ticket.Parent = expedition.train.built.model
+end
+
+local function passenger(expedition: ExpeditionService.Expedition)
+	expedition.firedBeats.sig_passenger = true
+	local train = expedition.train
+	local carriage = train.built.carriages[1]
+	if not carriage then
+		return
+	end
+	local seat: BasePart? = nil
+	for _, d in carriage:GetDescendants() do
+		if d:IsA("Seat") and d:HasTag("TrainSeat") and not d.Occupant then
+			seat = d
+			break
+		end
+	end
+	if not seat then
+		return
+	end
+	local chosen = seat :: BasePart
+	local figure = buildPassenger(chosen, train.built.root)
+	passengers[expedition.id] = figure
+	log.info(string.format("%s: the passenger", expedition.id))
+
+	-- It stays until somebody comes close, or for a minute.
+	local deadline = os.clock() + 60
+	while alive(expedition) and figure.Parent and os.clock() < deadline do
+		local near = false
+		for _, player in players(expedition) do
+			local character = player.Character
+			local root = if character then character:FindFirstChild("HumanoidRootPart") else nil
+			if root and root:IsA("BasePart") and (root.Position - chosen.Position).Magnitude < 13 then
+				near = true
+				break
+			end
+		end
+		if near then
+			break
+		end
+		task.wait(0.25)
+	end
+	if not figure.Parent then
+		return
+	end
+	flicker(expedition, 2.5)
+	task.wait(0.4)
+	figure:Destroy()
+	passengers[expedition.id] = nil
+	if alive(expedition) then
+		leaveTicket(expedition, chosen)
+	end
+end
+
+--------------------------------------------------------------------------
+-- 3. The recording
+--------------------------------------------------------------------------
+
+local function recording(expedition: ExpeditionService.Expedition)
+	expedition.firedBeats.sig_recording = true
+	log.info(string.format("%s: the recording", expedition.id))
+	task.wait(8)
+	if not alive(expedition) then
+		return
+	end
+	-- The set is wherever the transmitter is: the relay room.
+	local source = expedition.train.built.root.Position
+	local station = expedition.lane.stations[expedition.stationIndex]
+	if station then
+		local transmitter = station.fixtures.transmitter
+		if transmitter then
+			source = transmitter.Position
+		end
+	end
+	Net.fireClients("HorrorCue", players(expedition), { cue = "radio_distort", position = source })
+	local first = "Control to the zero two seventeen. I have you leaving the yard. You are the last one out."
+	say(expedition, "recording", "Recording, relay room", first, 6)
+	task.wait(7)
+	if not alive(expedition) then
+		return
+	end
+	say(expedition, "recording", "Recording, relay room", "[The tape clicks, rewinds, and starts again.]", 3)
+	task.wait(4)
+	if not alive(expedition) then
+		return
+	end
+	say(expedition, "recording", "Recording, relay room", first, 6)
+	task.wait(8)
+	if not alive(expedition) then
+		return
+	end
+	say(
+		expedition,
+		"crew",
+		"Crew",
+		"That is the voice from the yard. It has been on a loop up here the whole time. Get to the transmitter.",
+		6
+	)
+end
+
+--------------------------------------------------------------------------
+
+local function run(expedition: ExpeditionService.Expedition, beat: (ExpeditionService.Expedition) -> ())
+	task.spawn(function()
+		local ok, err = Protect.call(beat, expedition)
+		if not ok then
+			log.error(string.format("signature moment failed for %s: %s", expedition.id, tostring(err)))
+		end
+	end)
+end
+
+function SignatureMoments.start()
+	-- The two moments on the line fire on distance travelled.
+	task.spawn(function()
+		while true do
+			task.wait(0.5)
+			for _, expedition in ExpeditionService.all() do
+				if expedition.state ~= "travelling" then
+					continue
+				end
+				local distance = expedition.train.distance
+				local fired = expedition.firedBeats
+				if not fired.sig_second_dispatcher and expedition.stationIndex == 1 and distance >= SECOND_DISPATCHER_AT then
+					run(expedition, secondDispatcher)
+				elseif not fired.sig_passenger and expedition.stationIndex == 3 and distance >= PASSENGER_AT then
+					run(expedition, passenger)
+				end
+			end
+		end
+	end)
+
+	-- The recording fires on reaching the last station.
+	ExpeditionService.StationReached:Connect(function(expedition, index)
+		if index == StationRegistry.count() and not expedition.firedBeats.sig_recording then
+			run(expedition, recording)
+		end
+	end)
+
+	-- A retry clears a half-played Passenger and lets it play again.
+	ExpeditionService.Retried:Connect(function(expedition)
+		local figure = passengers[expedition.id]
+		if figure then
+			figure:Destroy()
+			passengers[expedition.id] = nil
+			expedition.firedBeats.sig_passenger = false
+		end
+	end)
+
+	ExpeditionService.Ended:Connect(function(expedition)
+		local figure = passengers[expedition.id]
+		if figure then
+			figure:Destroy()
+		end
+		passengers[expedition.id] = nil
+	end)
+
+	log.info("started with 3 moments")
+end
+
+return SignatureMoments
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="59">
+          <Properties>
             <string name="Name">SurvivalService</string>
             <string name="Source"><![CDATA[--!strict
 --[[
@@ -19965,7 +20318,7 @@ return SurvivalService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="59">
+        <Item class="ModuleScript" referent="60">
           <Properties>
             <string name="Name">TrainService</string>
             <string name="Source"><![CDATA[--!strict
@@ -20229,6 +20582,14 @@ function TrainService.setDoorsPose(built: TrainBuilder.BuiltTrain, open: boolean
 			end
 		end)
 	end
+end
+
+--- Sets one door to an angle, immediately. Used by horror events that open a
+--- single door; like every door, it moves through its joint, never by CFrame.
+function TrainService.setDoorAngle(door: { hinge: BasePart }, angle: number)
+	door.hinge:SetAttribute("SwingToken", (tonumber(door.hinge:GetAttribute("SwingToken")) or 0) + 1)
+	door.hinge:SetAttribute("OpenAngle", angle)
+	TrainBuilder.pose(door.hinge, CFrame.Angles(0, angle, 0))
 end
 
 function TrainService.applyDoors(state: TrainState, immediate: boolean?)
@@ -20818,7 +21179,7 @@ return TrainService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="60">
+        <Item class="ModuleScript" referent="61">
           <Properties>
             <string name="Name">WorldService</string>
             <string name="Source"><![CDATA[--!strict
@@ -21392,11 +21753,11 @@ return WorldService
           </Properties>
         </Item>
       </Item>
-      <Item class="Folder" referent="61">
+      <Item class="Folder" referent="62">
         <Properties>
           <string name="Name">World</string>
         </Properties>
-        <Item class="ModuleScript" referent="62">
+        <Item class="ModuleScript" referent="63">
           <Properties>
             <string name="Name">BuildKit</string>
             <string name="Source"><![CDATA[--!strict
@@ -22584,7 +22945,7 @@ return BuildKit
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="63">
+        <Item class="ModuleScript" referent="64">
           <Properties>
             <string name="Name">ForestBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -23138,7 +23499,7 @@ return ForestBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="64">
+        <Item class="ModuleScript" referent="65">
           <Properties>
             <string name="Name">LobbyBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -24250,7 +24611,7 @@ return LobbyBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="65">
+        <Item class="ModuleScript" referent="66">
           <Properties>
             <string name="Name">StationBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -25911,7 +26272,7 @@ return StationBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="66">
+        <Item class="ModuleScript" referent="67">
           <Properties>
             <string name="Name">TrainBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -28225,12 +28586,12 @@ return TrainBuilder
       </Item>
     </Item>
   </Item>
-  <Item class="ServerStorage" referent="67">
+  <Item class="ServerStorage" referent="68">
     <Properties>
       <string name="Name">ServerStorage</string>
     </Properties>
   </Item>
-  <Item class="SoundService" referent="68">
+  <Item class="SoundService" referent="69">
     <Properties>
       <string name="Name">SoundService</string>
       <float name="DistanceFactor">8</float>
@@ -28239,14 +28600,14 @@ return TrainBuilder
       <float name="RolloffScale">1.25</float>
     </Properties>
   </Item>
-  <Item class="StarterGui" referent="69">
+  <Item class="StarterGui" referent="70">
     <Properties>
       <string name="Name">StarterGui</string>
       <bool name="ResetPlayerGuiOnSpawn">false</bool>
       <token name="ScreenOrientation">4</token>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="70">
+  <Item class="StarterPlayer" referent="71">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <bool name="AutoJumpEnabled">false</bool>
@@ -28258,16 +28619,16 @@ return TrainBuilder
       <bool name="EnableMouseLockOption">false</bool>
       <bool name="LoadCharacterAppearance">true</bool>
     </Properties>
-    <Item class="StarterCharacterScripts" referent="71">
+    <Item class="StarterCharacterScripts" referent="72">
       <Properties>
         <string name="Name">StarterCharacterScripts</string>
       </Properties>
     </Item>
-    <Item class="StarterPlayerScripts" referent="72">
+    <Item class="StarterPlayerScripts" referent="73">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="73">
+      <Item class="LocalScript" referent="74">
         <Properties>
           <string name="Name">LastSignalClient</string>
           <string name="Source"><![CDATA[--!strict
@@ -28323,6 +28684,7 @@ local BOOT_ORDER = {
 	{ name = "WeaponController", module = Controllers.WeaponController },
 	{ name = "CabController", module = Controllers.CabController },
 	{ name = "TrainRideController", module = Controllers.TrainRideController },
+	{ name = "HorrorEffectsController", module = Controllers.HorrorEffectsController },
 }
 
 local failures: { string } = {}
@@ -28439,11 +28801,11 @@ else
 end
 ]]></string>
         </Properties>
-        <Item class="Folder" referent="74">
+        <Item class="Folder" referent="75">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="75">
+          <Item class="ModuleScript" referent="76">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--!strict
@@ -29100,7 +29462,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="76">
+          <Item class="ModuleScript" referent="77">
             <Properties>
               <string name="Name">CabController</string>
               <string name="Source"><![CDATA[--!strict
@@ -29657,7 +30019,7 @@ return CabController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="77">
+          <Item class="ModuleScript" referent="78">
             <Properties>
               <string name="Name">CameraController</string>
               <string name="Source"><![CDATA[--!strict
@@ -30162,7 +30524,7 @@ return CameraController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="78">
+          <Item class="ModuleScript" referent="79">
             <Properties>
               <string name="Name">CinematicController</string>
               <string name="Source"><![CDATA[--!strict
@@ -30580,7 +30942,7 @@ return CinematicController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="79">
+          <Item class="ModuleScript" referent="80">
             <Properties>
               <string name="Name">HUDController</string>
               <string name="Source"><![CDATA[--!strict
@@ -31622,7 +31984,285 @@ return HUDController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="80">
+          <Item class="ModuleScript" referent="81">
+            <Properties>
+              <string name="Name">HorrorEffectsController</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	HorrorEffectsController
+	-----------------------
+	The visible half of the horror director: the silhouette at the treeline,
+	evidence that something passed by, and lights that fail.
+
+	The director has always sent these cues, and the audio controller has
+	always skipped them as "handled by the visual effects controller", but no
+	such controller existed: three of the nine director events did nothing at
+	all on screen. This is that controller.
+
+	Everything here is local to the player it was sent to. A silhouette seen by
+	one crew member and not another is the point: it is something you can try
+	to describe and nobody else saw.
+]]
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage:WaitForChild("LastSignal")
+
+local Logger = require(Shared.Core.Logger)
+local Net = require(Shared.Core.Net)
+
+local log = Logger.new("HorrorEffectsController")
+local player = Players.LocalPlayer
+
+local HorrorEffectsController = {}
+
+local effectsFolder: Folder? = nil
+
+local function folder(): Folder
+	if effectsFolder and effectsFolder.Parent then
+		return effectsFolder
+	end
+	local made = Instance.new("Folder")
+	made.Name = "LocalHorrorEffects"
+	made.Parent = Workspace
+	effectsFolder = made
+	return made
+end
+
+local function ignoreList(): { Instance }
+	local list: { Instance } = { folder() }
+	if player.Character then
+		table.insert(list, player.Character)
+	end
+	return list
+end
+
+--- The ground under a point, so effects stand on whatever is there.
+local function groundAt(position: Vector3): Vector3
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = ignoreList()
+	local hit = Workspace:Raycast(position + Vector3.new(0, 40, 0), Vector3.new(0, -120, 0), params)
+	return if hit then hit.Position else position
+end
+
+local function piece(name: string, size: Vector3, cf: CFrame, colour: Color3, parent: Instance, shape: Enum.PartType?): Part
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Size = size
+	p.CFrame = cf
+	p.Color = colour
+	p.Material = Enum.Material.SmoothPlastic
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.CastShadow = false
+	if shape then
+		p.Shape = shape
+	end
+	p.Parent = parent
+	return p
+end
+
+local function fadeOut(model: Instance, seconds: number)
+	for _, part in model:GetDescendants() do
+		if part:IsA("BasePart") then
+			TweenService:Create(part, TweenInfo.new(seconds), { Transparency = 1 }):Play()
+		end
+	end
+	task.delay(seconds + 0.1, function()
+		model:Destroy()
+	end)
+end
+
+--------------------------------------------------------------------------
+-- Silhouette
+--------------------------------------------------------------------------
+
+-- Too tall, too thin, arms too long, standing still and facing you. It is
+-- built from plain dark shapes because at seventy studs in the dark that is
+-- all anyone would see.
+local function silhouette(position: Vector3, duration: number)
+	local camera = Workspace.CurrentCamera
+	if not camera then
+		return
+	end
+	local base = groundAt(position)
+	local facing = CFrame.lookAt(base, Vector3.new(camera.CFrame.Position.X, base.Y, camera.CFrame.Position.Z))
+	local model = Instance.new("Model")
+	model.Name = "Silhouette"
+	local dark = Color3.fromRGB(8, 8, 10)
+	piece("Body", Vector3.new(1.6, 6.5, 0.9), facing * CFrame.new(0, 7.2, 0), dark, model)
+	piece("Legs", Vector3.new(1.3, 4.2, 0.7), facing * CFrame.new(0, 2.1, 0), dark, model)
+	piece("Head", Vector3.new(1.3, 1.6, 1.1), facing * CFrame.new(0.15, 11.2, 0) * CFrame.Angles(0, 0, math.rad(-12)), dark, model)
+	for _, side in { -1, 1 } do
+		piece("Arm", Vector3.new(0.45, 7.8, 0.45), facing * CFrame.new(side * 1.1, 5.6, 0) * CFrame.Angles(0, 0, math.rad(side * 4)), dark, model)
+	end
+	for _, part in model:GetChildren() do
+		if part:IsA("BasePart") then
+			part.Transparency = 1
+			TweenService:Create(part, TweenInfo.new(0.35), { Transparency = 0.05 }):Play()
+		end
+	end
+	model.Parent = folder()
+	task.delay(duration, function()
+		if model.Parent then
+			fadeOut(model, 0.25)
+		end
+	end)
+end
+
+--------------------------------------------------------------------------
+-- Evidence
+--------------------------------------------------------------------------
+
+local function footprints(position: Vector3)
+	local model = Instance.new("Model")
+	model.Name = "Footprints"
+	-- A trail that comes from the trees, stops beside you, and goes back.
+	local angle = math.random() * math.pi * 2
+	local away = Vector3.new(math.cos(angle), 0, math.sin(angle))
+	local across = Vector3.new(-away.Z, 0, away.X)
+	for i = 0, 7 do
+		local stride = position + away * (3 + i * 2.6) + across * (if i % 2 == 0 then 0.7 else -0.7)
+		local ground = groundAt(stride)
+		piece(
+			"Print",
+			Vector3.new(0.9, 0.05, 1.9),
+			CFrame.lookAt(ground + Vector3.new(0, 0.03, 0), ground + Vector3.new(0, 0.03, 0) - away),
+			Color3.fromRGB(26, 22, 18),
+			model
+		)
+	end
+	model.Parent = folder()
+	task.delay(45, function()
+		if model.Parent then
+			fadeOut(model, 3)
+		end
+	end)
+end
+
+local function scratches(position: Vector3): boolean
+	-- Long gouges on the nearest wall within reach.
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = ignoreList()
+	local origin = position + Vector3.new(0, 1.5, 0)
+	local best: RaycastResult? = nil
+	for i = 0, 7 do
+		local a = i * math.pi / 4
+		local hit = Workspace:Raycast(origin, Vector3.new(math.cos(a), 0, math.sin(a)) * 10, params)
+		if hit and math.abs(hit.Normal.Y) < 0.3 and (not best or hit.Distance < (best :: RaycastResult).Distance) then
+			best = hit
+		end
+	end
+	if not best then
+		return false
+	end
+	local hit = best :: RaycastResult
+	local model = Instance.new("Model")
+	model.Name = "Scratches"
+	local face = CFrame.lookAt(hit.Position + hit.Normal * 0.04, hit.Position + hit.Normal * 2)
+	for i = -1, 1 do
+		piece(
+			"Gouge",
+			Vector3.new(0.12, 3.6, 0.06),
+			face * CFrame.new(i * 0.45, 0.6 + math.abs(i) * -0.2, 0) * CFrame.Angles(0, 0, math.rad(18)),
+			Color3.fromRGB(150, 140, 120),
+			model
+		)
+	end
+	model.Parent = folder()
+	task.delay(60, function()
+		if model.Parent then
+			fadeOut(model, 3)
+		end
+	end)
+	return true
+end
+
+--------------------------------------------------------------------------
+-- Failing lights
+--------------------------------------------------------------------------
+
+local flickering = false
+
+local function flicker(seconds: number)
+	if flickering then
+		return
+	end
+	local camera = Workspace.CurrentCamera
+	if not camera then
+		return
+	end
+	flickering = true
+	local near: { [Light]: boolean } = {}
+	for _, light in Workspace:GetDescendants() do
+		if light:IsA("Light") and light.Enabled and light.Parent and light.Parent:IsA("BasePart") then
+			if ((light.Parent :: BasePart).Position - camera.CFrame.Position).Magnitude < 70 then
+				near[light] = true
+			end
+		end
+	end
+	task.spawn(function()
+		local endsAt = os.clock() + seconds
+		while os.clock() < endsAt do
+			local on = math.random() < 0.35
+			for light in near do
+				if light.Parent then
+					light.Enabled = on
+				end
+			end
+			task.wait(0.04 + math.random() * 0.16)
+		end
+		-- Back to what the server says. Lights the server switched off during
+		-- the flicker are switched off again by its own update.
+		for light in near do
+			if light.Parent then
+				light.Enabled = true
+			end
+		end
+		flickering = false
+	end)
+end
+
+--------------------------------------------------------------------------
+
+function HorrorEffectsController.start()
+	Net.onClientEvent("HorrorCue", function(payload)
+		if type(payload) ~= "table" then
+			return
+		end
+		local position = if typeof(payload.position) == "Vector3" then payload.position else nil
+		if payload.cue == "silhouette" and position then
+			silhouette(position, if type(payload.duration) == "number" then math.clamp(payload.duration, 0.5, 6) else 2)
+		elseif payload.cue == "evidence" and position then
+			if payload.variant ~= "scratches" or not scratches(position) then
+				footprints(position)
+			end
+		elseif payload.cue == "lights_flicker" then
+			flicker(if type(payload.seconds) == "number" then math.clamp(payload.seconds, 0.5, 8) else 3)
+		end
+	end)
+
+	-- A new character, a new run: nothing from the last one lingers.
+	player.CharacterAdded:Connect(function()
+		if effectsFolder then
+			effectsFolder:ClearAllChildren()
+		end
+	end)
+
+	log.info("started")
+end
+
+return HorrorEffectsController
+]]></string>
+            </Properties>
+          </Item>
+          <Item class="ModuleScript" referent="82">
             <Properties>
               <string name="Name">InputController</string>
               <string name="Source"><![CDATA[--!strict
@@ -31994,7 +32634,7 @@ return InputController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="81">
+          <Item class="ModuleScript" referent="83">
             <Properties>
               <string name="Name">InteractionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -32416,6 +33056,16 @@ function InteractionController.start()
 		if not action then
 			return
 		end
+		-- A humanoid that thinks it is climbing (beside the lattice of Hallow
+		-- Bridge, for one) cannot be seated. Stand it up before asking for the
+		-- seat, so "Take the controls" never silently fails.
+		if action == "sit" then
+			local character = player.Character
+			local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
+			if humanoid and humanoid:GetState() == Enum.HumanoidStateType.Climbing then
+				humanoid:ChangeState(Enum.HumanoidStateType.Running)
+			end
+		end
 		-- The first send tells the server we are starting; it replies with the
 		-- duration, and the hold bar runs from that.
 		Net.fireServer("Interact", parent, action)
@@ -32572,7 +33222,7 @@ return InteractionController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="82">
+          <Item class="ModuleScript" referent="84">
             <Properties>
               <string name="Name">MenuController</string>
               <string name="Source"><![CDATA[--!strict
@@ -34275,7 +34925,7 @@ return MenuController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="83">
+          <Item class="ModuleScript" referent="85">
             <Properties>
               <string name="Name">StateController</string>
               <string name="Source"><![CDATA[--!strict
@@ -34530,7 +35180,7 @@ return StateController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="84">
+          <Item class="ModuleScript" referent="86">
             <Properties>
               <string name="Name">TrainRideController</string>
               <string name="Source"><![CDATA[--!strict
@@ -34922,7 +35572,7 @@ return TrainRideController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="85">
+          <Item class="ModuleScript" referent="87">
             <Properties>
               <string name="Name">WeaponController</string>
               <string name="Source"><![CDATA[--!strict
@@ -35481,11 +36131,11 @@ return WeaponController
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="86">
+        <Item class="Folder" referent="88">
           <Properties>
             <string name="Name">UI</string>
           </Properties>
-          <Item class="ModuleScript" referent="87">
+          <Item class="ModuleScript" referent="89">
             <Properties>
               <string name="Name">Theme</string>
               <string name="Source"><![CDATA[--!strict
@@ -35759,7 +36409,7 @@ return Theme
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="88">
+          <Item class="ModuleScript" referent="90">
             <Properties>
               <string name="Name">Widgets</string>
               <string name="Source"><![CDATA[--!strict
@@ -36473,13 +37123,13 @@ return Widgets
       </Item>
     </Item>
   </Item>
-  <Item class="TextChatService" referent="89">
+  <Item class="TextChatService" referent="91">
     <Properties>
       <string name="Name">TextChatService</string>
       <token name="ChatVersion">1</token>
     </Properties>
   </Item>
-  <Item class="Workspace" referent="90">
+  <Item class="Workspace" referent="92">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>
@@ -36491,7 +37141,7 @@ return Widgets
       <int name="StreamingMinRadius">192</int>
       <int name="StreamingTargetRadius">640</int>
     </Properties>
-    <Item class="Terrain" referent="91">
+    <Item class="Terrain" referent="93">
       <Properties>
         <string name="Name">Terrain</string>
       </Properties>
