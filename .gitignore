@@ -28,3 +28,5 @@ tools/devsync/rename_*.js
 tools/devsync/set_prices.js
 tools/devsync/fix_sia_*.js
 tools/devsync/fix_prologue_*.js
+tools/devsync/fix_*.js
+tools/devsync/patch_*.js

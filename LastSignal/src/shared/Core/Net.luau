@@ -109,6 +109,8 @@ local MANIFEST: { [string]: RemoteSpec } = {
 	-- Signal Integrity Analyzer: crew commands, and the shared notebook.
 	SignalCommand = { kind = "function", rate = { 12, 3 } },
 	SignalState = { kind = "event" }, -- server -> client
+	-- The Window Passenger: a client saw it.
+	EntitySeen = { kind = "event", rate = { 4, 1 } },
 	PurchaseResult = { kind = "event" }, -- server -> client
 
 	-- Live events --------------------------------------------------------------
