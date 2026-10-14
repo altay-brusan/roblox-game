@@ -224,12 +224,24 @@ local function operateFixture(player: Player, expedition: ExpeditionService.Expe
 				return false, "NEEDS:" .. itemDef.name
 			end
 		end
-		-- Generator steps need fuel in hand.
+		-- Generator steps need fuel. A jerry can is used if the player has one;
+		-- otherwise fuel is siphoned from the crew's own locomotive, so a crew
+		-- that already poured its can into the train is never stranded.
+		local siphon = false
 		if step.needsFuel and not InventoryService.has(player, "fuel_can", 1) then
-			return false, "NEEDS:Jerry Can"
+			if expedition.train.fuel >= Balance.Train.fuelCanRestore * 0.6 + 5 then
+				siphon = true
+			else
+				return false, "NEEDS:Jerry Can"
+			end
 		end
 
-		local duration = step.seconds or 2
+		-- A defend step is started with a short hold; its long timer then runs
+		-- on its own while the crew holds the area. It used to be treated as
+		-- one long hold, which meant standing on the key for minutes and the
+		-- defend timer never ran at all.
+		local isDefend = step.kind == "defend"
+		local duration = if isDefend then 1.5 else (step.seconds or 2)
 		local entry = held[player.UserId]
 		if not entry or entry.target ~= fixture then
 			beginHold(player, fixture, "operate", duration, fixture.Position)
@@ -238,12 +250,26 @@ local function operateFixture(player: Player, expedition: ExpeditionService.Expe
 		if not completeHold(player, fixture, "operate") then
 			return false, "TOO_EARLY"
 		end
+		if isDefend then
+			fixture:SetAttribute("State", "running")
+			return true, "START_DEFEND"
+		end
 
 		if step.item then
 			InventoryService.remove(player, step.item, 1)
 		end
 		if step.needsFuel then
-			InventoryService.remove(player, "fuel_can", 1)
+			if siphon then
+				expedition.train.fuel -= Balance.Train.fuelCanRestore * 0.6
+				Net.fireClient("Notify", player, {
+					kind = "info",
+					title = "Fuel siphoned from the locomotive",
+					body = "Nobody had a jerry can, so the generator was filled from the train.",
+					duration = 6,
+				})
+			else
+				InventoryService.remove(player, "fuel_can", 1)
+			end
 		end
 
 		fixture:SetAttribute("State", "done")
@@ -282,12 +308,12 @@ local function operateFixture(player: Player, expedition: ExpeditionService.Expe
 			return true, nil
 		end
 
-		-- Fuel delivery to a station fuel point, which fills the locomotive.
+		-- A powered station fuel point pumps from the station's own tank and
+		-- fills the locomotive to the target. It used to demand a jerry can,
+		-- and the halt's only guaranteed can is spent on its generator, so the
+		-- objective could only be finished if the loot rolls were kind.
 		if def.params.requiresPower and not fixture:GetAttribute("Powered") then
 			return false, "NO_POWER"
-		end
-		if not InventoryService.has(player, "fuel_can", 1) then
-			return false, "NEEDS:Jerry Can"
 		end
 		local duration = 4
 		local entry = held[player.UserId]
@@ -298,14 +324,10 @@ local function operateFixture(player: Player, expedition: ExpeditionService.Expe
 		if not completeHold(player, fixture, "operate") then
 			return false, "TOO_EARLY"
 		end
-		InventoryService.remove(player, "fuel_can", 1)
-		local added = TrainService.addFuel(expedition.train, Balance.Train.fuelCanRestore)
+		local target = def.params.targetFuel or 80
+		local added = TrainService.addFuel(expedition.train, math.max(0, target - expedition.train.fuel))
 		ProgressionService.addStat(player, "fuel_delivered", 1)
-		if expedition.train.fuel >= (def.params.targetFuel or 80) then
-			ExpeditionService.completeObjective(expedition, objectiveId)
-		else
-			ExpeditionService.push(expedition)
-		end
+		ExpeditionService.completeObjective(expedition, objectiveId)
 		Net.fireClient("InteractResult", player, { ok = true, action = "refuel", amount = added })
 		return true, nil
 	end
@@ -570,7 +592,7 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		if type(itemId) ~= "string" then
 			return
 		end
-		local added = InventoryService.add(player, itemId, quantity)
+		local added = InventoryService.add(player, itemId, quantity, expedition ~= nil and ExpeditionService.needsItem(expedition, itemId))
 		if added <= 0 then
 			Net.fireClient("InteractResult", player, { ok = false, error = "NO_SPACE" })
 			return
@@ -581,6 +603,9 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 			model:SetAttribute("Quantity", quantity - added)
 		end
 		ProgressionService.addStat(player, "items_collected", added)
+		if expedition then
+			ExpeditionService.checkCollectSteps(expedition)
+		end
 		Net.fireClient("InteractResult", player, { ok = true, action = "pickup", itemId = itemId, quantity = added })
 		return
 	end
@@ -684,7 +709,7 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		local taken: { { id: string, quantity: number } } = {}
 		local overflow: { { id: string, quantity: number } } = {}
 		for _, stack in contents do
-			local added = InventoryService.add(player, stack.id, stack.quantity)
+			local added = InventoryService.add(player, stack.id, stack.quantity, ExpeditionService.needsItem(expedition, stack.id))
 			if added > 0 then
 				table.insert(taken, { id = stack.id, quantity = added })
 				ProgressionService.addStat(player, "items_collected", added)
@@ -733,6 +758,7 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		end
 
 		InteractionService.NoiseMade:Fire(part.Position, 2, player)
+		ExpeditionService.checkCollectSteps(expedition)
 		Net.fireClient("InteractResult", player, { ok = true, action = "search", contents = taken, overflow = #overflow })
 		return
 	end
@@ -752,19 +778,20 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		if ok and err == "HOLD" then
 			return
 		end
+		if ok and err == "START_DEFEND" then
+			local defendObjective = part:GetAttribute("Objective")
+			local defendStep = if type(defendObjective) == "string" then ExpeditionService.currentStep(expedition, defendObjective) else nil
+			if type(defendObjective) == "string" and defendStep then
+				startDefend(expedition, defendObjective, part, defendStep.seconds or 60)
+			end
+			Net.fireClient("InteractResult", player, { ok = true, action = "defend_started", seconds = defendStep and defendStep.seconds })
+			return
+		end
 		if not ok then
 			Net.fireClient("InteractResult", player, { ok = false, error = err })
 			return
 		end
 
-		-- A completed step that is a defend step starts its timer.
-		local objectiveId = part:GetAttribute("Objective")
-		if type(objectiveId) == "string" then
-			local step = ExpeditionService.currentStep(expedition, objectiveId)
-			if step and step.kind == "defend" and step.fixture == part.Name then
-				startDefend(expedition, objectiveId, part, step.seconds or 60)
-			end
-		end
 		InteractionService.FixtureOperated:Fire(expedition.id, player, part)
 		Net.fireClient("InteractResult", player, { ok = true, action = "operate" })
 		return
@@ -793,6 +820,17 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		InventoryService.remove(player, "fuel_can", 1)
 		local added = TrainService.addFuel(expedition.train, Balance.Train.fuelCanRestore)
 		ProgressionService.addStat(player, "fuel_delivered", 1)
+		-- A can poured into the locomotive counts towards any objective that
+		-- asks for fuel delivered to the train (Tolbridge Camp). Nothing used
+		-- to credit it, which made that station impossible to clear.
+		local fuelStation = StationRegistry.byIndex(expedition.stationIndex)
+		if fuelStation then
+			for _, def in fuelStation.objectives do
+				if def.kind == "collect" and def.params.item == "fuel_can" and def.params.deliverTo == "train_fuel_point" then
+					ExpeditionService.addObjectiveProgress(expedition, def.id, 1)
+				end
+			end
+		end
 		Net.fireClient("InteractResult", player, { ok = true, action = "refuel", amount = added })
 		return
 	end

@@ -73,6 +73,11 @@ http
 			if (url.pathname === "/manifest") {
 				res.writeHead(200, { "Content-Type": "application/json" });
 				res.end(JSON.stringify(collect()));
+			} else if (url.pathname === "/dev") {
+				// Dev-only helpers kept beside this server (for example harness.luau).
+				const name = path.basename(url.searchParams.get("name") || "");
+				res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+				res.end(fs.readFileSync(path.join(__dirname, name), "utf8"));
 			} else if (url.pathname === "/source") {
 				const entry = collect().find((e) => e.path === url.searchParams.get("path"));
 				if (!entry) throw new Error("unknown path");

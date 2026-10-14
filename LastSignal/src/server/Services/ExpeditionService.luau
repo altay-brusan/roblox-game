@@ -427,6 +427,65 @@ function ExpeditionService.advanceStep(expedition: Expedition, objectiveId: stri
 	end
 end
 
+--- Advances any sequence objective whose current step is to collect an item
+--- the crew now holds. Called whenever items are picked up. Nothing used to
+--- do this, so "Find a ceramic fuse" at Marrow Halt could never complete and
+--- the chapter could not be finished.
+function ExpeditionService.checkCollectSteps(expedition: Expedition)
+	local station = currentStation(expedition)
+	if not station then
+		return
+	end
+	for _ = 1, 4 do
+		local advanced = false
+		for _, def in station.objectives do
+			local progress = expedition.objectives[def.id]
+			if def.kind ~= "sequence" or not progress or progress.complete or not requirementsMet(expedition, def) then
+				continue
+			end
+			local steps = def.params.steps or {}
+			local step = steps[progress.stepIndex]
+			if step and step.kind == "collect" and step.item then
+				for _, player in playersOf(expedition) do
+					if InventoryService.has(player, step.item, step.quantity or 1) then
+						ExpeditionService.advanceStep(expedition, def.id)
+						advanced = true
+						break
+					end
+				end
+			end
+		end
+		-- A step may be followed by another collect step already satisfied.
+		if not advanced then
+			return
+		end
+	end
+end
+
+--- Whether an incomplete objective at the current station needs this item.
+--- Such items are always taken, even into a full inventory.
+function ExpeditionService.needsItem(expedition: Expedition, itemId: string): boolean
+	local station = currentStation(expedition)
+	if not station then
+		return false
+	end
+	for _, def in station.objectives do
+		local progress = expedition.objectives[def.id]
+		if def.optional or not progress or progress.complete then
+			continue
+		end
+		if def.params.item == itemId then
+			return true
+		end
+		for _, step in def.params.steps or {} do
+			if step.item == itemId or (step.needsFuel and itemId == "fuel_can") then
+				return true
+			end
+		end
+	end
+	return false
+end
+
 function ExpeditionService.currentStep(expedition: Expedition, objectiveId: string): StationRegistry.StepDef?
 	local station = currentStation(expedition)
 	if not station then
@@ -1156,6 +1215,19 @@ function ExpeditionService.start()
 				CrewService.close(crew, "start failed")
 			end
 		end)
+	end)
+
+	-- Items also reach players through the supply rack and from crewmates,
+	-- which do not pass through the pickup paths; a slow sweep catches those.
+	task.spawn(function()
+		while true do
+			task.wait(1)
+			for _, expedition in expeditions do
+				if expedition.state == "onstation" or expedition.state == "climax" then
+					Protect.call(ExpeditionService.checkCollectSteps, expedition)
+				end
+			end
+		end
 	end)
 
 	-- Arrival at a station is driven by the train reaching its stop distance.
