@@ -628,14 +628,14 @@ BuildKit.Palette = {
 --- forest or a row of buildings are the main thing that makes a procedural
 --- world look procedural, and this is the cheapest fix.
 function BuildKit.weather(colour: Color3, amount: number, rng: Random): Color3
-	local jitter = function()
-		return (rng:NextNumber() - 0.5) * 2 * amount
+	-- Mostly a change of brightness, with only a trace of independent
+	-- per-channel drift. Jittering each channel fully turned dark timber into
+	-- visibly red, green and yellow sleepers under the headlights.
+	local shade = (rng:NextNumber() - 0.5) * 2 * amount
+	local function channel(value: number): number
+		return math.clamp(value + shade + (rng:NextNumber() - 0.5) * amount * 0.25, 0, 1)
 	end
-	return Color3.new(
-		math.clamp(colour.R + jitter(), 0, 1),
-		math.clamp(colour.G + jitter(), 0, 1),
-		math.clamp(colour.B + jitter(), 0, 1)
-	)
+	return Color3.new(channel(colour.R), channel(colour.G), channel(colour.B))
 end
 
 --- Streaks of rust down a painted surface. Applied to large metal faces on
@@ -973,6 +973,202 @@ function BuildKit.trackSection(originCF: CFrame, length: number, parent: Instanc
 			colour = C(168, 166, 160),
 			material = Enum.Material.Metal,
 			reflectance = 0.3,
+			parent = model,
+		})
+	end
+
+	return model
+end
+
+--------------------------------------------------------------------------
+-- Tunnels
+--------------------------------------------------------------------------
+
+--- A railway tunnel through a wooded hill. The portal face is at local Z = 0,
+--- facing local -Z; the bore runs into the hill along local +Z for `length`
+--- studs. Track is laid separately.
+---
+--- Tunnels are where the line leaves the yard and where it reaches the
+--- expedition corridor, so the crossing between the two is a real journey
+--- through darkness rather than a cut.
+function BuildKit.tunnel(mouthCF: CFrame, length: number, parent: Instance, rng: Random): Model
+	local model = BuildKit.model("Tunnel", parent)
+	local boreWidth = 20
+	local boreHeight = 22
+	local hillWidth = 150
+	local hillHeight = boreHeight + 10
+	local brick = C(78, 66, 58)
+	local stone = C(92, 88, 82)
+	local earth = C(58, 52, 42)
+
+	local function inHill(x: number, y: number, z: number): CFrame
+		return mouthCF * CFrame.new(x, y, z)
+	end
+
+	-- The hill: solid masses either side of the bore and over it, with grass
+	-- on top and sloping shoulders so it reads as ground, not as a box.
+	local sideWidth = (hillWidth - boreWidth) * 0.5
+	for _, side in { -1, 1 } do
+		BuildKit.part({
+			name = "HillMass",
+			size = Vector3.new(sideWidth, hillHeight, length),
+			cf = inHill(side * (boreWidth * 0.5 + sideWidth * 0.5), hillHeight * 0.5 - 1, length * 0.5),
+			colour = earth,
+			material = Enum.Material.Ground,
+			parent = model,
+		})
+		BuildKit.wedge({
+			name = "HillShoulder",
+			size = Vector3.new(length, hillHeight, 40),
+			cf = inHill(side * (hillWidth * 0.5 + 20), hillHeight * 0.5 - 1, length * 0.5)
+				* CFrame.Angles(0, math.rad(-side * 90), 0),
+			colour = earth,
+			material = Enum.Material.Ground,
+			parent = model,
+		})
+	end
+	BuildKit.part({
+		name = "HillCrown",
+		size = Vector3.new(boreWidth, hillHeight - boreHeight, length),
+		cf = inHill(0, boreHeight + (hillHeight - boreHeight) * 0.5 - 1, length * 0.5),
+		colour = earth,
+		material = Enum.Material.Ground,
+		parent = model,
+	})
+	BuildKit.part({
+		name = "HillTurf",
+		size = Vector3.new(hillWidth, 1.2, length),
+		cf = inHill(0, hillHeight - 0.6, length * 0.5),
+		colour = C(46, 58, 40),
+		material = Enum.Material.Grass,
+		parent = model,
+	})
+	-- Wing slopes either side of the portal wall, so the line runs into a
+	-- cutting rather than up to a cliff.
+	local wingInner = 36
+	for _, side in { -1, 1 } do
+		BuildKit.wedge({
+			name = "CuttingWing",
+			size = Vector3.new(hillWidth * 0.5 - wingInner, hillHeight, 30),
+			cf = inHill(side * (wingInner + (hillWidth * 0.5 - wingInner) * 0.5), hillHeight * 0.5 - 1, -15),
+			colour = earth,
+			material = Enum.Material.Ground,
+			parent = model,
+		})
+	end
+
+	-- Portal: a dressed-stone retaining wall with a brick arch ring.
+	local wallWidth = 64
+	local wallHeight = boreHeight + 10
+	for _, side in { -1, 1 } do
+		BuildKit.part({
+			name = "PortalWall",
+			size = Vector3.new((wallWidth - boreWidth) * 0.5, wallHeight, 3),
+			cf = inHill(side * (boreWidth * 0.5 + (wallWidth - boreWidth) * 0.25), wallHeight * 0.5 - 1, -1.5),
+			colour = stone,
+			material = Enum.Material.Slate,
+			parent = model,
+		})
+		-- Buttress at each end of the wall.
+		BuildKit.part({
+			name = "PortalButtress",
+			size = Vector3.new(4, wallHeight + 2, 5),
+			cf = inHill(side * (wallWidth * 0.5 + 2), (wallHeight + 2) * 0.5 - 1, -2.5),
+			colour = C(84, 80, 74),
+			material = Enum.Material.Slate,
+			parent = model,
+		})
+	end
+	BuildKit.part({
+		name = "PortalHeader",
+		size = Vector3.new(boreWidth, wallHeight - boreHeight, 3),
+		cf = inHill(0, boreHeight + (wallHeight - boreHeight) * 0.5 - 1, -1.5),
+		colour = stone,
+		material = Enum.Material.Slate,
+		parent = model,
+	})
+	-- Arch ring: voussoirs stepped around the opening's upper corners.
+	for i = 0, 6 do
+		local angle = math.rad(15 + i * 25)
+		local radius = boreWidth * 0.5
+		BuildKit.detail({
+			name = "Voussoir",
+			size = Vector3.new(2.4, 1.6, 3.4),
+			cf = inHill(math.cos(angle) * radius, boreHeight - 3 + math.sin(angle) * 3.5, -1.6)
+				* CFrame.Angles(0, 0, angle - math.rad(90)),
+			colour = brick,
+			material = Enum.Material.Brick,
+			parent = model,
+		})
+	end
+	BuildKit.detail({
+		name = "PortalCoping",
+		size = Vector3.new(wallWidth + 2, 1.2, 4),
+		cf = inHill(0, wallHeight - 0.4, -1.5),
+		colour = C(110, 106, 98),
+		material = Enum.Material.Concrete,
+		parent = model,
+	})
+
+	-- Bore lining: brick walls and a soot-blackened roof. Refuges are cut
+	-- every forty studs, each with a dim red lamp, so the darkness has depth
+	-- rather than being a flat black screen.
+	for _, side in { -1, 1 } do
+		BuildKit.part({
+			name = "BoreLining",
+			size = Vector3.new(1, boreHeight, length),
+			cf = inHill(side * (boreWidth * 0.5 - 0.5), boreHeight * 0.5 - 1, length * 0.5),
+			colour = brick,
+			material = Enum.Material.Brick,
+			parent = model,
+		})
+	end
+	BuildKit.part({
+		name = "BoreRoof",
+		size = Vector3.new(boreWidth, 1, length),
+		cf = inHill(0, boreHeight - 1.5, length * 0.5),
+		colour = C(30, 28, 26),
+		material = Enum.Material.Slate,
+		parent = model,
+	})
+	local refuge = 40
+	while refuge < length - 10 do
+		for _, side in { -1, 1 } do
+			local lampPart = BuildKit.detail({
+				name = "RefugeLamp",
+				size = Vector3.new(0.4, 0.6, 0.6),
+				cf = inHill(side * (boreWidth * 0.5 - 1.2), 9, refuge),
+				colour = C(160, 40, 30),
+				material = Enum.Material.Neon,
+				parent = model,
+			})
+			if side == 1 then
+				local glow = Instance.new("PointLight")
+				glow.Color = C(170, 50, 36)
+				glow.Brightness = 0.6
+				glow.Range = 14
+				glow.Shadows = false
+				glow.Parent = lampPart
+			end
+			BuildKit.detail({
+				name = "RefugeRecess",
+				size = Vector3.new(0.2, 7, 4),
+				cf = inHill(side * (boreWidth * 0.5 - 1.05), 3.5, refuge + 3),
+				colour = C(18, 16, 14),
+				material = Enum.Material.Slate,
+				parent = model,
+			})
+		end
+		refuge += 40 + rng:NextInteger(-4, 4)
+	end
+	-- Cable runs along one wall, the detail that sells a working railway.
+	for i = 0, 2 do
+		BuildKit.detail({
+			name = "CableRun",
+			size = Vector3.new(0.2, 0.2, length - 4),
+			cf = inHill(-boreWidth * 0.5 + 1.15, 6 + i * 0.35, length * 0.5),
+			colour = C(24, 24, 24),
+			material = Enum.Material.Rubber,
 			parent = model,
 		})
 	end

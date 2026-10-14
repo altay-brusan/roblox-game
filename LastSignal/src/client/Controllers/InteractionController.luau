@@ -349,6 +349,16 @@ end
 
 --------------------------------------------------------------------------
 
+-- A tall fixture hosts its prompt on an eye-level Attachment (see
+-- InteractionService); the interactable is the part that carries it.
+local function promptTarget(prompt: ProximityPrompt): Instance?
+	local parent = prompt.Parent
+	if parent and parent:IsA("Attachment") then
+		return parent.Parent
+	end
+	return parent
+end
+
 function InteractionController.start()
 	build()
 
@@ -358,7 +368,7 @@ function InteractionController.start()
 			return
 		end
 		activePrompt = prompt
-		local parent = prompt.Parent
+		local parent = promptTarget(prompt)
 		if not parent then
 			return
 		end
@@ -387,7 +397,7 @@ function InteractionController.start()
 		if triggeringPlayer ~= player then
 			return
 		end
-		local parent = prompt.Parent
+		local parent = promptTarget(prompt)
 		if not parent then
 			return
 		end

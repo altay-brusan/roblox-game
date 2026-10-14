@@ -3,11 +3,11 @@
     <Properties>
       <string name="Name">Lighting</string>
       <Color3 name="Ambient">
-        <R>0.043</R>
-        <G>0.047</G>
-        <B>0.058</B>
+        <R>0.06</R>
+        <G>0.065</G>
+        <B>0.08</B>
       </Color3>
-      <float name="Brightness">0.55</float>
+      <float name="Brightness">1.1</float>
       <float name="ClockTime">2.2833</float>
       <Color3 name="ColorShift_Bottom">
         <R>0.02</R>
@@ -21,7 +21,7 @@
       </Color3>
       <float name="EnvironmentDiffuseScale">0.25</float>
       <float name="EnvironmentSpecularScale">0.2</float>
-      <float name="ExposureCompensation">0.35</float>
+      <float name="ExposureCompensation">0.9</float>
       <Color3 name="FogColor">
         <R>0.043</R>
         <G>0.051</G>
@@ -32,26 +32,65 @@
       <float name="GeographicLatitude">62</float>
       <bool name="GlobalShadows">true</bool>
       <Color3 name="OutdoorAmbient">
-        <R>0.055</R>
-        <G>0.062</G>
-        <B>0.078</B>
+        <R>0.085</R>
+        <G>0.095</G>
+        <B>0.125</B>
       </Color3>
       <float name="ShadowSoftness">0.35</float>
       <token name="Technology">4</token>
     </Properties>
+    <Item class="Atmosphere" referent="1">
+      <Properties>
+        <string name="Name">Atmosphere</string>
+        <Color3 name="Color">
+          <R>0.275</R>
+          <G>0.314</G>
+          <B>0.376</B>
+        </Color3>
+        <Color3 name="Decay">
+          <R>0.118</R>
+          <G>0.133</G>
+          <B>0.173</B>
+        </Color3>
+        <float name="Density">0.42</float>
+        <float name="Glare">0</float>
+        <float name="Haze">1.6</float>
+        <float name="Offset">0.1</float>
+      </Properties>
+    </Item>
+    <Item class="BloomEffect" referent="2">
+      <Properties>
+        <string name="Name">Bloom</string>
+        <float name="Intensity">0.6</float>
+        <float name="Size">28</float>
+        <float name="Threshold">1.6</float>
+      </Properties>
+    </Item>
+    <Item class="ColorCorrectionEffect" referent="3">
+      <Properties>
+        <string name="Name">Grade</string>
+        <float name="Contrast">0.12</float>
+        <float name="Saturation">-0.12</float>
+        <Color3 name="TintColor">
+          <R>0.91</R>
+          <G>0.933</G>
+          <B>1</B>
+        </Color3>
+      </Properties>
+    </Item>
   </Item>
-  <Item class="Players" referent="1">
+  <Item class="Players" referent="4">
     <Properties>
       <string name="Name">Players</string>
       <bool name="CharacterAutoLoads">false</bool>
       <float name="RespawnTime">3</float>
     </Properties>
   </Item>
-  <Item class="ReplicatedFirst" referent="2">
+  <Item class="ReplicatedFirst" referent="5">
     <Properties>
       <string name="Name">ReplicatedFirst</string>
     </Properties>
-    <Item class="LocalScript" referent="3">
+    <Item class="LocalScript" referent="6">
       <Properties>
         <string name="Name">LoadingScreen</string>
         <string name="Source"><![CDATA[--!strict
@@ -246,19 +285,19 @@ end)
       </Properties>
     </Item>
   </Item>
-  <Item class="ReplicatedStorage" referent="4">
+  <Item class="ReplicatedStorage" referent="7">
     <Properties>
       <string name="Name">ReplicatedStorage</string>
     </Properties>
-    <Item class="Folder" referent="5">
+    <Item class="Folder" referent="8">
       <Properties>
         <string name="Name">LastSignal</string>
       </Properties>
-      <Item class="Folder" referent="6">
+      <Item class="Folder" referent="9">
         <Properties>
           <string name="Name">Config</string>
         </Properties>
-        <Item class="ModuleScript" referent="7">
+        <Item class="ModuleScript" referent="10">
           <Properties>
             <string name="Name">Admin</string>
             <string name="Source"><![CDATA[--!strict
@@ -427,7 +466,7 @@ return Admin
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="8">
+        <Item class="ModuleScript" referent="11">
           <Properties>
             <string name="Name">Audio</string>
             <string name="Source"><![CDATA[--!strict
@@ -804,7 +843,7 @@ return Audio
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="9">
+        <Item class="ModuleScript" referent="12">
           <Properties>
             <string name="Name">Balance</string>
             <string name="Source"><![CDATA[--!strict
@@ -887,6 +926,10 @@ Balance.Train = {
 	coastDeceleration = 1.6,
 	serviceBrakeDeceleration = 7.5,
 	emergencyBrakeDeceleration = 19,
+	-- Train protection: approaching a stop, the train is held to a braking
+	-- curve at this rate so it always draws up at the platform instead of
+	-- stopping dead the instant it reaches it.
+	stationApproachDeceleration = 5.5,
 	-- Emergency braking is punishing on purpose: it costs condition and wakes
 	-- things up, so it is a real decision rather than a free stop.
 	emergencyBrakeConditionCost = 4,
@@ -1137,7 +1180,7 @@ return Balance
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="10">
+        <Item class="ModuleScript" referent="13">
           <Properties>
             <string name="Name">GameConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -1255,7 +1298,9 @@ GameConfig.TargetRunSeconds = 32 * 60
 GameConfig.MinRunSeconds = 22 * 60
 GameConfig.MaxRunSeconds = 48 * 60
 
-GameConfig.CinematicSeconds = 38
+-- The departure sequence films the real train leaving the yard; it ends when
+-- the train is inside the tunnel, which the yard pilot reaches in about this.
+GameConfig.CinematicSeconds = 24
 GameConfig.CinematicSkippableAfter = 2
 
 --------------------------------------------------------------------------
@@ -1358,7 +1403,7 @@ return table.freeze(GameConfig)
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="11">
+        <Item class="ModuleScript" referent="14">
           <Properties>
             <string name="Name">Monetization</string>
             <string name="Source"><![CDATA[--!strict
@@ -1713,11 +1758,11 @@ return Monetization
           </Properties>
         </Item>
       </Item>
-      <Item class="Folder" referent="12">
+      <Item class="Folder" referent="15">
         <Properties>
           <string name="Name">Core</string>
         </Properties>
-        <Item class="ModuleScript" referent="13">
+        <Item class="ModuleScript" referent="16">
           <Properties>
             <string name="Name">Format</string>
             <string name="Source"><![CDATA[--!strict
@@ -1845,7 +1890,7 @@ return Format
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="14">
+        <Item class="ModuleScript" referent="17">
           <Properties>
             <string name="Name">Guard</string>
             <string name="Source"><![CDATA[--!strict
@@ -2070,7 +2115,7 @@ return Guard
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="15">
+        <Item class="ModuleScript" referent="18">
           <Properties>
             <string name="Name">Logger</string>
             <string name="Source"><![CDATA[--!strict
@@ -2157,7 +2202,7 @@ return Logger
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="16">
+        <Item class="ModuleScript" referent="19">
           <Properties>
             <string name="Name">Maid</string>
             <string name="Source"><![CDATA[--!strict
@@ -2266,7 +2311,7 @@ return Maid
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="17">
+        <Item class="ModuleScript" referent="20">
           <Properties>
             <string name="Name">Net</string>
             <string name="Source"><![CDATA[--!strict
@@ -2329,6 +2374,9 @@ local MANIFEST: { [string]: RemoteSpec } = {
 	ExpeditionCommand = { kind = "function", rate = { 10, 2 } },
 	Cinematic = { kind = "event" }, -- server -> client
 	CinematicSkip = { kind = "event", rate = { 4, 1 } },
+	Boarding = { kind = "event" }, -- server -> client, who is still to board the 02:17
+	ScreenFade = { kind = "event" }, -- server -> client, the tunnel crossing
+	CrossToLine = { kind = "event" }, -- server -> client, where to stand on the expedition train
 
 	-- World interaction ----------------------------------------------------
 	Interact = { kind = "event", rate = { 12, 4 } },
@@ -2573,7 +2621,7 @@ return Net
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="18">
+        <Item class="ModuleScript" referent="21">
           <Properties>
             <string name="Name">Protect</string>
             <string name="Source"><![CDATA[--!strict
@@ -2609,7 +2657,7 @@ return Protect
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="19">
+        <Item class="ModuleScript" referent="22">
           <Properties>
             <string name="Name">RateLimiter</string>
             <string name="Source"><![CDATA[--!strict
@@ -2690,7 +2738,7 @@ return RateLimiter
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="20">
+        <Item class="ModuleScript" referent="23">
           <Properties>
             <string name="Name">Signal</string>
             <string name="Source"><![CDATA[--!strict
@@ -2854,7 +2902,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="21">
+        <Item class="ModuleScript" referent="24">
           <Properties>
             <string name="Name">Spring</string>
             <string name="Source"><![CDATA[--!strict
@@ -2974,7 +3022,7 @@ return Spring
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="22">
+        <Item class="ModuleScript" referent="25">
           <Properties>
             <string name="Name">TableUtil</string>
             <string name="Source"><![CDATA[--!strict
@@ -3137,11 +3185,11 @@ return TableUtil
           </Properties>
         </Item>
       </Item>
-      <Item class="Folder" referent="23">
+      <Item class="Folder" referent="26">
         <Properties>
           <string name="Name">Registry</string>
         </Properties>
-        <Item class="ModuleScript" referent="24">
+        <Item class="ModuleScript" referent="27">
           <Properties>
             <string name="Name">CosmeticRegistry</string>
             <string name="Source"><![CDATA[--!strict
@@ -3599,7 +3647,7 @@ return CosmeticRegistry
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="25">
+        <Item class="ModuleScript" referent="28">
           <Properties>
             <string name="Name">EventRegistry</string>
             <string name="Source"><![CDATA[--!strict
@@ -3837,7 +3885,7 @@ return EventRegistry
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="26">
+        <Item class="ModuleScript" referent="29">
           <Properties>
             <string name="Name">ItemRegistry</string>
             <string name="Source"><![CDATA[--!strict
@@ -4387,7 +4435,7 @@ return ItemRegistry
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="27">
+        <Item class="ModuleScript" referent="30">
           <Properties>
             <string name="Name">QuestRegistry</string>
             <string name="Source"><![CDATA[--!strict
@@ -4880,7 +4928,7 @@ return QuestRegistry
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="28">
+        <Item class="ModuleScript" referent="31">
           <Properties>
             <string name="Name">RadioScript</string>
             <string name="Source"><![CDATA[--!strict
@@ -5633,7 +5681,7 @@ return RadioScript
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="29">
+        <Item class="ModuleScript" referent="32">
           <Properties>
             <string name="Name">StationRegistry</string>
             <string name="Source"><![CDATA[--!strict
@@ -6397,7 +6445,7 @@ return StationRegistry
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="30">
+        <Item class="ModuleScript" referent="33">
           <Properties>
             <string name="Name">TrainRegistry</string>
             <string name="Source"><![CDATA[--!strict
@@ -6828,13 +6876,13 @@ local INTERIORS: { [string]: InteriorDef } = {
 		id = "interior_standard",
 		name = "Standard Stock",
 		description = "Green vinyl, cream panelling, and a light that buzzes.",
-		wall = C(196, 188, 166),
+		wall = C(150, 140, 116),
 		floor = C(64, 62, 58),
 		seat = C(58, 78, 62),
 		seatMaterial = Enum.Material.Fabric,
 		trim = C(92, 70, 48),
 		lampColour = C(255, 232, 186),
-		lampBrightness = 1.1,
+		lampBrightness = 0.75,
 		source = "default",
 	},
 	interior_utility = {
@@ -6847,7 +6895,7 @@ local INTERIORS: { [string]: InteriorDef } = {
 		seatMaterial = Enum.Material.Metal,
 		trim = C(140, 142, 146),
 		lampColour = C(226, 238, 255),
-		lampBrightness = 1.3,
+		lampBrightness = 0.85,
 		source = "credits",
 		creditCost = 2200,
 	},
@@ -6861,7 +6909,7 @@ local INTERIORS: { [string]: InteriorDef } = {
 		seatMaterial = Enum.Material.Fabric,
 		trim = C(186, 148, 76),
 		lampColour = C(255, 214, 150),
-		lampBrightness = 0.95,
+		lampBrightness = 0.65,
 		source = "robux",
 		productKey = "workshop_access",
 	},
@@ -6875,7 +6923,7 @@ local INTERIORS: { [string]: InteriorDef } = {
 		seatMaterial = Enum.Material.Fabric,
 		trim = C(118, 104, 78),
 		lampColour = C(255, 240, 206),
-		lampBrightness = 1.15,
+		lampBrightness = 0.75,
 		source = "robux",
 		productKey = "workshop_access",
 	},
@@ -6883,13 +6931,13 @@ local INTERIORS: { [string]: InteriorDef } = {
 		id = "interior_ashwood",
 		name = "Ashwood",
 		description = "Pale ash panelling and dark leather. Quiet, and slightly too clean for this line.",
-		wall = C(186, 174, 152),
+		wall = C(146, 134, 114),
 		floor = C(66, 58, 50),
 		seat = C(48, 42, 40),
 		seatMaterial = Enum.Material.Fabric,
 		trim = C(148, 132, 108),
 		lampColour = C(255, 236, 202),
-		lampBrightness = 1.05,
+		lampBrightness = 0.7,
 		source = "robux",
 		productKey = "workshop_access",
 	},
@@ -6971,7 +7019,7 @@ return TrainRegistry
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="31">
+        <Item class="ModuleScript" referent="34">
           <Properties>
             <string name="Name">WeaponRegistry</string>
             <string name="Source"><![CDATA[--!strict
@@ -7417,11 +7465,11 @@ return WeaponRegistry
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="32">
+  <Item class="ServerScriptService" referent="35">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Script" referent="33">
+    <Item class="Script" referent="36">
       <Properties>
         <string name="Name">LastSignalServer</string>
         <token name="RunContext">0</token>
@@ -7506,6 +7554,7 @@ local BOOT_ORDER: { ServiceEntry } = {
 
 	{ name = "CrewService", module = Services.CrewService, stage = "Session" },
 	{ name = "TrainService", module = Services.TrainService, stage = "Session" },
+	{ name = "DepartureService", module = Services.DepartureService, stage = "Session" },
 	{ name = "ExpeditionService", module = Services.ExpeditionService, stage = "Session" },
 
 	{ name = "SurvivalService", module = Services.SurvivalService, stage = "Gameplay" },
@@ -7639,8 +7688,10 @@ local function onPlayerAdded(player: Player)
 				local target = if currentLobby then currentLobby.spawnCFrames[math.random(1, #currentLobby.spawnCFrames)] else spawnCF
 				-- Only reposition when the player is not on an expedition;
 				-- ExpeditionService places its own crew.
+				-- A crew still boarding at Platform 1 is in the yard too.
 				local ExpeditionService = loaded.ExpeditionService
-				if not (ExpeditionService and ExpeditionService.forPlayer(player)) then
+				local expedition = if ExpeditionService then ExpeditionService.forPlayer(player) else nil
+				if not expedition or expedition.state == "preparing" or expedition.state == "boarding" then
 					character:PivotTo(target)
 				end
 			end
@@ -7671,16 +7722,16 @@ if RunService:IsStudio() then
 end
 ]]></string>
       </Properties>
-      <Item class="Folder" referent="34">
+      <Item class="Folder" referent="37">
         <Properties>
           <string name="Name">Gameplay</string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="35">
+      <Item class="Folder" referent="38">
         <Properties>
           <string name="Name">Services</string>
         </Properties>
-        <Item class="ModuleScript" referent="36">
+        <Item class="ModuleScript" referent="39">
           <Properties>
             <string name="Name">AdminService</string>
             <string name="Source"><![CDATA[--!strict
@@ -8341,7 +8392,7 @@ return AdminService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="37">
+        <Item class="ModuleScript" referent="40">
           <Properties>
             <string name="Name">AnalyticsService</string>
             <string name="Source"><![CDATA[--!strict
@@ -8659,7 +8710,7 @@ return AnalyticsService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="38">
+        <Item class="ModuleScript" referent="41">
           <Properties>
             <string name="Name">CombatService</string>
             <string name="Source"><![CDATA[--!strict
@@ -9185,7 +9236,7 @@ return CombatService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="39">
+        <Item class="ModuleScript" referent="42">
           <Properties>
             <string name="Name">CreatureService</string>
             <string name="Source"><![CDATA[--!strict
@@ -9878,7 +9929,7 @@ return CreatureService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="40">
+        <Item class="ModuleScript" referent="43">
           <Properties>
             <string name="Name">CrewService</string>
             <string name="Source"><![CDATA[--!strict
@@ -10663,7 +10714,7 @@ return CrewService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="41">
+        <Item class="ModuleScript" referent="44">
           <Properties>
             <string name="Name">DataService</string>
             <string name="Source"><![CDATA[--!strict
@@ -11233,7 +11284,463 @@ return DataService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="42">
+        <Item class="ModuleScript" referent="45">
+          <Properties>
+            <string name="Name">DepartureService</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	DepartureService
+	----------------
+	Runs the yard service train: the 02:17 at Platform 1.
+
+	WHY THIS EXISTS
+	---------------
+	The first build had no way to board anything. A crew pressed Depart and
+	was teleported into a cab twenty thousand studs away, which is why players
+	reported that they could not find the train. Now the train they see from
+	the spawn is the one they ride:
+
+	  arriving    the next service runs in from the south and draws up at
+	              Platform 1 under train protection
+	  waiting     doors open, lit, walkable; anyone may look round it
+	  boarding    reserved by a crew that has departed; it waits for every
+	              member to walk aboard
+	  departing   doors closed, the yard pilot takes it out north into the
+	              tunnel; the expedition carries the crew across to the line
+	              inside the tunnel
+	  gone        retired; the next service is called
+
+	The yard train is a normal TrainService train, so it moves, renders and
+	carries passengers exactly as the expedition train does. It is worked by
+	the yard pilot: players cannot claim its controls or its doors.
+
+	RECOVERY
+	--------
+	Nothing here can wait forever. A crew that cannot get a train within the
+	reservation window is told so. A member who has not boarded when the
+	boarding window closes is helped aboard by the guard, and told why. A
+	service that fails to arrive is replaced.
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage.LastSignal
+
+local Logger = require(Shared.Core.Logger)
+local Net = require(Shared.Core.Net)
+local Protect = require(Shared.Core.Protect)
+local TrainRegistry = require(Shared.Registry.TrainRegistry)
+
+local TrainService = require(script.Parent.TrainService)
+local WorldService = require(script.Parent.WorldService)
+
+local log = Logger.new("DepartureService")
+
+local DepartureService = {}
+
+export type Phase = "arriving" | "waiting" | "boarding" | "departing" | "gone"
+
+export type Service = {
+	key: string,
+	train: TrainService.TrainState,
+	phase: Phase,
+	reservedBy: string?,
+	trainId: string,
+	liveryId: string,
+	interiorId: string,
+}
+
+-- How long a departed crew has to walk aboard before the guard helps the
+-- stragglers on.
+DepartureService.BoardingSeconds = 60
+-- How long a crew waits for a service before being told there is none.
+DepartureService.ReserveSeconds = 120
+-- Gap between one service leaving and the next being called.
+DepartureService.TurnaroundSeconds = 18
+
+-- Yard pilot speeds, in studs per second.
+local ARRIVAL_SPEED = 22
+local DEPARTURE_SPEED = 34
+local DEPARTURE_ACCELERATION = 1.4
+
+local current: Service? = nil
+local serviceCount = 0
+local calling = false
+
+--------------------------------------------------------------------------
+-- Helpers
+--------------------------------------------------------------------------
+
+local function lobby()
+	return WorldService.getLobby()
+end
+
+local function setBoard(text: string)
+	local built = lobby()
+	if built and built.departureStatus then
+		built.departureStatus.Text = text
+	end
+end
+
+--- A yard train carries passengers, nothing else. The cab, supply rack,
+--- radio and fuel point are expedition fixtures; in the yard they would offer
+--- prompts that do nothing. Run after InteractionService has attached its
+--- prompts, which happens on deferred tag signals.
+local function stripExpeditionFixtures(model: Model)
+	task.wait()
+	task.wait()
+	if not model.Parent then
+		return
+	end
+	for _, descendant in model:GetDescendants() do
+		if descendant:IsA("ProximityPrompt") then
+			descendant:Destroy()
+		elseif descendant:IsA("Seat") and descendant:HasTag("DriverSeat") then
+			descendant.Disabled = true
+		end
+	end
+	for _, tag in { "SupplyRack", "RadioSet", "TrainFuelPoint", "TrainRepairPoint", "DoorLeaf" } do
+		for _, descendant in model:GetDescendants() do
+			if descendant:HasTag(tag) then
+				descendant:RemoveTag(tag)
+			end
+		end
+	end
+end
+
+local function aliveRoot(player: Player): BasePart?
+	local character = player.Character
+	local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
+	local root = if character then character:FindFirstChild("HumanoidRootPart") else nil
+	if humanoid and humanoid.Health > 0 and root and root:IsA("BasePart") then
+		return root
+	end
+	return nil
+end
+
+function DepartureService.isAboard(service: Service, player: Player): boolean
+	local root = aliveRoot(player)
+	return root ~= nil and TrainService.isInside(service.train, root.Position, 1)
+end
+
+--------------------------------------------------------------------------
+-- Building and calling services
+--------------------------------------------------------------------------
+
+local function spawnService(trainId: string, liveryId: string, interiorId: string, atPlatform: boolean): Service?
+	local built = lobby()
+	if not built then
+		return nil
+	end
+	serviceCount += 1
+	local key = string.format("yard_service_%d", serviceCount)
+	local ok, train = Protect.call(
+		TrainService.spawn,
+		key,
+		trainId,
+		liveryId,
+		interiorId,
+		built.serviceOrigin,
+		built.model,
+		{ doorsOpen = atPlatform, service = true }
+	)
+	if not ok or not train then
+		log.error("yard service failed to build:", tostring(train))
+		return nil
+	end
+	local state = train :: TrainService.TrainState
+	state.built.model.Name = "YardService"
+	task.spawn(stripExpeditionFixtures, state.built.model)
+
+	local service: Service = {
+		key = key,
+		train = state,
+		phase = if atPlatform then "waiting" else "arriving",
+		reservedBy = nil,
+		trainId = trainId,
+		liveryId = liveryId,
+		interiorId = interiorId,
+	}
+
+	if atPlatform then
+		TrainService.place(state, built.platformDistance)
+		state.serviceBrake = 1
+	else
+		TrainService.place(state, 0)
+		TrainService.setStopDistance(state, built.platformDistance)
+		TrainService.setPilot(state, ARRIVAL_SPEED, 2.2)
+	end
+	return service
+end
+
+--- Watches an arriving service until it stands at the platform, then opens
+--- its doors. A service that has not arrived in a minute is replaced in
+--- place rather than left stuck short of the platform.
+local function superviseArrival(service: Service)
+	local built = lobby()
+	if not built then
+		return
+	end
+	local startedAt = os.clock()
+	while service.phase == "arriving" do
+		task.wait(0.1)
+		local train = service.train
+		if train.distance >= built.platformDistance - 0.05 and train.speed <= 0.01 then
+			TrainService.setPilot(train, nil)
+			train.serviceBrake = 1
+			train.doorsOpen = true
+			TrainService.applyDoors(train)
+			service.phase = "waiting"
+			setBoard("NOW BOARDING  -  DEPART FROM THE POST ON THE PLATFORM")
+			log.info(string.format("%s standing at Platform 1", service.key))
+			return
+		end
+		if os.clock() - startedAt > 60 then
+			log.warn(string.format("%s did not reach the platform; replacing it", service.key))
+			TrainService.despawn(service.key)
+			local replacement = spawnService(service.trainId, service.liveryId, service.interiorId, true)
+			if replacement then
+				current = replacement
+				setBoard("NOW BOARDING  -  DEPART FROM THE POST ON THE PLATFORM")
+			end
+			service.phase = "gone"
+			return
+		end
+	end
+end
+
+--- Calls the next service after the turnaround, unless one is already on
+--- its way.
+local function callNext(delaySeconds: number)
+	if calling then
+		return
+	end
+	calling = true
+	setBoard(string.format("NEXT SERVICE DUE IN %d SECONDS", math.ceil(delaySeconds)))
+	task.delay(delaySeconds, function()
+		calling = false
+		local service = spawnService(TrainRegistry.StarterTrainId, "livery_depot", "interior_standard", false)
+		if service then
+			current = service
+			setBoard("APPROACHING PLATFORM 1")
+			task.spawn(superviseArrival, service)
+		else
+			-- Building failed outright; try again rather than leaving the yard
+			-- without a train.
+			callNext(10)
+		end
+	end)
+end
+
+--------------------------------------------------------------------------
+-- The crew's side
+--------------------------------------------------------------------------
+
+--- Reserves the service at Platform 1 for a crew, waiting for one if it is
+--- out on a run. The crew's chosen train and livery are honoured when the
+--- waiting train is empty; with passengers already aboard, it is kept.
+--- Returns nil if no train becomes available in time.
+function DepartureService.reserve(
+	crewId: string,
+	trainId: string,
+	liveryId: string?,
+	interiorId: string?,
+	onWaiting: (string) -> ()
+): Service?
+	local deadline = os.clock() + DepartureService.ReserveSeconds
+	local told = false
+	while os.clock() < deadline do
+		local service = current
+		if service and service.phase == "waiting" and not service.reservedBy then
+			service.reservedBy = crewId
+			-- Rebuild as the crew's own train if nobody is aboard to notice.
+			local wantLivery = liveryId or TrainRegistry.getOrStarter(trainId).defaultLivery
+			local wantInterior = interiorId or "interior_standard"
+			if service.trainId ~= trainId or service.liveryId ~= wantLivery or service.interiorId ~= wantInterior then
+				local occupied = false
+				for _, player in Players:GetPlayers() do
+					if DepartureService.isAboard(service, player) then
+						occupied = true
+						break
+					end
+				end
+				if not occupied then
+					TrainService.despawn(service.key)
+					local rebuilt = spawnService(trainId, wantLivery, wantInterior, true)
+					if rebuilt then
+						rebuilt.reservedBy = crewId
+						current = rebuilt
+						service = rebuilt
+					end
+				end
+			end
+			return service
+		end
+		if not told then
+			told = true
+			onWaiting(if service and service.phase == "arriving" then "The next service is pulling in to Platform 1." else "The last service has just left. The next one is on its way.")
+		end
+		task.wait(0.5)
+	end
+	return nil
+end
+
+--- Waits for every member to walk aboard. Calls onStatus about twice a
+--- second with who is still missing and how long is left. When the window
+--- closes, stragglers are put aboard by the guard and told so. Returns the
+--- players that needed help.
+function DepartureService.board(
+	service: Service,
+	members: () -> { Player },
+	onStatus: (missing: { Player }, remaining: number) -> ()
+): { Player }
+	service.phase = "boarding"
+	setBoard("BOARDING  -  DOORS CLOSE WHEN THE CREW IS ABOARD")
+	local deadline = os.clock() + DepartureService.BoardingSeconds
+	local allAboardSince: number? = nil
+
+	while true do
+		local missing: { Player } = {}
+		local crew = members()
+		for _, player in crew do
+			if not DepartureService.isAboard(service, player) then
+				table.insert(missing, player)
+			end
+		end
+		local remaining = math.max(0, deadline - os.clock())
+		onStatus(missing, remaining)
+
+		if #crew == 0 then
+			return {}
+		end
+		if #missing == 0 then
+			-- A short beat once everyone is in, so the last aboard is not
+			-- shut in by the doors the instant they cross the threshold.
+			allAboardSince = allAboardSince or os.clock()
+			if os.clock() - (allAboardSince :: number) >= 2.5 then
+				return {}
+			end
+		else
+			allAboardSince = nil
+		end
+		if remaining <= 0 then
+			-- Recovery: the guard holds the door and helps them on.
+			local carriage = service.train.built.carriages[1]
+			local anchor = if carriage then carriage:GetPivot() else service.train.built.root.CFrame
+			for index, player in missing do
+				local root = aliveRoot(player)
+				local character = player.Character
+				if root and character then
+					character:PivotTo(anchor * CFrame.new(0, 1, (index - 1) * 2.5 - 4))
+				end
+				Net.fireClient("Notify", player, {
+					kind = "info",
+					title = "The guard held the doors",
+					body = "Your crew could not leave without you, so you were helped aboard.",
+					duration = 6,
+				})
+			end
+			return missing
+		end
+		task.wait(0.5)
+	end
+end
+
+--- Closes the doors and sends the train out. Anybody aboard who is not in
+--- the departing crew is put back on the platform first.
+function DepartureService.depart(service: Service, crewUserIds: { number })
+	local built = lobby()
+	service.phase = "departing"
+	setBoard("DEPARTING  -  STAND CLEAR")
+	for _, player in Players:GetPlayers() do
+		if not table.find(crewUserIds, player.UserId) and DepartureService.isAboard(service, player) then
+			local character = player.Character
+			if character and built then
+				character:PivotTo(built.platformCFrame * CFrame.new(math.random(-3, 3), 0, math.random(-8, 8)))
+			end
+			Net.fireClient("Notify", player, {
+				kind = "info",
+				title = "This service is reserved",
+				body = "Another crew is departing. The next train will be at Platform 1 shortly.",
+				duration = 7,
+			})
+		end
+	end
+
+	local train = service.train
+	train.doorsOpen = false
+	TrainService.applyDoors(train)
+	task.wait(2.5)
+	TrainService.setStopDistance(train, nil)
+	TrainService.setPilot(train, DEPARTURE_SPEED, DEPARTURE_ACCELERATION)
+	log.info(string.format("%s departing for crew %s", service.key, tostring(service.reservedBy)))
+end
+
+--- Yields until the service has travelled the given distance along the
+--- departure road, or the timeout passes. Returns whether it got there.
+function DepartureService.waitForDistance(service: Service, distance: number, timeout: number): boolean
+	local deadline = os.clock() + timeout
+	while os.clock() < deadline do
+		if service.train.distance >= distance then
+			return true
+		end
+		task.wait(0.05)
+	end
+	return false
+end
+
+--- Removes a service that has gone into the tunnel and calls the next.
+function DepartureService.retire(service: Service)
+	if service.phase == "gone" then
+		return
+	end
+	service.phase = "gone"
+	TrainService.despawn(service.key)
+	if current == service then
+		current = nil
+	end
+	callNext(DepartureService.TurnaroundSeconds)
+end
+
+--- Gives a reserved service back, for a crew that cancelled or failed to
+--- start. It goes back to waiting at the platform.
+function DepartureService.release(service: Service)
+	if service.phase == "boarding" or service.phase == "waiting" then
+		service.reservedBy = nil
+		service.phase = "waiting"
+		setBoard("NOW BOARDING  -  DEPART FROM THE POST ON THE PLATFORM")
+	end
+end
+
+function DepartureService.lobbyGeometry(): (number, number)
+	local built = lobby()
+	if built then
+		return built.platformDistance, built.tunnelDistance
+	end
+	return 0, 0
+end
+
+--------------------------------------------------------------------------
+
+function DepartureService.start()
+	-- The first service is already standing at the platform when the server
+	-- opens, so the very first player to arrive sees a train waiting.
+	local service = spawnService(TrainRegistry.StarterTrainId, "livery_depot", "interior_standard", true)
+	if service then
+		current = service
+		setBoard("NOW BOARDING  -  DEPART FROM THE POST ON THE PLATFORM")
+		log.info("yard service standing at Platform 1")
+	else
+		callNext(5)
+	end
+	log.info("started")
+end
+
+return DepartureService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="46">
           <Properties>
             <string name="Name">EventService</string>
             <string name="Source"><![CDATA[--!strict
@@ -11868,7 +12375,7 @@ return EventService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="43">
+        <Item class="ModuleScript" referent="47">
           <Properties>
             <string name="Name">ExpeditionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -11923,12 +12430,14 @@ local RadioScript = require(Shared.Registry.RadioScript)
 local StationRegistry = require(Shared.Registry.StationRegistry)
 
 local CrewService = require(script.Parent.CrewService)
+local DepartureService = require(script.Parent.DepartureService)
 local DataService = require(script.Parent.DataService)
 local InventoryService = require(script.Parent.InventoryService)
 local ProgressionService = require(script.Parent.ProgressionService)
 local ShopService = require(script.Parent.ShopService)
 local TrainService = require(script.Parent.TrainService)
 local WorldService = require(script.Parent.WorldService)
+local TrainBuilder = require(script.Parent.Parent.World.TrainBuilder)
 
 local log = Logger.new("ExpeditionService")
 
@@ -12491,29 +13000,27 @@ function ExpeditionService.begin(crew: CrewService.Crew, members: { Player })
 		end
 	end)
 
-	if not lane then
-		-- Every lane is busy. This is a real limit of single-place mode and the
-		-- crew is told plainly rather than left waiting.
+	local function abandonStart(title: string, body: string, reason: string)
 		for _, player in members do
-			Net.fireClient("Notify", player, {
-				kind = "error",
-				title = "The line is occupied",
-				body = string.format(
-					"All %d expedition lines on this server are in use. Try another server, or wait for a crew to return.",
-					GameConfig.MaxConcurrentExpeditions
-				),
-				duration = 10,
-			})
+			Net.fireClient("Notify", player, { kind = "error", title = title, body = body, duration = 10 })
 			Net.fireClient("ExpeditionState", player, { state = "cancelled", id = id })
 			ShopService.setBlockedState(player, nil)
 		end
-		CrewService.close(crew, "no lane available")
-		return
+		CrewService.close(crew, reason)
 	end
 
-	local memberIds: { number } = {}
-	for _, player in members do
-		table.insert(memberIds, player.UserId)
+	if not lane then
+		-- Every lane is busy. This is a real limit of single-place mode and the
+		-- crew is told plainly rather than left waiting.
+		abandonStart(
+			"The line is occupied",
+			string.format(
+				"All %d expedition lines on this server are in use. Try another server, or wait for a crew to return.",
+				GameConfig.MaxConcurrentExpeditions
+			),
+			"no lane available"
+		)
+		return
 	end
 
 	local leader = Players:GetPlayerByUserId(crew.leaderUserId)
@@ -12521,8 +13028,40 @@ function ExpeditionService.begin(crew: CrewService.Crew, members: { Player })
 	local livery = if leaderProfile then leaderProfile.loadout.livery else nil
 	local interior = if leaderProfile then leaderProfile.loadout.interior else nil
 
-	local trainOrigin = CFrame.new(lane.origin + Vector3.new(0, 0, 60)) * CFrame.Angles(0, math.rad(180), 0)
-	local train = TrainService.spawn(crew.id, crew.trainId, livery, interior, trainOrigin, lane.trainContainer)
+	-- The train at Platform 1 is the crew's train. If it is out on a run, the
+	-- crew waits for the next one and is told so.
+	for _, player in members do
+		Net.fireClient("ExpeditionState", player, { state = "preparing", id = id, progress = 1, label = "Calling the train" })
+	end
+	local service = DepartureService.reserve(crew.id, crew.trainId, livery, interior, function(message)
+		for _, player in members do
+			Net.fireClient("Notify", player, { kind = "info", title = "Platform 1", body = message, duration = 8 })
+		end
+	end)
+	if not service then
+		WorldService.releaseLane(lane)
+		abandonStart(
+			"No train is available",
+			"No service reached Platform 1 in time. You are back in the yard; try departing again.",
+			"no service"
+		)
+		return
+	end
+	local yard = service :: DepartureService.Service
+
+	local memberIds: { number } = {}
+	for _, player in members do
+		table.insert(memberIds, player.UserId)
+	end
+
+	-- The expedition train waits inside the tunnel at the start of the line.
+	-- It is the same type, livery and interior as the yard train, so the crew
+	-- crosses into an identical carriage.
+	local halfLength = TrainBuilder.lengthOf(yard.trainId) * 0.5
+	local trainOrigin = CFrame.new(lane.origin + Vector3.new(0, 0, -halfLength))
+	local train = TrainService.spawn(crew.id, yard.trainId, yard.liveryId, yard.interiorId, trainOrigin, lane.trainContainer, {
+		doorsOpen = false,
+	})
 
 	local expedition: Expedition = {
 		id = id,
@@ -12575,7 +13114,7 @@ function ExpeditionService.begin(crew: CrewService.Crew, members: { Player })
 
 	for _, player in members do
 		playerExpedition[player.UserId] = id
-		InventoryService.create(player, crew.trainId, sharedSlots, sharedWeight)
+		InventoryService.create(player, yard.trainId, sharedSlots, sharedWeight)
 		InventoryService.bindCrewStore(crew.id, player)
 		ProgressionService.addStat(player, "expeditions_started", 1)
 		DataService.update(player, function(p)
@@ -12584,41 +13123,188 @@ function ExpeditionService.begin(crew: CrewService.Crew, members: { Player })
 		-- Starting kit, so nobody begins with nothing.
 		InventoryService.add(player, "bandage", 2)
 		InventoryService.add(player, "battery", 1)
-		spawnIntoTrain(expedition, player)
 	end
 
 	InventoryService.configureDrops(lane.dropContainer, WorldService.buildDroppedItem)
 
-	-- Cinematic, synchronised across the crew.
+	------------------------------------------------------------------
+	-- Boarding: the crew walks onto the train at Platform 1.
+	------------------------------------------------------------------
+	setState(expedition, "boarding")
+	local boardTarget = yard.train.built.carriages[1] or yard.train.built.model
+	DepartureService.board(yard, function()
+		return playersOf(expedition)
+	end, function(missing, remaining)
+		local names: { string } = {}
+		for _, player in missing do
+			table.insert(names, player.DisplayName)
+		end
+		broadcast(expedition, "Boarding", {
+			state = "boarding",
+			target = boardTarget,
+			missing = names,
+			remaining = remaining,
+			total = #expedition.members,
+		})
+	end)
+	if expedition.state == "closed" then
+		DepartureService.release(yard)
+		return
+	end
+	broadcast(expedition, "Boarding", { state = "aboard" })
+
+	------------------------------------------------------------------
+	-- Departure: doors close, the yard pilot takes the train out, and the
+	-- opening sequence films it leaving.
+	------------------------------------------------------------------
+	DepartureService.depart(yard, expedition.members)
 	setState(expedition, "cinematic")
 	broadcast(expedition, "Cinematic", {
 		action = "play",
 		duration = GameConfig.CinematicSeconds,
 		skippableAfter = GameConfig.CinematicSkippableAfter,
-		trainCFrame = train.built.root.CFrame,
+		trainModel = yard.train.built.model,
+		trainCFrame = yard.train.built.root.CFrame,
 	})
 	ExpeditionService.fireRadio(expedition, "expedition_start")
 
-	expedition.maid:Give(task.delay(GameConfig.CinematicSeconds, function()
-		ExpeditionService.endCinematic(expedition)
-	end))
+	local platformDistance, tunnelDistance = DepartureService.lobbyGeometry()
+	-- Start streaming the line in for each member while the train is still
+	-- in the yard, so it is there when they arrive.
+	DepartureService.waitForDistance(yard, platformDistance + (tunnelDistance - platformDistance) * 0.6, 60)
+	local laneFocus = train.built.root.Position
+	for _, player in playersOf(expedition) do
+		task.spawn(function()
+			pcall(function()
+				player:RequestStreamAroundAsync(laneFocus, 6)
+			end)
+		end)
+	end
+	DepartureService.waitForDistance(yard, tunnelDistance, 45)
+	if expedition.state == "closed" then
+		DepartureService.retire(yard)
+		return
+	end
+
+	------------------------------------------------------------------
+	-- The tunnel: in the dark, the crew crosses from the yard train to the
+	-- expedition train, standing exactly where they were.
+	------------------------------------------------------------------
+	broadcast(expedition, "ScreenFade", { action = "out", seconds = 0.6 })
+	task.wait(0.75)
+	ExpeditionService.crossToLine(expedition, yard)
+	DepartureService.retire(yard)
+	broadcast(expedition, "Cinematic", { action = "stop" })
+	broadcast(expedition, "ScreenFade", { action = "in", seconds = 1.4 })
+	ExpeditionService.arriveOnLine(expedition)
 
 	log.info(string.format("expedition %s begun on lane %d with %d crew", id, lane.index, #members))
 end
 
+--- Moves every crew member from the yard train to the expedition train,
+--- keeping each one's position and facing relative to the train. Anybody who
+--- is somehow not aboard the yard train is put in the cab instead.
+function ExpeditionService.crossToLine(expedition: Expedition, yard: DepartureService.Service)
+	local yardRoot = yard.train.built.root.CFrame
+	local train = expedition.train
+	local lineRoot = train.built.root.CFrame
+	-- Where each crew member stands, relative to the train rather than the
+	-- world: the train is moving, so a world position is stale a moment later.
+	local cabRelative = lineRoot:ToObjectSpace(train.built.cab.driverSeat.CFrame * CFrame.new(0, 1, 4))
+	local relatives: { [Player]: CFrame } = {}
+
+	-- The expedition train takes over the yard train's motion, so nothing
+	-- jolts: it emerges from the tunnel still rolling and coasts to a stand.
+	train.direction = 1
+	train.speed = yard.train.speed
+	train.throttle = 0
+	train.serviceBrake = 0
+	TrainService.publishMotion(train, true)
+	local model = train.built.model
+	local motion = {
+		origin = train.origin,
+		distance = train.distance,
+		velocity = train.speed,
+		sampleTime = workspace:GetServerTimeNow(),
+	}
+
+	for _, player in playersOf(expedition) do
+		local character = player.Character
+		local root = if character then character:FindFirstChild("HumanoidRootPart") else nil
+		local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
+		if not character or not root or not root:IsA("BasePart") or not humanoid then
+			spawnIntoTrain(expedition, player)
+			continue
+		end
+		-- A seated passenger is welded into the yard train's anchored assembly,
+		-- which takes the character out of its own client's control. Leave the
+		-- seat before crossing.
+		if humanoid.SeatPart then
+			local weld = humanoid.SeatPart:FindFirstChild("SeatWeld")
+			if weld then
+				weld:Destroy()
+			end
+			humanoid.Sit = false
+		end
+		local relative = if TrainService.isInside(yard.train, root.Position, 3)
+			then yardRoot:ToObjectSpace(character:GetPivot())
+			else cabRelative
+		relatives[player] = relative
+		-- The client owns its character, so it makes the move itself, tracking
+		-- the moving train until the train has streamed in around it. A move
+		-- written only by the server was lost in testing when the character
+		-- had just left a seat on the yard train.
+		Net.fireClient("CrossToLine", player, {
+			relative = relative,
+			model = model,
+			origin = motion.origin,
+			distance = motion.distance,
+			velocity = motion.velocity,
+			sampleTime = motion.sampleTime,
+		})
+		character:PivotTo(lineRoot * relative)
+	end
+
+	-- Check that everybody is actually aboard, and put anyone who is not
+	-- back in their place on the train from the server.
+	task.delay(2.5, function()
+		for player, relative in relatives do
+			local character = player.Character
+			if character and character.Parent and not TrainService.isInside(train, character:GetPivot().Position, 2) then
+				log.warn(string.format("%s did not cross to the line; placing them from the server", player.Name))
+				character:PivotTo(train.built.root.CFrame * relative)
+			end
+		end
+	end)
+end
+
+--- The crew is on the line. Hand over to the travelling state and point the
+--- crew at the cab.
+function ExpeditionService.arriveOnLine(expedition: Expedition)
+	if expedition.state == "closed" then
+		return
+	end
+	TrainService.setStopDistance(expedition.train, StationRegistry.Stations[1].distance)
+	setState(expedition, "travelling")
+	notify(
+		expedition,
+		"info",
+		"02:17, Up Main",
+		"The yard pilot has handed her over. The cab is at the front: take the driver's seat.",
+		8
+	)
+end
+
 local cinematicSkipVotes: { [string]: { [number]: boolean } } = {}
 
+--- Ends the opening sequence's camera work early (a crew skip vote). The
+--- departure itself carries on: the train is really moving, and the crew
+--- rides the rest of it in first person.
 function ExpeditionService.endCinematic(expedition: Expedition)
 	if expedition.state ~= "cinematic" then
 		return
 	end
 	broadcast(expedition, "Cinematic", { action = "stop" })
-	TrainService.setStopDistance(expedition.train, StationRegistry.Stations[1].distance)
-	expedition.train.direction = 1
-	expedition.train.doorsOpen = false
-	TrainService.applyDoors(expedition.train)
-	setState(expedition, "travelling")
-	notify(expedition, "info", "02:17", "The last train out. Keep her moving.", 6)
 end
 
 --------------------------------------------------------------------------
@@ -12989,7 +13675,7 @@ return ExpeditionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="44">
+        <Item class="ModuleScript" referent="48">
           <Properties>
             <string name="Name">HorrorDirector</string>
             <string name="Source"><![CDATA[--!strict
@@ -13728,7 +14414,7 @@ return HorrorDirector
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="45">
+        <Item class="ModuleScript" referent="49">
           <Properties>
             <string name="Name">InteractionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -14645,12 +15331,26 @@ function InteractionService.start()
 	-- Attach proximity prompts to every interactable the world builders tagged.
 	-- Prompts are created on the server so the client cannot fabricate one for
 	-- an object that has no behaviour.
-	local function attachPrompt(instance: Instance, actionText: string, objectText: string, hold: number?)
+	local function attachPrompt(instance: Instance, actionText: string, objectText: string, hold: number?, eyeLevel: boolean?)
 		if not instance:IsA("BasePart") then
 			return
 		end
-		if instance:FindFirstChildOfClass("ProximityPrompt") then
+		if instance:FindFirstChildOfClass("ProximityPrompt") or instance:FindFirstChild("PromptAnchor") then
 			return
+		end
+		-- Roblox only shows a prompt whose anchor is on screen. A tall board's
+		-- centre sits above the eye line at arm's length, so its prompt never
+		-- appeared unless the player happened to look up. Tall fixtures anchor
+		-- the prompt near their lower edge instead, where a player looking at
+		-- the fixture is actually looking. The client resolves the attachment
+		-- back to the tagged part.
+		local host: Instance = instance
+		if eyeLevel and instance.Size.Y > 4 then
+			local anchor = Instance.new("Attachment")
+			anchor.Name = "PromptAnchor"
+			anchor.Position = Vector3.new(0, -instance.Size.Y * 0.5 + 1.5, 0)
+			anchor.Parent = instance
+			host = anchor
 		end
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.ActionText = actionText
@@ -14659,15 +15359,15 @@ function InteractionService.start()
 		prompt.MaxActivationDistance = MAX_REACH - 2
 		prompt.RequiresLineOfSight = false
 		prompt.Style = Enum.ProximityPromptStyle.Custom
-		prompt.Parent = instance
+		prompt.Parent = host
 	end
 
-	local function wire(tag: string, actionText: string, objectText: string)
+	local function wire(tag: string, actionText: string, objectText: string, eyeLevel: boolean?)
 		for _, instance in CollectionService:GetTagged(tag) do
-			attachPrompt(instance, actionText, objectText)
+			attachPrompt(instance, actionText, objectText, nil, eyeLevel)
 		end
 		CollectionService:GetInstanceAddedSignal(tag):Connect(function(instance)
-			attachPrompt(instance, actionText, objectText)
+			attachPrompt(instance, actionText, objectText, nil, eyeLevel)
 		end)
 	end
 
@@ -14683,10 +15383,10 @@ function InteractionService.start()
 	-- Lobby fixtures. Without these the crew board is scenery and the only way
 	-- to start an expedition is to guess a keyboard shortcut, which is how the
 	-- first build shipped and why nobody could find the train.
-	wire("CrewBoard", "Form a crew", "Crew board")
-	wire("NoticeBoard", "Read", "Notice board")
-	wire("StoresCounter", "Browse", "Stores")
-	wire("WorkshopBench", "Open loadout", "Workshop bench")
+	wire("CrewBoard", "Form a crew", "Crew board", true)
+	wire("NoticeBoard", "Read", "Notice board", true)
+	wire("StoresCounter", "Browse", "Stores", true)
+	wire("WorkshopBench", "Open loadout", "Workshop bench", true)
 
 	log.info("started")
 end
@@ -14695,7 +15395,7 @@ return InteractionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="46">
+        <Item class="ModuleScript" referent="50">
           <Properties>
             <string name="Name">InventoryService</string>
             <string name="Source"><![CDATA[--!strict
@@ -15264,7 +15964,7 @@ return InventoryService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="47">
+        <Item class="ModuleScript" referent="51">
           <Properties>
             <string name="Name">LeaderboardService</string>
             <string name="Source"><![CDATA[--!strict
@@ -15561,7 +16261,7 @@ return LeaderboardService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="48">
+        <Item class="ModuleScript" referent="52">
           <Properties>
             <string name="Name">ProfileSchema</string>
             <string name="Source"><![CDATA[--!strict
@@ -16009,7 +16709,7 @@ return ProfileSchema
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="49">
+        <Item class="ModuleScript" referent="53">
           <Properties>
             <string name="Name">ProgressionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -16539,7 +17239,7 @@ return ProgressionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="50">
+        <Item class="ModuleScript" referent="54">
           <Properties>
             <string name="Name">PurchaseService</string>
             <string name="Source"><![CDATA[--!strict
@@ -16955,7 +17655,7 @@ return PurchaseService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="51">
+        <Item class="ModuleScript" referent="55">
           <Properties>
             <string name="Name">QuestService</string>
             <string name="Source"><![CDATA[--!strict
@@ -17336,7 +18036,7 @@ return QuestService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="52">
+        <Item class="ModuleScript" referent="56">
           <Properties>
             <string name="Name">RewardService</string>
             <string name="Source"><![CDATA[--!strict
@@ -17642,7 +18342,7 @@ return RewardService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="53">
+        <Item class="ModuleScript" referent="57">
           <Properties>
             <string name="Name">ShopService</string>
             <string name="Source"><![CDATA[--!strict
@@ -18013,7 +18713,7 @@ return ShopService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="54">
+        <Item class="ModuleScript" referent="58">
           <Properties>
             <string name="Name">SurvivalService</string>
             <string name="Source"><![CDATA[--!strict
@@ -18841,7 +19541,7 @@ return SurvivalService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="55">
+        <Item class="ModuleScript" referent="59">
           <Properties>
             <string name="Name">TrainService</string>
             <string name="Source"><![CDATA[--!strict
@@ -18928,11 +19628,34 @@ export type TrainState = {
 	targetDistance: number,
 	stopDistance: number?,
 
+	-- Where distance zero is. The pose is always origin * (0, 0, -distance).
+	origin: CFrame,
+
+	-- True while train protection is braking for a stop.
+	protectionBraking: boolean,
+
+	-- A yard service train is worked by the yard pilot, not by players: it
+	-- drives itself to a target speed and refuses driver and door controls.
+	pilot: Pilot?,
+	isService: boolean,
+
 	-- Bookkeeping.
 	lastTick: number,
 	lastCFrame: CFrame,
 	emergencyBrakeCooldown: { [number]: number },
 	doorCooldown: { [number]: number },
+}
+
+export type Pilot = {
+	targetSpeed: number,
+	acceleration: number,
+}
+
+export type SpawnOptions = {
+	-- Doors open on arrival. Defaults to true, which is how a train waits.
+	doorsOpen: boolean?,
+	-- A yard service train worked by the yard pilot.
+	service: boolean?,
 }
 
 local trains: { [string]: TrainState } = {}
@@ -18948,7 +19671,16 @@ TrainService.DoorsToggled = Signal.new() :: Signal.Signal<TrainState, boolean>
 -- Creation
 --------------------------------------------------------------------------
 
-function TrainService.spawn(crewId: string, trainId: string, liveryId: string?, interiorId: string?, originCF: CFrame, parent: Instance): TrainState
+function TrainService.spawn(
+	crewId: string,
+	trainId: string,
+	liveryId: string?,
+	interiorId: string?,
+	originCF: CFrame,
+	parent: Instance,
+	options: SpawnOptions?
+): TrainState
+	local opts: SpawnOptions = options or {}
 	local def = TrainRegistry.getOrStarter(trainId)
 	local built = TrainBuilder.build(trainId, liveryId, interiorId, originCF, parent, 20217)
 
@@ -18971,11 +19703,15 @@ function TrainService.spawn(crewId: string, trainId: string, liveryId: string?, 
 		cabinLights = true,
 		interiorLights = true,
 		wipers = false,
-		doorsOpen = true,
+		doorsOpen = if opts.doorsOpen == nil then true else opts.doorsOpen,
 		engineRunning = true,
 		driverUserId = nil,
 		targetDistance = 0,
 		stopDistance = nil,
+		origin = originCF,
+		protectionBraking = false,
+		pilot = nil,
+		isService = opts.service == true,
 		lastTick = os.clock(),
 		lastCFrame = originCF,
 		emergencyBrakeCooldown = {},
@@ -18983,6 +19719,7 @@ function TrainService.spawn(crewId: string, trainId: string, liveryId: string?, 
 	}
 
 	trains[crewId] = state
+	TrainService.publishMotion(state, true)
 	TrainService.applyLights(state)
 	TrainService.applyDoors(state, true)
 	log.info(string.format("spawned %s for crew %s (%d parts)", def.name, crewId, built.partCount))
@@ -19034,58 +19771,59 @@ function TrainService.applyLights(state: TrainState)
 	end
 end
 
-function TrainService.applyDoors(state: TrainState, immediate: boolean?)
-	local openAngle = math.rad(105)
-	for _, door in state.built.doors do
+local DOOR_OPEN_ANGLE = math.rad(105)
+
+--- Swings every door of a built train open or closed. Doors are articulated
+--- joints (see TrainBuilder), so this moves the leaves and nothing else.
+function TrainService.setDoorsPose(built: TrainBuilder.BuiltTrain, open: boolean, immediate: boolean?)
+	local target = if open then DOOR_OPEN_ANGLE else 0
+	for _, door in built.doors do
 		local hinge = door.hinge
-		local model = door.model
-		local closed = model:GetAttribute("ClosedCFrame")
-		if typeof(closed) ~= "CFrame" then
-			closed = hinge.CFrame
-			model:SetAttribute("ClosedCFrame", closed)
+		-- A new request supersedes a swing still in progress.
+		local token = (tonumber(hinge:GetAttribute("SwingToken")) or 0) + 1
+		hinge:SetAttribute("SwingToken", token)
+		local from = tonumber(hinge:GetAttribute("OpenAngle")) or 0
+		if immediate or from == target then
+			hinge:SetAttribute("OpenAngle", target)
+			TrainBuilder.pose(hinge, CFrame.Angles(0, target, 0))
+			continue
 		end
-		local target = (closed :: CFrame) * CFrame.Angles(0, if state.doorsOpen then openAngle else 0, 0)
-		if immediate then
-			model:PivotTo(target)
-		else
-			-- Doors swing over their configured duration. A tween per door is
-			-- cheap because there are at most a dozen and they move rarely.
-			local start = model:GetPivot()
-			local duration = Balance.Train.doorOpenSeconds
-			task.spawn(function()
-				local elapsed = 0
-				while elapsed < duration do
-					local dt = task.wait()
-					elapsed += dt
-					local alpha = math.clamp(elapsed / duration, 0, 1)
-					-- Ease out, so a pneumatic door does not snap.
-					alpha = 1 - (1 - alpha) ^ 3
-					model:PivotTo(start:Lerp(target, alpha))
+		local duration = Balance.Train.doorOpenSeconds
+		task.spawn(function()
+			local elapsed = 0
+			while elapsed < duration do
+				elapsed += task.wait()
+				if hinge:GetAttribute("SwingToken") ~= token or not hinge.Parent then
+					return
 				end
-				model:PivotTo(target)
-			end)
-		end
+				-- Ease out, so a pneumatic door does not snap.
+				local alpha = 1 - (1 - math.clamp(elapsed / duration, 0, 1)) ^ 3
+				local angle = from + (target - from) * alpha
+				hinge:SetAttribute("OpenAngle", angle)
+				TrainBuilder.pose(hinge, CFrame.Angles(0, angle, 0))
+			end
+		end)
 	end
+end
+
+function TrainService.applyDoors(state: TrainState, immediate: boolean?)
+	TrainService.setDoorsPose(state.built, state.doorsOpen, immediate)
 	TrainService.DoorsToggled:Fire(state, state.doorsOpen)
 end
 
 local function applyGauges(state: TrainState)
 	local cab = state.built.cab
 	local function setNeedle(needle: BasePart, fraction: number)
-		local base = needle:GetAttribute("BaseCFrame")
-		if typeof(base) ~= "CFrame" then
-			base = needle.CFrame
-			needle:SetAttribute("BaseCFrame", base)
-		end
-		-- Needles sweep 240 degrees, which is what a real dial does.
+		-- Needles sweep 240 degrees, which is what a real dial does. The needle
+		-- is an articulated joint, so only it moves; and it is only rewritten
+		-- when it would visibly move, to keep replication quiet.
 		local angle = math.rad(-120 + math.clamp(fraction, 0, 1) * 240)
-		-- The needle is welded, so the weld is what must move. Rotating the
-		-- part directly would be undone by the weld on the next physics step.
-		local weld = needle:FindFirstChildOfClass("WeldConstraint")
-		if weld then
-			weld:Destroy()
+		local last = tonumber(needle:GetAttribute("NeedleAngle"))
+		if last and math.abs(last - angle) < math.rad(0.75) then
+			return
 		end
-		needle.CFrame = (base :: CFrame) * CFrame.Angles(0, angle, 0)
+		needle:SetAttribute("NeedleAngle", angle)
+		TrainBuilder.pose(needle, CFrame.Angles(0, angle, 0))
 	end
 
 	setNeedle(cab.speedNeedle, state.speed / (Balance.Train.maxSpeed * state.def.handling.maxSpeedMultiplier))
@@ -19099,6 +19837,18 @@ end
 
 local function targetAcceleration(state: TrainState): number
 	local handling = state.def.handling
+	local pilot = state.pilot
+	if pilot then
+		-- The pilot drives smoothly to its target speed and coasts above it.
+		-- Train protection still applies on top, so a piloted train always
+		-- draws up at its stop point.
+		if state.speed < pilot.targetSpeed - 0.5 then
+			return pilot.acceleration
+		elseif state.speed > pilot.targetSpeed + 0.5 then
+			return -Balance.Train.serviceBrakeDeceleration * 0.4
+		end
+		return 0
+	end
 	if state.emergencyBrake then
 		return -Balance.Train.emergencyBrakeDeceleration * handling.brakingMultiplier
 	end
@@ -19127,6 +19877,24 @@ local function maxSpeedFor(state: TrainState): number
 	return base
 end
 
+--- Publishes the motion sample TrainRideController extrapolates from. Only
+--- written while something changes, so a parked train costs no bandwidth.
+function TrainService.publishMotion(state: TrainState, force: boolean?)
+	local model = state.built.model
+	local velocity = if state.direction ~= 0 then state.speed * state.direction else 0
+	local moving = math.abs(velocity) > 1e-3
+	local wasMoving = model:GetAttribute("Velocity") ~= 0
+	if force then
+		model:SetAttribute("OriginCFrame", state.origin)
+	end
+	if force or moving or wasMoving then
+		model:SetAttribute("Distance", state.distance)
+		model:SetAttribute("Velocity", velocity)
+		model:SetAttribute("SampleTime", workspace:GetServerTimeNow())
+	end
+	model:SetAttribute("StopDistance", state.stopDistance)
+end
+
 local function step(state: TrainState, dt: number)
 	local handling = state.def.handling
 
@@ -19134,6 +19902,23 @@ local function step(state: TrainState, dt: number)
 	local acceleration = targetAcceleration(state)
 	state.speed = math.max(0, state.speed + acceleration * dt)
 	state.speed = math.min(state.speed, maxSpeedFor(state))
+
+	-- Train protection. Approaching a stop point, speed is held to the curve
+	-- from which the train can still draw up at it, and the train brakes
+	-- itself, firmly but not violently, when the driver comes in too fast.
+	state.protectionBraking = false
+	local stop = state.stopDistance
+	if stop and state.direction > 0 then
+		local remaining = math.max(0, stop - state.distance)
+		local curve = math.sqrt(2 * Balance.Train.stationApproachDeceleration * remaining) + 1.5
+		if state.speed > curve then
+			-- Protection cuts traction as it brakes, as the real thing does;
+			-- otherwise an open throttle cancels the braking out.
+			state.throttle = 0
+			state.speed = math.max(curve, state.speed - Balance.Train.emergencyBrakeDeceleration * dt)
+			state.protectionBraking = true
+		end
+	end
 
 	-- A train with the doors open does not move above a crawl, which removes
 	-- the entire class of "somebody drove off while I was boarding" problems
@@ -19196,15 +19981,11 @@ local function step(state: TrainState, dt: number)
 		state.wheelAngle = (state.wheelAngle + delta / radius) % (math.pi * 2)
 	end
 
-	-- Write the pose.
+	-- Write the pose, and publish the motion sample clients render from.
 	local root = state.built.root
-	local origin = root:GetAttribute("OriginCFrame")
-	if typeof(origin) ~= "CFrame" then
-		origin = root.CFrame
-		root:SetAttribute("OriginCFrame", origin)
-	end
 	state.lastCFrame = root.CFrame
-	root.CFrame = (origin :: CFrame) * CFrame.new(0, 0, -state.distance)
+	root.CFrame = state.origin * CFrame.new(0, 0, -state.distance)
+	TrainService.publishMotion(state)
 
 	applyGauges(state)
 end
@@ -19230,6 +20011,9 @@ end
 
 --- Claims the controls. Refused when somebody else is already driving.
 function TrainService.claimDriver(state: TrainState, player: Player): (boolean, string?)
+	if state.isService then
+		return false, "SERVICE_TRAIN"
+	end
 	local seat = state.built.cab.driverSeat
 	local occupant = seat.Occupant
 	if not occupant then
@@ -19279,6 +20063,10 @@ local CONTROLS = {
 }
 
 function TrainService.applyControl(player: Player, state: TrainState, control: string, value: any): (boolean, string?)
+	if state.isService then
+		-- The yard pilot works this train; passengers ride it.
+		return false, "SERVICE_TRAIN"
+	end
 	if not isDriver(state, player) then
 		-- Doors are the exception: any crew member can work a carriage door
 		-- from inside, which is how boarding works with one driver.
@@ -19420,6 +20208,38 @@ function TrainService.setOverheating(state: TrainState, overheating: boolean)
 	state.overheating = overheating
 end
 
+--- Puts a train at a distance along its line, at rest. Used to stand a
+--- train at a platform without driving it there.
+function TrainService.place(state: TrainState, distance: number)
+	state.distance = distance
+	state.speed = 0
+	state.built.root.CFrame = state.origin * CFrame.new(0, 0, -distance)
+	TrainService.publishMotion(state, true)
+end
+
+--- Hands the train to the yard pilot (or takes it back with nil). The pilot
+--- drives forward to the target speed at the given acceleration.
+function TrainService.setPilot(state: TrainState, targetSpeed: number?, acceleration: number?)
+	if targetSpeed then
+		state.pilot = { targetSpeed = targetSpeed, acceleration = acceleration or 1.5 }
+		state.direction = 1
+		state.serviceBrake = 0
+		state.emergencyBrake = false
+		state.throttle = 0
+	else
+		state.pilot = nil
+	end
+end
+
+--- Whether a world position is inside the train, using the volume the
+--- builder recorded. The same test TrainRideController uses on the client.
+function TrainService.isInside(state: TrainState, position: Vector3, margin: number?): boolean
+	local localPoint = (state.built.root.CFrame * state.built.volumeOffset):PointToObjectSpace(position)
+	local half = state.built.volumeSize * 0.5
+	local m = margin or 0
+	return math.abs(localPoint.X) <= half.X + m and math.abs(localPoint.Y) <= half.Y + m and math.abs(localPoint.Z) <= half.Z + m
+end
+
 --- Sets the next hard stop. The expedition uses this to hold the train at a
 --- station until its objectives are done.
 function TrainService.setStopDistance(state: TrainState, distance: number?)
@@ -19459,6 +20279,7 @@ local function describe(state: TrainState): { [string]: any }
 		-- the wheel animation need.
 		cframe = state.built.root.CFrame,
 		stopDistance = state.stopDistance,
+		protectionBraking = state.protectionBraking,
 	}
 end
 
@@ -19570,7 +20391,7 @@ return TrainService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="56">
+        <Item class="ModuleScript" referent="60">
           <Properties>
             <string name="Name">WorldService</string>
             <string name="Source"><![CDATA[--!strict
@@ -19616,8 +20437,6 @@ local BuildKit = require(script.Parent.Parent.World.BuildKit)
 local ForestBuilder = require(script.Parent.Parent.World.ForestBuilder)
 local LobbyBuilder = require(script.Parent.Parent.World.LobbyBuilder)
 local StationBuilder = require(script.Parent.Parent.World.StationBuilder)
-local TrainBuilder = require(script.Parent.Parent.World.TrainBuilder)
-local TrainRegistry = require(Shared.Registry.TrainRegistry)
 
 local log = Logger.new("WorldService")
 
@@ -19641,7 +20460,6 @@ export type Lane = {
 
 local lanes: { Lane } = {}
 local lobby: LobbyBuilder.BuiltLobby? = nil
-local previewTrain: TrainBuilder.BuiltTrain? = nil
 local worldRoot: Folder? = nil
 
 WorldService.LaneReady = Signal.new() :: Signal.Signal<Lane>
@@ -19671,58 +20489,9 @@ function WorldService.buildLobby(): LobbyBuilder.BuiltLobby
 		parent = built.model,
 	})
 
-	-- The preview train on the near siding. The brief asks for a train preview
-	-- in the lobby, and without one the first question every player asks is
-	-- "where is the train", because the expedition train only exists inside a
-	-- lane after departure.
-	--
-	-- It is the real TrainBuilder output, not a mock-up, so what you look at in
-	-- the yard is exactly what you board.
-	local previewOk, preview = pcall(function()
-		return TrainBuilder.build(
-			TrainRegistry.StarterTrainId,
-			"livery_depot",
-			"interior_standard",
-			built.trainPreviewCF,
-			built.model,
-			991
-		)
-	end)
-
-	if previewOk and preview then
-		-- It must not carry the Train tag: the client ride controller resolves
-		-- the train it is riding by that tag, and a stationary lobby train
-		-- would be picked up instead of the real one.
-		preview.model:RemoveTag("Train")
-		preview.model:AddTag("PreviewTrain")
-		preview.model.Name = "PreviewTrain"
-
-		-- Lit, so it reads as a living object in a dark yard rather than a
-		-- silhouette. Marker and tail lamps are already on from the builder.
-		for _, spot in preview.headlights do
-			spot.Enabled = true
-		end
-		for _, light in preview.cabinLights do
-			light.Enabled = true
-		end
-		for _, light in preview.interiorLights do
-			light.Enabled = true
-		end
-		-- Doors open, so a player can walk through it before they ever depart.
-		for _, door in preview.doors do
-			local closed = door.model:GetAttribute("ClosedCFrame")
-			if typeof(closed) ~= "CFrame" then
-				closed = door.hinge.CFrame
-				door.model:SetAttribute("ClosedCFrame", closed)
-			end
-			door.model:PivotTo((closed :: CFrame) * CFrame.Angles(0, math.rad(105), 0))
-		end
-
-		previewTrain = preview
-		log.info(string.format("lobby preview train built (%d parts)", preview.partCount))
-	else
-		log.error("lobby preview train failed to build:", tostring(preview))
-	end
+	-- There is no static preview train any more. The train a player sees on
+	-- arrival is the real yard service waiting at Platform 1, the one they
+	-- board; DepartureService runs it.
 
 	lobby = built
 	log.info(
@@ -19733,10 +20502,6 @@ function WorldService.buildLobby(): LobbyBuilder.BuiltLobby
 		)
 	)
 	return built
-end
-
-function WorldService.getPreviewTrain(): TrainBuilder.BuiltTrain?
-	return previewTrain
 end
 
 function WorldService.getLobby(): LobbyBuilder.BuiltLobby?
@@ -19762,6 +20527,12 @@ local function buildLane(lane: Lane, onProgress: (number, string) -> ())
 	-- Track is laid in segments so a 14,000 stud line does not build in one
 	-- uninterrupted burst.
 	local trackModel = BuildKit.model("Track", lane.root)
+	-- Approach road behind the start of the line, where the train stands at
+	-- distance zero. Half of the consist is behind the origin at that point.
+	BuildKit.trackSection(CFrame.new(origin + Vector3.new(0, 0, 400)), 400, trackModel, Random.new(3900 + lane.index)).Name = "TrackApproach"
+	-- The line begins in a tunnel. The crew arrives from the yard inside it,
+	-- carried across in the dark, and emerges onto the line.
+	BuildKit.tunnel(CFrame.new(origin + Vector3.new(0, 0, -100)), 380, lane.root, Random.new(3800 + lane.index))
 	local segmentLength = 1000
 	local segments = math.ceil(GameConfig.TrackLength / segmentLength)
 	local rng = Random.new(4000 + lane.index)
@@ -20165,11 +20936,11 @@ return WorldService
           </Properties>
         </Item>
       </Item>
-      <Item class="Folder" referent="57">
+      <Item class="Folder" referent="61">
         <Properties>
           <string name="Name">World</string>
         </Properties>
-        <Item class="ModuleScript" referent="58">
+        <Item class="ModuleScript" referent="62">
           <Properties>
             <string name="Name">BuildKit</string>
             <string name="Source"><![CDATA[--!strict
@@ -20802,14 +21573,14 @@ BuildKit.Palette = {
 --- forest or a row of buildings are the main thing that makes a procedural
 --- world look procedural, and this is the cheapest fix.
 function BuildKit.weather(colour: Color3, amount: number, rng: Random): Color3
-	local jitter = function()
-		return (rng:NextNumber() - 0.5) * 2 * amount
+	-- Mostly a change of brightness, with only a trace of independent
+	-- per-channel drift. Jittering each channel fully turned dark timber into
+	-- visibly red, green and yellow sleepers under the headlights.
+	local shade = (rng:NextNumber() - 0.5) * 2 * amount
+	local function channel(value: number): number
+		return math.clamp(value + shade + (rng:NextNumber() - 0.5) * amount * 0.25, 0, 1)
 	end
-	return Color3.new(
-		math.clamp(colour.R + jitter(), 0, 1),
-		math.clamp(colour.G + jitter(), 0, 1),
-		math.clamp(colour.B + jitter(), 0, 1)
-	)
+	return Color3.new(channel(colour.R), channel(colour.G), channel(colour.B))
 end
 
 --- Streaks of rust down a painted surface. Applied to large metal faces on
@@ -21154,11 +21925,207 @@ function BuildKit.trackSection(originCF: CFrame, length: number, parent: Instanc
 	return model
 end
 
+--------------------------------------------------------------------------
+-- Tunnels
+--------------------------------------------------------------------------
+
+--- A railway tunnel through a wooded hill. The portal face is at local Z = 0,
+--- facing local -Z; the bore runs into the hill along local +Z for `length`
+--- studs. Track is laid separately.
+---
+--- Tunnels are where the line leaves the yard and where it reaches the
+--- expedition corridor, so the crossing between the two is a real journey
+--- through darkness rather than a cut.
+function BuildKit.tunnel(mouthCF: CFrame, length: number, parent: Instance, rng: Random): Model
+	local model = BuildKit.model("Tunnel", parent)
+	local boreWidth = 20
+	local boreHeight = 22
+	local hillWidth = 150
+	local hillHeight = boreHeight + 10
+	local brick = C(78, 66, 58)
+	local stone = C(92, 88, 82)
+	local earth = C(58, 52, 42)
+
+	local function inHill(x: number, y: number, z: number): CFrame
+		return mouthCF * CFrame.new(x, y, z)
+	end
+
+	-- The hill: solid masses either side of the bore and over it, with grass
+	-- on top and sloping shoulders so it reads as ground, not as a box.
+	local sideWidth = (hillWidth - boreWidth) * 0.5
+	for _, side in { -1, 1 } do
+		BuildKit.part({
+			name = "HillMass",
+			size = Vector3.new(sideWidth, hillHeight, length),
+			cf = inHill(side * (boreWidth * 0.5 + sideWidth * 0.5), hillHeight * 0.5 - 1, length * 0.5),
+			colour = earth,
+			material = Enum.Material.Ground,
+			parent = model,
+		})
+		BuildKit.wedge({
+			name = "HillShoulder",
+			size = Vector3.new(length, hillHeight, 40),
+			cf = inHill(side * (hillWidth * 0.5 + 20), hillHeight * 0.5 - 1, length * 0.5)
+				* CFrame.Angles(0, math.rad(-side * 90), 0),
+			colour = earth,
+			material = Enum.Material.Ground,
+			parent = model,
+		})
+	end
+	BuildKit.part({
+		name = "HillCrown",
+		size = Vector3.new(boreWidth, hillHeight - boreHeight, length),
+		cf = inHill(0, boreHeight + (hillHeight - boreHeight) * 0.5 - 1, length * 0.5),
+		colour = earth,
+		material = Enum.Material.Ground,
+		parent = model,
+	})
+	BuildKit.part({
+		name = "HillTurf",
+		size = Vector3.new(hillWidth, 1.2, length),
+		cf = inHill(0, hillHeight - 0.6, length * 0.5),
+		colour = C(46, 58, 40),
+		material = Enum.Material.Grass,
+		parent = model,
+	})
+	-- Wing slopes either side of the portal wall, so the line runs into a
+	-- cutting rather than up to a cliff.
+	local wingInner = 36
+	for _, side in { -1, 1 } do
+		BuildKit.wedge({
+			name = "CuttingWing",
+			size = Vector3.new(hillWidth * 0.5 - wingInner, hillHeight, 30),
+			cf = inHill(side * (wingInner + (hillWidth * 0.5 - wingInner) * 0.5), hillHeight * 0.5 - 1, -15),
+			colour = earth,
+			material = Enum.Material.Ground,
+			parent = model,
+		})
+	end
+
+	-- Portal: a dressed-stone retaining wall with a brick arch ring.
+	local wallWidth = 64
+	local wallHeight = boreHeight + 10
+	for _, side in { -1, 1 } do
+		BuildKit.part({
+			name = "PortalWall",
+			size = Vector3.new((wallWidth - boreWidth) * 0.5, wallHeight, 3),
+			cf = inHill(side * (boreWidth * 0.5 + (wallWidth - boreWidth) * 0.25), wallHeight * 0.5 - 1, -1.5),
+			colour = stone,
+			material = Enum.Material.Slate,
+			parent = model,
+		})
+		-- Buttress at each end of the wall.
+		BuildKit.part({
+			name = "PortalButtress",
+			size = Vector3.new(4, wallHeight + 2, 5),
+			cf = inHill(side * (wallWidth * 0.5 + 2), (wallHeight + 2) * 0.5 - 1, -2.5),
+			colour = C(84, 80, 74),
+			material = Enum.Material.Slate,
+			parent = model,
+		})
+	end
+	BuildKit.part({
+		name = "PortalHeader",
+		size = Vector3.new(boreWidth, wallHeight - boreHeight, 3),
+		cf = inHill(0, boreHeight + (wallHeight - boreHeight) * 0.5 - 1, -1.5),
+		colour = stone,
+		material = Enum.Material.Slate,
+		parent = model,
+	})
+	-- Arch ring: voussoirs stepped around the opening's upper corners.
+	for i = 0, 6 do
+		local angle = math.rad(15 + i * 25)
+		local radius = boreWidth * 0.5
+		BuildKit.detail({
+			name = "Voussoir",
+			size = Vector3.new(2.4, 1.6, 3.4),
+			cf = inHill(math.cos(angle) * radius, boreHeight - 3 + math.sin(angle) * 3.5, -1.6)
+				* CFrame.Angles(0, 0, angle - math.rad(90)),
+			colour = brick,
+			material = Enum.Material.Brick,
+			parent = model,
+		})
+	end
+	BuildKit.detail({
+		name = "PortalCoping",
+		size = Vector3.new(wallWidth + 2, 1.2, 4),
+		cf = inHill(0, wallHeight - 0.4, -1.5),
+		colour = C(110, 106, 98),
+		material = Enum.Material.Concrete,
+		parent = model,
+	})
+
+	-- Bore lining: brick walls and a soot-blackened roof. Refuges are cut
+	-- every forty studs, each with a dim red lamp, so the darkness has depth
+	-- rather than being a flat black screen.
+	for _, side in { -1, 1 } do
+		BuildKit.part({
+			name = "BoreLining",
+			size = Vector3.new(1, boreHeight, length),
+			cf = inHill(side * (boreWidth * 0.5 - 0.5), boreHeight * 0.5 - 1, length * 0.5),
+			colour = brick,
+			material = Enum.Material.Brick,
+			parent = model,
+		})
+	end
+	BuildKit.part({
+		name = "BoreRoof",
+		size = Vector3.new(boreWidth, 1, length),
+		cf = inHill(0, boreHeight - 1.5, length * 0.5),
+		colour = C(30, 28, 26),
+		material = Enum.Material.Slate,
+		parent = model,
+	})
+	local refuge = 40
+	while refuge < length - 10 do
+		for _, side in { -1, 1 } do
+			local lampPart = BuildKit.detail({
+				name = "RefugeLamp",
+				size = Vector3.new(0.4, 0.6, 0.6),
+				cf = inHill(side * (boreWidth * 0.5 - 1.2), 9, refuge),
+				colour = C(160, 40, 30),
+				material = Enum.Material.Neon,
+				parent = model,
+			})
+			if side == 1 then
+				local glow = Instance.new("PointLight")
+				glow.Color = C(170, 50, 36)
+				glow.Brightness = 0.6
+				glow.Range = 14
+				glow.Shadows = false
+				glow.Parent = lampPart
+			end
+			BuildKit.detail({
+				name = "RefugeRecess",
+				size = Vector3.new(0.2, 7, 4),
+				cf = inHill(side * (boreWidth * 0.5 - 1.05), 3.5, refuge + 3),
+				colour = C(18, 16, 14),
+				material = Enum.Material.Slate,
+				parent = model,
+			})
+		end
+		refuge += 40 + rng:NextInteger(-4, 4)
+	end
+	-- Cable runs along one wall, the detail that sells a working railway.
+	for i = 0, 2 do
+		BuildKit.detail({
+			name = "CableRun",
+			size = Vector3.new(0.2, 0.2, length - 4),
+			cf = inHill(-boreWidth * 0.5 + 1.15, 6 + i * 0.35, length * 0.5),
+			colour = C(24, 24, 24),
+			material = Enum.Material.Rubber,
+			parent = model,
+		})
+	end
+
+	return model
+end
+
 return BuildKit
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="59">
+        <Item class="ModuleScript" referent="63">
           <Properties>
             <string name="Name">ForestBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -21700,7 +22667,7 @@ return ForestBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="60">
+        <Item class="ModuleScript" referent="64">
           <Properties>
             <string name="Name">LobbyBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -21739,8 +22706,14 @@ export type BuiltLobby = {
 	workshopBench: BasePart,
 	storesCounter: BasePart,
 	noticeBoard: BasePart,
-	trainPreviewCF: CFrame,
-	departureCF: CFrame,
+	-- The yard service train runs along the departure road. At distance D its
+	-- front coupler is at serviceOrigin * (0, 0, -D).
+	serviceOrigin: CFrame,
+	platformDistance: number,
+	tunnelDistance: number,
+	departurePost: BasePart,
+	departureStatus: TextLabel,
+	platformCFrame: CFrame,
 	lights: { Light },
 	partCount: number,
 }
@@ -22190,6 +23163,263 @@ end
 
 --------------------------------------------------------------------------
 
+--------------------------------------------------------------------------
+-- Platform 1
+--------------------------------------------------------------------------
+
+-- Where the 02:17 stands. The platform runs along the east side of the
+-- departure road, directly in front of the spawn, so the first thing a new
+-- player sees is a lit train with its doors open and a way up to it.
+-- The platform edge sits just clear of the widest fixed part of the train
+-- (locomotive handrails at 6.45), less than a stud from the carriage sides.
+local PLATFORM_X = 12.7
+local PLATFORM_WIDTH = 12
+local PLATFORM_LENGTH = 190
+local PLATFORM_TOP = 3.2
+
+local function buildPlatform(originCF: CFrame, parent: Instance, lights: { Light }, rng: Random): (BasePart, TextLabel)
+	local deckCF = originCF * CFrame.new(PLATFORM_X, 0, 0)
+	BuildKit.part({
+		name = "PlatformDeck",
+		size = Vector3.new(PLATFORM_WIDTH, PLATFORM_TOP - 0.6, PLATFORM_LENGTH),
+		cf = deckCF * CFrame.new(0, 0.6 + (PLATFORM_TOP - 0.6) * 0.5, 0),
+		colour = C(118, 114, 106),
+		material = Enum.Material.Concrete,
+		parent = parent,
+	})
+	-- Coping stones and the painted safety line along the track edge.
+	BuildKit.part({
+		name = "PlatformCoping",
+		size = Vector3.new(1.4, 0.3, PLATFORM_LENGTH),
+		cf = deckCF * CFrame.new(-PLATFORM_WIDTH * 0.5 + 0.7, PLATFORM_TOP + 0.15, 0),
+		colour = C(150, 146, 136),
+		material = Enum.Material.Concrete,
+		parent = parent,
+	})
+	BuildKit.detail({
+		name = "SafetyLine",
+		size = Vector3.new(0.5, 0.05, PLATFORM_LENGTH),
+		cf = deckCF * CFrame.new(-PLATFORM_WIDTH * 0.5 + 2.2, PLATFORM_TOP + 0.02, 0),
+		colour = C(214, 178, 62),
+		material = Enum.Material.SmoothPlastic,
+		parent = parent,
+	})
+	-- Wet patches on the deck catch the lamplight.
+	for _ = 1, 8 do
+		local size = rng:NextNumber(3, 7)
+		BuildKit.detail({
+			name = "Puddle",
+			size = Vector3.new(size * 0.7, 0.04, size),
+			cf = deckCF * CFrame.new(rng:NextNumber(-3, 4), PLATFORM_TOP + 0.03, rng:NextNumber(-85, 85)),
+			colour = C(40, 44, 48),
+			material = Enum.Material.Glass,
+			transparency = 0.3,
+			reflectance = 0.4,
+			parent = parent,
+		})
+	end
+
+	-- Ramps up from the yard, one directly in front of the spawn.
+	for _, z in { -12, 52 } do
+		local rampLength = 10
+		BuildKit.wedge({
+			name = "PlatformRamp",
+			size = Vector3.new(8, PLATFORM_TOP - 0.6, rampLength),
+			cf = deckCF
+				* CFrame.new(PLATFORM_WIDTH * 0.5 + rampLength * 0.5, 0.6 + (PLATFORM_TOP - 0.6) * 0.5, z)
+				* CFrame.Angles(0, math.rad(-90), 0),
+			colour = C(110, 106, 98),
+			material = Enum.Material.Concrete,
+			parent = parent,
+		})
+		for _, side in { -1, 1 } do
+			BuildKit.detail({
+				name = "RampRail",
+				size = Vector3.new(rampLength, 0.2, 0.2),
+				cf = deckCF
+					* CFrame.new(PLATFORM_WIDTH * 0.5 + rampLength * 0.5, 0.6 + (PLATFORM_TOP - 0.6) * 0.5 + 2.6, z + side * 4.1)
+					* CFrame.Angles(0, 0, math.rad(-math.deg(math.atan2(PLATFORM_TOP - 0.6, rampLength)))),
+				colour = C(170, 140, 58),
+				material = Enum.Material.Metal,
+				parent = parent,
+			})
+		end
+	end
+
+	-- Canopy over the middle of the platform: columns, a ribbed roof and
+	-- pendant lamps.
+	local canopyLength = 96
+	local canopyHeight = PLATFORM_TOP + 10
+	for i = 0, 8 do
+		local z = -canopyLength * 0.5 + i * (canopyLength / 8)
+		BuildKit.part({
+			name = "CanopyColumn",
+			size = Vector3.new(0.8, canopyHeight - PLATFORM_TOP, 0.8),
+			cf = deckCF * CFrame.new(2.5, PLATFORM_TOP + (canopyHeight - PLATFORM_TOP) * 0.5, z),
+			colour = C(52, 70, 62),
+			material = Enum.Material.Metal,
+			parent = parent,
+		})
+		BuildKit.detail({
+			name = "CanopyBracket",
+			size = Vector3.new(PLATFORM_WIDTH - 1, 0.5, 0.4),
+			cf = deckCF * CFrame.new(-0.5, canopyHeight - 0.6, z),
+			colour = C(52, 70, 62),
+			material = Enum.Material.Metal,
+			parent = parent,
+		})
+		if i % 2 == 0 then
+			local _, light = BuildKit.lamp(deckCF * CFrame.new(-1, canopyHeight - 1.6, z), "pendant", C(255, 214, 160), 3, 36, parent)
+			table.insert(lights, light)
+		end
+	end
+	BuildKit.part({
+		name = "CanopyRoof",
+		size = Vector3.new(PLATFORM_WIDTH + 1, 0.5, canopyLength + 4),
+		cf = deckCF * CFrame.new(-0.5, canopyHeight, 0) * CFrame.Angles(0, 0, math.rad(4)),
+		colour = C(46, 52, 52),
+		material = Enum.Material.Metal,
+		parent = parent,
+	})
+	BuildKit.detail({
+		name = "CanopyValance",
+		size = Vector3.new(0.3, 1.4, canopyLength + 4),
+		cf = deckCF * CFrame.new(-PLATFORM_WIDTH * 0.5 - 0.3, canopyHeight - 0.8, 0),
+		colour = C(118, 92, 58),
+		material = Enum.Material.WoodPlanks,
+		parent = parent,
+	})
+
+	-- Lamp posts beyond the canopy, so the whole length of the train is lit.
+	for _, z in { -80, -62, 62, 80 } do
+		BuildKit.part({
+			name = "PlatformLampPost",
+			size = Vector3.new(0.5, 11, 0.5),
+			cf = deckCF * CFrame.new(3.5, PLATFORM_TOP + 5.5, z),
+			colour = C(52, 70, 62),
+			material = Enum.Material.Metal,
+			parent = parent,
+		})
+		local _, light = BuildKit.lamp(deckCF * CFrame.new(2.4, PLATFORM_TOP + 10.6, z), "pendant", C(255, 206, 150), 3, 40, parent)
+		table.insert(lights, light)
+	end
+
+	-- Benches and a luggage barrow: the platform is a place people wait.
+	for _, z in { -30, 18 } do
+		BuildKit.part({
+			name = "PlatformBenchSeat",
+			size = Vector3.new(1.6, 0.3, 6),
+			cf = deckCF * CFrame.new(4.2, PLATFORM_TOP + 1.5, z),
+			colour = BuildKit.weather(P.planking, 0.04, rng),
+			material = Enum.Material.WoodPlanks,
+			parent = parent,
+		})
+		BuildKit.detail({
+			name = "PlatformBenchBack",
+			size = Vector3.new(0.3, 1.6, 6),
+			cf = deckCF * CFrame.new(5, PLATFORM_TOP + 2.4, z),
+			colour = BuildKit.weather(P.planking, 0.04, rng),
+			material = Enum.Material.WoodPlanks,
+			parent = parent,
+		})
+		for _, offset in { -2.6, 2.6 } do
+			BuildKit.detail({
+				name = "PlatformBenchLeg",
+				size = Vector3.new(1.6, 1.4, 0.3),
+				cf = deckCF * CFrame.new(4.2, PLATFORM_TOP + 0.7, z + offset),
+				colour = C(40, 44, 42),
+				material = Enum.Material.Metal,
+				parent = parent,
+			})
+		end
+	end
+	BuildKit.part({
+		name = "LuggageBarrow",
+		size = Vector3.new(2.6, 0.4, 5),
+		cf = deckCF * CFrame.new(3.6, PLATFORM_TOP + 1.2, 36),
+		colour = C(92, 70, 50),
+		material = Enum.Material.WoodPlanks,
+		parent = parent,
+	})
+	for i = 0, 2 do
+		BuildKit.part({
+			name = "Suitcase",
+			size = Vector3.new(1.8, 1.0, 2.4),
+			cf = deckCF
+				* CFrame.new(3.6, PLATFORM_TOP + 1.9 + i * 1.0, 35 + i * 0.6)
+				* CFrame.Angles(0, math.rad(rng:NextNumber(-12, 12)), 0),
+			colour = BuildKit.weather(C(86, 58, 44), 0.05, rng),
+			material = Enum.Material.Leather,
+			parent = parent,
+		})
+	end
+
+	-- The departure board, hung from the canopy facing the yard. Its text is
+	-- driven live by DepartureService.
+	local board = BuildKit.part({
+		name = "DepartureBoard",
+		size = Vector3.new(0.4, 3.6, 12),
+		cf = deckCF * CFrame.new(PLATFORM_WIDTH * 0.5 - 0.2, canopyHeight - 3, -6),
+		colour = C(22, 24, 26),
+		material = Enum.Material.Metal,
+		parent = parent,
+	})
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "BoardFace"
+	gui.Face = Enum.NormalId.Right
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 40
+	gui.LightInfluence = 0
+	gui.Brightness = 2
+	gui.Parent = board
+	local heading = Instance.new("TextLabel")
+	heading.Name = "Heading"
+	heading.BackgroundTransparency = 1
+	heading.Size = UDim2.fromScale(1, 0.42)
+	heading.Text = "02:17  UP MAIN  -  WARD HILL"
+	heading.FontFace = Font.fromEnum(Enum.Font.Code)
+	heading.TextScaled = true
+	heading.TextColor3 = C(255, 176, 64)
+	heading.Parent = gui
+	local status = Instance.new("TextLabel")
+	status.Name = "Status"
+	status.BackgroundTransparency = 1
+	status.Position = UDim2.fromScale(0, 0.48)
+	status.Size = UDim2.fromScale(1, 0.4)
+	status.Text = "NOW BOARDING"
+	status.FontFace = Font.fromEnum(Enum.Font.Code)
+	status.TextScaled = true
+	status.TextColor3 = C(255, 206, 120)
+	status.Parent = gui
+
+	-- The departure post: the same crew panel as the board in the shelter,
+	-- right beside the train, at a height where its prompt is actually seen.
+	local post = BuildKit.part({
+		name = "DeparturePost",
+		size = Vector3.new(1.4, 4.6, 2.4),
+		cf = deckCF * CFrame.new(2.2, PLATFORM_TOP + 2.3, -14),
+		colour = C(52, 70, 62),
+		material = Enum.Material.Metal,
+		parent = parent,
+	})
+	post:AddTag("CrewBoard")
+	BuildKit.label(post, Enum.NormalId.Right, "DEPART", "Alone or with a crew")
+	local _, postLight = BuildKit.lamp(deckCF * CFrame.new(3.2, PLATFORM_TOP + 5.2, -14), "bulkhead", C(255, 196, 120), 0.9, 12, parent)
+	table.insert(lights, postLight)
+
+	-- Platform nameboards at both ends, readable from the yard.
+	for _, z in { -88, 88 } do
+		BuildKit.postSign(deckCF * CFrame.new(4.5, PLATFORM_TOP, z) * CFrame.Angles(0, math.rad(90), 0), "PLATFORM 1", parent, {
+			width = 12,
+			height = 8,
+			subtitle = "02:17 Up Main",
+			plate = C(32, 44, 38),
+		})
+	end
+
+	return post, status
+end
+
 function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): BuiltLobby
 	local rng = Random.new(seed or 217)
 	local model = BuildKit.model("Lobby", nil)
@@ -22201,7 +23431,9 @@ function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): B
 	--------------------------------------------------------------
 	BuildKit.part({
 		name = "YardGround",
-		size = Vector3.new(420, 2, 520),
+		-- Long enough to carry the departure road from the south approach,
+		-- where the next service appears, to the tunnel in the north.
+		size = Vector3.new(520, 2, 1700),
 		cf = originCF * CFrame.new(0, -1, 0),
 		colour = P.soil,
 		material = Enum.Material.Ground,
@@ -22235,7 +23467,9 @@ function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): B
 	-- Tracks: departure road plus two sidings
 	--------------------------------------------------------------
 	local departureX = 0
-	BuildKit.trackSection(originCF * CFrame.new(departureX, 0, 240), 480, model, rng)
+	-- The departure road runs the full length of the yard: in from the south,
+	-- past Platform 1, and north into the tunnel towards the line.
+	BuildKit.trackSection(originCF * CFrame.new(departureX, 0, 820), 1560, model, rng)
 	BuildKit.trackSection(originCF * CFrame.new(departureX - 34, 0, 180), 300, model, rng)
 	BuildKit.trackSection(originCF * CFrame.new(departureX + 34, 0, 180), 300, model, rng)
 
@@ -22279,7 +23513,7 @@ function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): B
 
 	-- Water column by the departure road, the classic yard silhouette.
 	do
-		local columnCF = originCF * CFrame.new(departureX + 16, 0, 40)
+		local columnCF = originCF * CFrame.new(departureX - 16, 0, 40)
 		BuildKit.part({
 			name = "WaterColumn",
 			size = Vector3.new(2.0, 18, 2.0),
@@ -22321,7 +23555,7 @@ function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): B
 			Vector3.new(40, 0, 90),
 			Vector3.new(-40, 0, -60),
 			Vector3.new(40, 0, -60),
-			Vector3.new(0, 0, 150),
+			Vector3.new(-16, 0, 150),
 		}
 	do
 		local mastCF = originCF * CFrame.new(spec)
@@ -22356,7 +23590,12 @@ function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): B
 
 	-- Scattered yard clutter: pallets, drums, a permanent way trolley, sleepers.
 	for _ = 1, 16 do
-		local pos = originCF * CFrame.new(rng:NextNumber(-95, 95), 0, rng:NextNumber(-130, 130))
+		local clutterX = rng:NextNumber(-95, 95)
+		-- Nothing is dumped on the departure road, the platform or its ramps.
+		if clutterX > -12 and clutterX < 34 then
+			clutterX += if clutterX < 11 then -26 else 26
+		end
+		local pos = originCF * CFrame.new(clutterX, 0, rng:NextNumber(-130, 130))
 		local pick = rng:NextInteger(1, 4)
 		if pick == 1 then
 			BuildKit.part({
@@ -22430,9 +23669,10 @@ function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): B
 	local spawnCFrames: { CFrame } = {}
 	for i = 0, 11 do
 		local angle = math.rad(i * 30)
+		-- Facing west, across the ramp to Platform 1 and the waiting train.
 		spawnCFrames[i + 1] = originCF
-			* CFrame.new(38 + math.cos(angle) * 9, 3, -14 + math.sin(angle) * 9)
-			* CFrame.Angles(0, math.rad(-90), 0)
+			* CFrame.new(36 + math.cos(angle) * 5, 3, 8 + math.sin(angle) * 5)
+			* CFrame.Angles(0, math.rad(90), 0)
 	end
 
 	--------------------------------------------------------------
@@ -22446,7 +23686,7 @@ function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): B
 	BuildKit.label(noticeBoard, Enum.NormalId.Left, "NOTICES", "Orders, rewards and events")
 
 	-- The yard nameboard, on the approach to the shelter.
-	BuildKit.postSign(originCF * CFrame.new(20, 0, -80) * CFrame.Angles(0, math.rad(180), 0), "TOLBRIDGE YARD", model, {
+	BuildKit.postSign(originCF * CFrame.new(46, 0, -72) * CFrame.Angles(0, math.rad(180), 0), "TOLBRIDGE YARD", model, {
 		width = 22,
 		height = 11,
 		subtitle = "Regional Permanent Way Depot",
@@ -22472,7 +23712,7 @@ function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): B
 
 	-- The departure road is marked, because the preview train sits on the
 	-- siding beside it and the two need telling apart.
-	BuildKit.postSign(originCF * CFrame.new(departureX + 14, 0, 110) * CFrame.Angles(0, math.rad(180), 0), "DEPARTURE ROAD", model, {
+	BuildKit.postSign(originCF * CFrame.new(departureX + 22, 0, 110) * CFrame.Angles(0, math.rad(180), 0), "DEPARTURE ROAD", model, {
 		width = 17,
 		height = 6,
 		subtitle = "Up main to the north",
@@ -22485,6 +23725,10 @@ function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): B
 		plate = C(44, 34, 30),
 	})
 
+	-- Platform 1, and the tunnel the line leaves the yard through.
+	local departurePost, departureStatus = buildPlatform(originCF, model, lights, rng)
+	BuildKit.tunnel(originCF * CFrame.new(departureX, 0, -330) * CFrame.Angles(0, math.rad(180), 0), 300, model, rng)
+
 	model:AddTag("Lobby")
 	model.Parent = parent
 
@@ -22495,10 +23739,15 @@ function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): B
 		workshopBench = workshopBench,
 		storesCounter = storesCounter,
 		noticeBoard = noticeBoard,
-		-- The preview road, where the selected train is displayed.
-		trainPreviewCF = originCF * CFrame.new(departureX - 34, 0, 40) * CFrame.Angles(0, math.rad(180), 0),
-		-- Where the expedition train sits before departure.
-		departureCF = originCF * CFrame.new(departureX, 0, 60) * CFrame.Angles(0, math.rad(180), 0),
+		-- The next service appears out of sight to the south (distance 0), draws
+		-- up with its consist along Platform 1, and swaps to the line once it is
+		-- well inside the tunnel.
+		serviceOrigin = originCF * CFrame.new(departureX, 0, 640),
+		platformDistance = 716,
+		tunnelDistance = 1090,
+		departurePost = departurePost,
+		departureStatus = departureStatus,
+		platformCFrame = originCF * CFrame.new(PLATFORM_X + 2, PLATFORM_TOP + 3, 0) * CFrame.Angles(0, math.rad(-90), 0),
 		lights = lights,
 		partCount = BuildKit.countParts(model),
 	}
@@ -22508,7 +23757,7 @@ return LobbyBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="61">
+        <Item class="ModuleScript" referent="65">
           <Properties>
             <string name="Name">StationBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -24151,7 +25400,7 @@ return StationBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="62">
+        <Item class="ModuleScript" referent="66">
           <Properties>
             <string name="Name">TrainBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -24236,6 +25485,115 @@ export type BuiltTrain = {
 	volumeOffset: CFrame,
 	partCount: number,
 }
+
+--------------------------------------------------------------------------
+-- Articulation
+--------------------------------------------------------------------------
+
+-- Parts that move relative to the train (door hinges, gauge needles, wiper
+-- arms) cannot be welded with a WeldConstraint and then moved by CFrame:
+-- writing the CFrame of any part in a welded assembly moves the whole
+-- assembly, anchored root included. That is what used to swing the entire
+-- train off its track every time a door opened.
+--
+-- Instead each moving part gets its own Weld to the root, and is animated by
+-- rewriting that Weld's C0, which moves only the part. Parts that ride on a
+-- moving part (a door leaf on its hinge, a blade on its wiper arm) are welded
+-- to that part rather than to the root.
+
+-- Filled while a train is being built; consumed by the weld pass in build().
+local followers: { [BasePart]: BasePart } = {}
+
+--- Marks a part as articulated about a pivot. The pivot is where the part
+--- rotates from, which for a needle is the dial centre rather than the
+--- needle's own middle.
+local function articulate(part: BasePart, pivot: CFrame)
+	part:SetAttribute("ArticulationPivot", pivot:ToObjectSpace(part.CFrame))
+	part:AddTag("Articulated")
+end
+
+--- Poses an articulated part. `offset` is applied in the pivot's frame, so
+--- CFrame.Angles(0, a, 0) swings a door about its hinge.
+function TrainBuilder.pose(part: BasePart, offset: CFrame)
+	local joint = part:FindFirstChild("Articulation")
+	if joint and joint:IsA("Weld") then
+		local base = joint:GetAttribute("BaseC0")
+		if typeof(base) == "CFrame" then
+			joint.C0 = base * offset
+		end
+	end
+end
+
+--------------------------------------------------------------------------
+-- Walls with openings
+--------------------------------------------------------------------------
+
+export type Opening = { z0: number, z1: number, y0: number, y1: number }
+
+--- Builds a wall in the plane x = `x` (in originCF's frame) running from z0
+--- to z1 and from y0 to y1, leaving every opening as a genuine gap. The wall
+--- is cut into horizontal bands at each opening's top and bottom, and each
+--- band into the spans no opening crosses, so a door is a hole a player can
+--- walk through and a window is a hole they can see through.
+local function openWall(
+	originCF: CFrame,
+	x: number,
+	thickness: number,
+	z0: number,
+	z1: number,
+	y0: number,
+	y1: number,
+	openings: { Opening },
+	props: { name: string, colour: Color3, material: Enum.Material, detail: boolean? },
+	parent: Instance
+)
+	local cuts = { y0, y1 }
+	for _, opening in openings do
+		table.insert(cuts, math.clamp(opening.y0, y0, y1))
+		table.insert(cuts, math.clamp(opening.y1, y0, y1))
+	end
+	table.sort(cuts)
+	for i = 1, #cuts - 1 do
+		local bandBottom, bandTop = cuts[i], cuts[i + 1]
+		if bandTop - bandBottom < 0.02 then
+			continue
+		end
+		local middle = (bandBottom + bandTop) * 0.5
+		local gaps: { { number } } = {}
+		for _, opening in openings do
+			if middle > opening.y0 and middle < opening.y1 then
+				table.insert(gaps, { opening.z0, opening.z1 })
+			end
+		end
+		table.sort(gaps, function(a, b)
+			return a[1] < b[1]
+		end)
+		local cursor = z0
+		local function piece(from: number, to: number)
+			if to - from < 0.02 then
+				return
+			end
+			local spec = {
+				name = props.name,
+				size = Vector3.new(thickness, bandTop - bandBottom, to - from),
+				cf = originCF * CFrame.new(x, middle, (from + to) * 0.5),
+				colour = props.colour,
+				material = props.material,
+				parent = parent,
+			}
+			if props.detail then
+				BuildKit.detail(spec)
+			else
+				BuildKit.part(spec)
+			end
+		end
+		for _, gap in gaps do
+			piece(cursor, math.min(gap[1], z1))
+			cursor = math.max(cursor, gap[2])
+		end
+		piece(cursor, z1)
+	end
+end
 
 --------------------------------------------------------------------------
 -- Bogies and running gear
@@ -24465,6 +25823,13 @@ end
 -- Locomotive
 --------------------------------------------------------------------------
 
+-- Windscreen geometry, shared by the cab front and the glazing so the panes
+-- always sit in the openings. Heights are above the body floor; the sill is
+-- set below a seated driver's eye line so the line ahead is visible.
+local WINDSCREEN_CENTRE = 6.5
+local WINDSCREEN_WIDTH = 4.6
+local WINDSCREEN_HEIGHT = 4.8
+
 local function buildNose(
 	cf: CFrame,
 	style: string,
@@ -24472,24 +25837,38 @@ local function buildNose(
 	height: number,
 	livery: TrainRegistry.LiveryDef,
 	parent: Instance
-)
+): (number, number)
+	-- Returns the Z of the nose front face and the height for the headlamps,
+	-- both relative to cf, so the lamps are mounted on the nose itself.
+	--
+	-- Every nose stays below the windscreen sill. The first versions of the
+	-- blunt, raked and armoured noses were full-height blocks standing
+	-- directly in front of the windscreen, so the driver saw a wall.
+	local sill = WINDSCREEN_CENTRE - WINDSCREEN_HEIGHT * 0.5 - height * 0.5
+	local lower = sill + height * 0.5 -- height of the nose from the body floor
+	local function lowerCF(h: number, depth: number, z: number): CFrame
+		return cf * CFrame.new(0, -height * 0.5 + h * 0.5, z - depth * 0.5)
+	end
+
 	if style == "raked" then
-		BuildKit.wedge({
-			name = "Nose",
-			size = Vector3.new(width, height * 0.55, 7),
-			cf = cf * CFrame.new(0, height * 0.22, -3.5) * CFrame.Angles(0, math.rad(180), 0),
-			colour = livery.body,
-			material = Enum.Material.Metal,
-			parent = parent,
-		})
+		-- Long sloping nose: a low block with a wedge rising to the sill.
 		BuildKit.part({
 			name = "NoseLower",
-			size = Vector3.new(width, height * 0.45, 7),
-			cf = cf * CFrame.new(0, -height * 0.27, -3.5),
+			size = Vector3.new(width, lower - 2.4, 7),
+			cf = lowerCF(lower - 2.4, 7, 0),
 			colour = livery.body,
 			material = Enum.Material.Metal,
 			parent = parent,
 		})
+		BuildKit.wedge({
+			name = "Nose",
+			size = Vector3.new(width, 2.4, 7),
+			cf = cf * CFrame.new(0, sill - 1.2, -3.5) * CFrame.Angles(0, math.rad(180), 0),
+			colour = livery.body,
+			material = Enum.Material.Metal,
+			parent = parent,
+		})
+		return -7.1, -height * 0.5 + (lower - 2.4) * 0.6
 	elseif style == "bonnet" then
 		-- A long low bonnet in front of a centre cab.
 		BuildKit.part({
@@ -24517,11 +25896,12 @@ local function buildNose(
 				parent
 			)
 		end
+		return -14.1, -height * 0.25
 	elseif style == "armoured" then
 		BuildKit.part({
 			name = "NoseArmour",
-			size = Vector3.new(width + 0.4, height * 0.9, 6),
-			cf = cf * CFrame.new(0, 0, -3),
+			size = Vector3.new(width + 0.4, lower, 5),
+			cf = lowerCF(lower, 5, 0),
 			colour = livery.body,
 			material = Enum.Material.DiamondPlate,
 			parent = parent,
@@ -24545,25 +25925,81 @@ local function buildNose(
 				parent = parent,
 			})
 		end
+		-- Armoured visor over the windscreen: slatted, so it can be seen past.
+		for i = 0, 1 do
+			BuildKit.detail({
+				name = "VisorSlat",
+				size = Vector3.new(width, 0.3, 1.6),
+				cf = cf * CFrame.new(0, sill + WINDSCREEN_HEIGHT + 0.3 - i * 0.6, -0.9),
+				colour = livery.trim,
+				material = Enum.Material.Metal,
+				parent = parent,
+			})
+		end
+		return -5.1, -height * 0.5 + lower * 0.6
 	else -- "blunt"
+		-- A short lower nose projecting ahead of a flat cab front.
 		BuildKit.part({
 			name = "Nose",
-			size = Vector3.new(width, height * 0.92, 5),
-			cf = cf * CFrame.new(0, 0, -2.5),
+			size = Vector3.new(width, lower - 1.2, 4),
+			cf = lowerCF(lower - 1.2, 4, 0),
 			colour = livery.body,
 			material = Enum.Material.Metal,
 			parent = parent,
 		})
-		-- A shallow curve across the top of the nose so it is not a slab.
+		-- Sloped top of the lower nose, rising to the windscreen sill.
 		BuildKit.wedge({
-			name = "NoseCrown",
-			size = Vector3.new(width, 1.4, 5),
-			cf = cf * CFrame.new(0, height * 0.46 + 0.7, -2.5) * CFrame.Angles(0, math.rad(180), 0),
-			colour = livery.roof,
+			name = "NoseSlope",
+			size = Vector3.new(width, 1.2, 4),
+			cf = cf * CFrame.new(0, sill - 0.6, -2) * CFrame.Angles(0, math.rad(180), 0),
+			colour = livery.body,
+			material = Enum.Material.Metal,
+			parent = parent,
+		})
+		return -4.1, -height * 0.5 + (lower - 1.2) * 0.55
+	end
+end
+
+--- The flat cab front of a front-cab locomotive: a frame around the two
+--- windscreen panes, so the glazing sits in a real opening.
+local function buildCabFront(cf: CFrame, width: number, height: number, livery: TrainRegistry.LiveryDef, parent: Instance)
+	local sill = WINDSCREEN_CENTRE - WINDSCREEN_HEIGHT * 0.5 - height * 0.5
+	local head = WINDSCREEN_CENTRE + WINDSCREEN_HEIGHT * 0.5 - height * 0.5
+	BuildKit.part({
+		name = "CabFrontHeader",
+		size = Vector3.new(width, height * 0.5 - head, 0.5),
+		cf = cf * CFrame.new(0, (head + height * 0.5) * 0.5, 0.1),
+		colour = livery.body,
+		material = Enum.Material.Metal,
+		parent = parent,
+	})
+	BuildKit.part({
+		name = "CabFrontSill",
+		size = Vector3.new(width, sill + height * 0.5, 0.5),
+		cf = cf * CFrame.new(0, (sill - height * 0.5) * 0.5, 0.1),
+		colour = livery.body,
+		material = Enum.Material.Metal,
+		parent = parent,
+	})
+	local paneOuter = width * 0.24 + WINDSCREEN_WIDTH * 0.5
+	for _, side in { -1, 1 } do
+		BuildKit.part({
+			name = "CabFrontPost",
+			size = Vector3.new(width * 0.5 - paneOuter, head - sill, 0.5),
+			cf = cf * CFrame.new(side * (paneOuter + width * 0.5) * 0.5, (head + sill) * 0.5, 0.1),
+			colour = livery.body,
 			material = Enum.Material.Metal,
 			parent = parent,
 		})
 	end
+	BuildKit.detail({
+		name = "NoseCrown",
+		size = Vector3.new(width + 0.2, 0.5, 1.2),
+		cf = cf * CFrame.new(0, height * 0.5 - 0.1, -0.3),
+		colour = livery.roof,
+		material = Enum.Material.Metal,
+		parent = parent,
+	})
 end
 
 local function buildCabInterior(
@@ -24593,14 +26029,24 @@ local function buildCabInterior(
 		material = Enum.Material.Metal,
 		parent = parent,
 	})
-	BuildKit.part({
-		name = "CabBulkhead",
-		size = Vector3.new(width - 0.8, height - 0.8, 0.4),
-		cf = cf * CFrame.new(0, 0, 5.3),
-		colour = interior.wall,
-		material = Enum.Material.Metal,
-		parent = parent,
-	})
+	-- Rear bulkhead, with a doorway into the engine-room corridor so the crew
+	-- can walk between the cab and the carriages.
+	local corridorX0, corridorX1 = width * 0.5 - 0.6 - 3.4, width * 0.5 - 0.6
+	local bulkheadHalf = width * 0.5 - 0.4
+	local floorY = -height * 0.5 + 0.4
+	local function bulkhead(x0: number, x1: number, y0: number, y1: number)
+		BuildKit.part({
+			name = "CabBulkhead",
+			size = Vector3.new(x1 - x0, y1 - y0, 0.4),
+			cf = cf * CFrame.new((x0 + x1) * 0.5, (y0 + y1) * 0.5, 5.3),
+			colour = interior.wall,
+			material = Enum.Material.Metal,
+			parent = parent,
+		})
+	end
+	bulkhead(-bulkheadHalf, corridorX0, -height * 0.5 + 0.4, height * 0.5 - 0.4)
+	bulkhead(corridorX1, bulkheadHalf, -height * 0.5 + 0.4, height * 0.5 - 0.4)
+	bulkhead(corridorX0, corridorX1, floorY + 7.4, height * 0.5 - 0.4)
 
 	-- Driver's desk: a sloped console across the front of the cab.
 	local deskTop = BuildKit.part({
@@ -24722,6 +26168,8 @@ local function buildCabInterior(
 			parent = parent,
 		})
 		needle:AddTag("Gauge")
+		-- Needles sweep about the dial centre.
+		articulate(needle, face.CFrame)
 		return needle
 	end
 
@@ -24819,7 +26267,7 @@ local function buildCabInterior(
 			material = Enum.Material.Metal,
 			parent = parent,
 		})
-		BuildKit.detail({
+		local blade = BuildKit.detail({
 			name = "WiperBlade",
 			size = Vector3.new(0.12, 3.0, 0.1),
 			cf = arm.CFrame * CFrame.new(0, 0.1, -0.14),
@@ -24828,6 +26276,9 @@ local function buildCabInterior(
 			parent = parent,
 		})
 		arm:AddTag("WiperArm")
+		-- The arm sweeps about its spindle; the blade rides on the arm.
+		articulate(arm, pivot)
+		followers[blade] = arm
 		table.insert(wipers, arm)
 	end
 
@@ -24949,15 +26400,26 @@ local function buildLocomotive(
 	local cabLength = 11
 	local cabZ = if build.cabPosition == "front" then -(length * 0.5 - cabLength * 0.5 - 1) else 0
 
+	-- The cab door opening and the cab side window, in body-local Z and in
+	-- height above the body floor. Both sides use the same opening; the far
+	-- side door is hinged at the other end of it so it still opens into the
+	-- cab rather than into the engine room.
+	local cabDoorZ0 = cabZ + 0.1
+	local cabDoorZ1 = cabZ + 3.5
+	local cabDoorTop = 7.4
+	local sideWindowZ = cabZ - 2.6
+	local sideWindowHeight = 3.2
+
 	for _, side in { -1, 1 } do
-		BuildKit.part({
-			name = "BodySide",
-			size = Vector3.new(0.6, height, length - 4),
-			cf = originCF * CFrame.new(side * (width * 0.5 - 0.3), bodyCentreY, 0),
-			colour = livery.body,
-			material = Enum.Material.Metal,
-			parent = model,
-		})
+		openWall(originCF, side * (width * 0.5 - 0.3), 0.6, -length * 0.5 + 2, length * 0.5 - 2, bodyBottom, bodyTop, {
+			{ z0 = cabDoorZ0, z1 = cabDoorZ1, y0 = bodyBottom - 1, y1 = bodyBottom + cabDoorTop },
+			{
+				z0 = sideWindowZ - 2,
+				z1 = sideWindowZ + 2,
+				y0 = bodyBottom + WINDSCREEN_CENTRE - sideWindowHeight * 0.5,
+				y1 = bodyBottom + WINDSCREEN_CENTRE + sideWindowHeight * 0.5,
+			},
+		}, { name = "BodySide", colour = livery.body, material = Enum.Material.Metal }, model)
 		-- Waist stripe, if the livery has one.
 		if livery.stripe then
 			BuildKit.detail({
@@ -25027,16 +26489,30 @@ local function buildLocomotive(
 			model
 		)
 
-		-- Cab side door with a real opening.
-		local doorCF = originCF * CFrame.new(side * (width * 0.5 - 0.35), bodyBottom + 0.2, cabZ + 3.4)
+		-- Cab side door, in a real opening.
+		local hingeZ = if side > 0 then cabDoorZ1 - 0.1 else cabDoorZ0 + 0.1
+		local doorCF = originCF * CFrame.new(side * (width * 0.5 - 0.35), bodyBottom + 0.2, hingeZ)
 		local door = BuildKit.door(doorCF * CFrame.Angles(0, math.rad(if side > 0 then 0 else 180), 0), 3.2, 7.0, 0.35, livery.body, Enum.Material.Metal, model)
 		door.Name = "CabDoor"
 		table.insert(doors, { model = door, hinge = door.PrimaryPart :: BasePart, side = if side > 0 then "right" else "left", carriage = 0 })
-		-- Cab side window above the door.
+		-- Steps up to the cab door from the ballast.
+		for stepIndex = 0, 1 do
+			BuildKit.part({
+				name = "CabStep",
+				size = Vector3.new(1.8, 0.22, 3.0),
+				cf = originCF * CFrame.new(side * (width * 0.5 + 0.55), bodyBottom - 1.1 - stepIndex * 1.1, (cabDoorZ0 + cabDoorZ1) * 0.5),
+				colour = C(68, 68, 70),
+				material = Enum.Material.DiamondPlate,
+				parent = model,
+			})
+		end
+		-- Cab side window ahead of the door, at the driver's eye line. The
+		-- window builder glazes its local Y-Z plane, which is already the
+		-- plane of the body side.
 		BuildKit.window(
-			originCF * CFrame.new(side * (width * 0.5 + 0.02), bodyBottom + 8.4, cabZ + 0.5) * CFrame.Angles(0, math.rad(90), 0),
+			originCF * CFrame.new(side * (width * 0.5 + 0.02), bodyBottom + WINDSCREEN_CENTRE, sideWindowZ),
 			4.0,
-			3.2,
+			sideWindowHeight,
 			livery.trim,
 			model
 		)
@@ -25144,22 +26620,28 @@ local function buildLocomotive(
 	-- Nose, cab glazing and lights
 	--------------------------------------------------------------
 	local noseCF = originCF * CFrame.new(0, bodyCentreY, -length * 0.5 + 1)
-	buildNose(noseCF, build.nose, width, height, livery, model)
+	local noseFrontZ, lampY = buildNose(noseCF, build.nose, width, height, livery, model)
+	if build.cabPosition == "front" then
+		buildCabFront(noseCF, width, height, livery, model)
+	end
 
-	-- Windscreen: two panes with a centre pillar.
+	-- Windscreen: two panes with a centre pillar, in the plane of the cab
+	-- front. BuildKit.window glazes its local Y-Z plane, so it is turned to
+	-- face along the track; unturned, the panes stood edge-on to the driver.
+	local screenZ = -length * 0.5 + 1.1
 	for _, side in { -1, 1 } do
 		BuildKit.window(
-			originCF * CFrame.new(side * width * 0.24, bodyBottom + 8.2, cabZ - 5.3),
-			4.6,
-			4.2,
+			originCF * CFrame.new(side * width * 0.24, bodyBottom + WINDSCREEN_CENTRE, screenZ) * CFrame.Angles(0, math.rad(90), 0),
+			WINDSCREEN_WIDTH,
+			WINDSCREEN_HEIGHT,
 			livery.trim,
 			model
 		)
 	end
 	BuildKit.detail({
 		name = "CentrePillar",
-		size = Vector3.new(0.6, 4.6, 0.5),
-		cf = originCF * CFrame.new(0, bodyBottom + 8.2, cabZ - 5.3),
+		size = Vector3.new(width * 0.48 - WINDSCREEN_WIDTH, WINDSCREEN_HEIGHT + 0.4, 0.5),
+		cf = originCF * CFrame.new(0, bodyBottom + WINDSCREEN_CENTRE, screenZ),
 		colour = livery.trim,
 		material = Enum.Material.Metal,
 		parent = model,
@@ -25170,7 +26652,7 @@ local function buildLocomotive(
 		local housing = BuildKit.detail({
 			name = "HeadlampHousing",
 			size = Vector3.new(2.0, 2.0, 1.2),
-			cf = noseCF * CFrame.new(side * width * 0.3, -height * 0.18, -2.8),
+			cf = noseCF * CFrame.new(side * width * 0.3, lampY, noseFrontZ + 0.5),
 			colour = C(50, 50, 52),
 			material = Enum.Material.Metal,
 			parent = model,
@@ -25201,7 +26683,7 @@ local function buildLocomotive(
 		local marker = BuildKit.detail({
 			name = "MarkerLamp",
 			size = Vector3.new(0.8, 0.8, 0.5),
-			cf = noseCF * CFrame.new(side * width * 0.42, height * 0.22, -2.6),
+			cf = noseCF * CFrame.new(side * width * 0.42, lampY, noseFrontZ + 0.2),
 			colour = C(255, 214, 150),
 			material = Enum.Material.Neon,
 			parent = model,
@@ -25236,6 +26718,150 @@ local function buildLocomotive(
 			model
 		)
 		table.insert(cabinLights, light)
+	end
+
+	--------------------------------------------------------------
+	-- Engine room: the prime mover, and a side corridor past it
+	--------------------------------------------------------------
+	-- The corridor runs along the right-hand side from the cab doorway to a
+	-- vestibule at the rear, where a gangway opens onto the first carriage.
+	-- This is how the crew walks between the carriages and the cab while the
+	-- train is moving; without it, a driver who rode in a carriage could only
+	-- reach the controls at a stop.
+	do
+		local roomZ0 = cabZ + 5.5
+		local roomZ1 = length * 0.5 - 1.2
+		local corridorX0 = width * 0.5 - 0.6 - 3.4
+		local floorTop = bodyBottom + 0.4
+		BuildKit.part({
+			name = "EngineRoomFloor",
+			size = Vector3.new(width - 1.2, 0.4, roomZ1 - roomZ0),
+			cf = originCF * CFrame.new(0, floorTop - 0.2, (roomZ0 + roomZ1) * 0.5),
+			colour = C(52, 52, 54),
+			material = Enum.Material.DiamondPlate,
+			parent = model,
+		})
+		BuildKit.part({
+			name = "EngineRoomCeiling",
+			size = Vector3.new(width - 1.2, 0.35, roomZ1 - roomZ0),
+			cf = originCF * CFrame.new(0, bodyTop - 0.5, (roomZ0 + roomZ1) * 0.5),
+			colour = C(70, 72, 70),
+			material = Enum.Material.Metal,
+			parent = model,
+		})
+
+		-- The prime mover fills the left of the room and stops short of the
+		-- rear wall, leaving a vestibule across the full width.
+		local blockX0 = -width * 0.5 + 0.8
+		local blockX1 = corridorX0 - 0.4
+		local blockZ0 = roomZ0 + 1.5
+		local blockZ1 = roomZ1 - 6
+		if blockZ1 - blockZ0 > 4 then
+			local blockCF = originCF * CFrame.new((blockX0 + blockX1) * 0.5, floorTop, (blockZ0 + blockZ1) * 0.5)
+			local blockSize = Vector3.new(blockX1 - blockX0, 5.4, blockZ1 - blockZ0)
+			BuildKit.part({
+				name = "PrimeMover",
+				size = blockSize,
+				cf = blockCF * CFrame.new(0, blockSize.Y * 0.5, 0),
+				colour = C(64, 78, 70),
+				material = Enum.Material.Metal,
+				parent = model,
+			})
+			-- Cylinder head covers along the top, an exhaust manifold and a
+			-- generator drum at the far end: the shape of a diesel, not a box.
+			local heads = math.max(2, math.floor(blockSize.Z / 3.2))
+			for i = 0, heads - 1 do
+				BuildKit.detail({
+					name = "CylinderHead",
+					size = Vector3.new(blockSize.X * 0.7, 0.8, 2.2),
+					cf = blockCF * CFrame.new(0, blockSize.Y + 0.4, -blockSize.Z * 0.5 + 1.6 + i * (blockSize.Z - 3.2) / math.max(1, heads - 1)),
+					colour = C(82, 96, 86),
+					material = Enum.Material.Metal,
+					parent = model,
+				})
+			end
+			BuildKit.cylinder({
+				name = "ExhaustManifold",
+				size = Vector3.new(blockSize.Z - 1, 0.7, 0.7),
+				cf = blockCF * CFrame.new(blockSize.X * 0.5 - 0.3, blockSize.Y - 0.6, 0) * CFrame.Angles(0, math.rad(90), 0),
+				colour = C(92, 74, 60),
+				material = Enum.Material.CorrodedMetal,
+				canCollide = false,
+				parent = model,
+			})
+			BuildKit.cylinder({
+				name = "Generator",
+				size = Vector3.new(2.6, blockSize.X * 0.8, blockSize.X * 0.8),
+				cf = blockCF * CFrame.new(0, blockSize.Y * 0.45, blockSize.Z * 0.5 + 1.3) * CFrame.Angles(0, math.rad(90), 0),
+				colour = C(58, 66, 74),
+				material = Enum.Material.Metal,
+				parent = model,
+			})
+			-- Grab rail along the corridor side of the engine.
+			BuildKit.detail({
+				name = "CorridorRail",
+				size = Vector3.new(0.16, 0.16, blockSize.Z),
+				cf = blockCF * CFrame.new(blockSize.X * 0.5 + 0.25, 3.4, 0),
+				colour = C(170, 140, 58),
+				material = Enum.Material.Metal,
+				parent = model,
+			})
+		end
+
+		-- Corridor lamps, switched with the cab lights.
+		for i = 0, 2 do
+			local z = roomZ0 + 3 + i * ((roomZ1 - roomZ0 - 6) / 2)
+			local _, light = BuildKit.lamp(
+				originCF * CFrame.new(width * 0.5 - 2.4, bodyTop - 1.3, z),
+				"bulkhead",
+				interior.lampColour,
+				interior.lampBrightness * 0.7,
+				16,
+				model
+			)
+			table.insert(cabinLights, light)
+		end
+
+		-- Rear end: a wall with a central gangway opening, a header, a
+		-- concertina shroud and a walk plate over the coupling.
+		local rearZ = length * 0.5 - 0.6
+		local gangwayHalf = width * 0.21
+		for _, side in { -1, 1 } do
+			BuildKit.part({
+				name = "RearEndWall",
+				size = Vector3.new(width * 0.5 - gangwayHalf, height, 0.5),
+				cf = originCF * CFrame.new(side * (gangwayHalf + (width * 0.5 - gangwayHalf) * 0.5), bodyCentreY, rearZ),
+				colour = livery.body,
+				material = Enum.Material.Metal,
+				parent = model,
+			})
+		end
+		BuildKit.part({
+			name = "RearEndHeader",
+			size = Vector3.new(gangwayHalf * 2, height - 7.4, 0.5),
+			cf = originCF * CFrame.new(0, bodyBottom + 7.4 + (height - 7.4) * 0.5, rearZ),
+			colour = livery.body,
+			material = Enum.Material.Metal,
+			parent = model,
+		})
+		for ring = 0, 2 do
+			BuildKit.detail({
+				name = "GangwayRing",
+				size = Vector3.new(gangwayHalf * 2 + ring * 0.12, 7.6 + ring * 0.12, 0.3),
+				cf = originCF * CFrame.new(0, bodyBottom + 3.8, rearZ + 0.6 + ring * 0.6),
+				colour = C(42, 40, 40),
+				material = Enum.Material.Fabric,
+				parent = model,
+			})
+		end
+		BuildKit.part({
+			name = "GangwayPlate",
+			size = Vector3.new(width * 0.36, 0.3, 3.2),
+			cf = originCF * CFrame.new(0, bodyBottom + 0.3, rearZ + 1.6),
+			colour = C(62, 62, 64),
+			material = Enum.Material.DiamondPlate,
+			parent = model,
+		})
 	end
 
 	--------------------------------------------------------------
@@ -25437,37 +27063,131 @@ local function buildCarriage(
 		local windowSpacing = (length - 10) / (windowCount - 1)
 
 		for _, side in { -1, 1 } do
-			-- Side wall built as segments so window openings are real gaps.
-			local segmentZ = -length * 0.5 + 1.25
-			BuildKit.part({
-				name = "SideWall",
-				size = Vector3.new(0.55, height, length - 2.5),
-				cf = originCF * CFrame.new(side * (width * 0.5 - 0.28), bodyCentreY, 0),
-				colour = livery.body,
-				material = Enum.Material.Metal,
-				parent = model,
-			})
-			-- Interior lining, so the inside is not bare exterior colour.
-			BuildKit.detail({
-				name = "Lining",
-				size = Vector3.new(0.2, height - 1.2, length - 3),
-				cf = originCF * CFrame.new(side * (width * 0.5 - 0.7), bodyCentreY, 0),
-				colour = interior.wall,
-				material = Enum.Material.Wood,
-				parent = model,
-			})
-			BuildKit.detail({
-				name = "Dado",
-				size = Vector3.new(0.26, 1.0, length - 3),
-				cf = originCF * CFrame.new(side * (width * 0.5 - 0.72), bodyBottom + 1.6, 0),
-				colour = interior.trim,
-				material = Enum.Material.Wood,
-				parent = model,
-			})
-			_ = segmentZ
+			-- Side wall built as real segments around the door and window
+			-- openings. The first version was a single solid slab with the
+			-- doors and windows drawn on it, so nobody could board a carriage
+			-- or see out of one.
+			--
+			-- The door hinges at doorZ and its leaf lies along the hinge's -Z;
+			-- the far side is turned through 180 degrees, so the opening runs
+			-- to opposite sides of doorZ on the two sides of the carriage.
+			local doorZ = -length * 0.5 + length * 0.3
+			local doorWidth = 3.4
+			local doorFrom = if side > 0 then doorZ - doorWidth - 0.1 else doorZ - 0.1
+			local doorTo = if side > 0 then doorZ + 0.1 else doorZ + doorWidth + 0.1
+			local doorTop = 7.6
 
+			local windowBottom = height * 0.62 - 1.9
+			local windowTop = height * 0.62 + 1.9
+			local windowZs: { number } = {}
 			for i = 0, windowCount - 1 do
 				local z = -length * 0.5 + 5 + i * windowSpacing
+				-- A window never shares a bay with the door.
+				if z + 2.3 < doorFrom - 0.6 or z - 2.3 > doorTo + 0.6 then
+					table.insert(windowZs, z)
+				end
+			end
+
+			local wallFrom = -length * 0.5 + 1.25
+			local wallTo = length * 0.5 - 1.25
+			-- Spans along the wall that are not covered by any gap.
+			local function solidSpans(gaps: { { number } }): { { number } }
+				table.sort(gaps, function(a, b)
+					return a[1] < b[1]
+				end)
+				local spans: { { number } } = {}
+				local cursor = wallFrom
+				for _, gap in gaps do
+					if gap[1] > cursor then
+						table.insert(spans, { cursor, math.min(gap[1], wallTo) })
+					end
+					cursor = math.max(cursor, gap[2])
+				end
+				if cursor < wallTo then
+					table.insert(spans, { cursor, wallTo })
+				end
+				return spans
+			end
+
+			local doorGap = { doorFrom, doorTo }
+			local windowGaps: { { number } } = { { doorFrom, doorTo } }
+			if not isGuard then
+				for _, z in windowZs do
+					table.insert(windowGaps, { z - 2.1, z + 2.1 })
+				end
+			end
+			-- Three horizontal bands: below the windows, through them, above.
+			local bands = {
+				{ y0 = 0, y1 = windowBottom, gaps = { doorGap } },
+				{ y0 = windowBottom, y1 = windowTop, gaps = windowGaps },
+				{ y0 = windowTop, y1 = height, gaps = if doorTop > windowTop then { doorGap } else {} },
+			}
+
+			local function buildBands(name: string, x: number, thickness: number, colour: Color3, material: Enum.Material, detail: boolean, inset: number)
+				for _, band in bands do
+					local y0 = math.max(band.y0, inset)
+					local y1 = math.min(band.y1, height - inset)
+					if y1 - y0 < 0.05 then
+						continue
+					end
+					for _, span in solidSpans(table.clone(band.gaps)) do
+						local props = {
+							name = name,
+							size = Vector3.new(thickness, y1 - y0, span[2] - span[1]),
+							cf = originCF * CFrame.new(x, bodyBottom + (y0 + y1) * 0.5, (span[1] + span[2]) * 0.5),
+							colour = colour,
+							material = material,
+							parent = model,
+						}
+						if detail then
+							BuildKit.detail(props)
+						else
+							BuildKit.part(props)
+						end
+					end
+				end
+				-- The lintel over the door, between its head and the band above.
+				if doorTop < windowTop then
+					local props = {
+						name = name .. "Lintel",
+						size = Vector3.new(thickness, windowTop - doorTop, doorTo - doorFrom),
+						cf = originCF * CFrame.new(x, bodyBottom + (doorTop + windowTop) * 0.5, (doorFrom + doorTo) * 0.5),
+						colour = colour,
+						material = material,
+						parent = model,
+					}
+					if detail then
+						BuildKit.detail(props)
+					else
+						BuildKit.part(props)
+					end
+				end
+			end
+
+			buildBands("SideWall", side * (width * 0.5 - 0.28), 0.55, livery.body, Enum.Material.Metal, false, 0)
+			-- Interior lining and dado follow the same openings.
+			buildBands("Lining", side * (width * 0.5 - 0.62), 0.12, interior.wall, Enum.Material.Wood, true, 0.6)
+			for _, span in solidSpans({ { doorFrom, doorTo } }) do
+				BuildKit.detail({
+					name = "Dado",
+					size = Vector3.new(0.26, 1.0, span[2] - span[1]),
+					cf = originCF * CFrame.new(side * (width * 0.5 - 0.72), bodyBottom + 1.6, (span[1] + span[2]) * 0.5),
+					colour = interior.trim,
+					material = Enum.Material.Wood,
+					parent = model,
+				})
+			end
+			-- Threshold plate across the doorway, so the floor reaches the step.
+			BuildKit.part({
+				name = "Threshold",
+				size = Vector3.new(1.4, 0.5, doorTo - doorFrom),
+				cf = originCF * CFrame.new(side * (width * 0.5 - 0.3), bodyBottom + 0.25, (doorFrom + doorTo) * 0.5),
+				colour = C(70, 70, 72),
+				material = Enum.Material.DiamondPlate,
+				parent = model,
+			})
+
+			for _, z in windowZs do
 				local broken = not isGuard and rng:NextNumber() < 0.12
 				if isGuard then
 					-- Guard van windows are shuttered with a narrow slit.
@@ -25500,11 +27220,10 @@ local function buildCarriage(
 			end
 
 			-- Passenger door, one per side, roughly a third along.
-			local doorZ = -length * 0.5 + length * 0.3
 			local doorCF = originCF * CFrame.new(side * (width * 0.5 - 0.3), bodyBottom + 0.1, doorZ)
 			local door = BuildKit.door(
 				doorCF * CFrame.Angles(0, math.rad(if side > 0 then 0 else 180), 0),
-				3.4,
+				doorWidth,
 				7.2,
 				0.32,
 				livery.body,
@@ -25513,24 +27232,28 @@ local function buildCarriage(
 			)
 			door.Name = "CarriageDoor"
 			table.insert(doors, { model = door, hinge = door.PrimaryPart :: BasePart, side = if side > 0 then "right" else "left", carriage = index })
-			-- Boarding steps below each door.
+			-- Boarding steps below the doorway, for stations with low platforms.
+			local doorMid = (doorFrom + doorTo) * 0.5
 			for stepIndex = 0, 1 do
 				BuildKit.part({
 					name = "Step",
-					size = Vector3.new(2.0, 0.22, 3.2),
-					cf = originCF * CFrame.new(side * (width * 0.5 + 0.6), bodyBottom - 1.1 - stepIndex * 1.1, doorZ),
+					size = Vector3.new(2.0, 0.22, doorWidth - 0.2),
+					cf = originCF * CFrame.new(side * (width * 0.5 + 0.6), bodyBottom - 1.1 - stepIndex * 1.1, doorMid),
 					colour = C(68, 68, 70),
 					material = Enum.Material.DiamondPlate,
 					parent = model,
 				})
 			end
-			BuildKit.handrail(
-				originCF * CFrame.new(side * (width * 0.5 + 0.4), bodyBottom - 0.4, doorZ + 2.6),
-				4.0,
-				2.4,
-				livery.trim,
-				model
-			)
+			for _, edge in { doorFrom - 0.35, doorTo + 0.35 } do
+				BuildKit.detail({
+					name = "GrabRail",
+					size = Vector3.new(0.18, 4.2, 0.18),
+					cf = originCF * CFrame.new(side * (width * 0.5 + 0.18), bodyBottom + 2.6, edge),
+					colour = livery.trim,
+					material = Enum.Material.Metal,
+					parent = model,
+				})
+			end
 
 			BuildKit.rustStreaks(
 				originCF * CFrame.new(side * (width * 0.5 + 0.06), bodyCentreY, 0),
@@ -25541,7 +27264,6 @@ local function buildCarriage(
 				model
 			)
 		end
-
 		-- Roof with vents.
 		BuildKit.part({
 			name = "Roof",
@@ -25785,6 +27507,19 @@ end
 --------------------------------------------------------------------------
 
 --- Builds a complete train at the given CFrame, facing -Z.
+--- Overall length of a consist, front coupler to rear buffer, matching the
+--- layout build() produces.
+function TrainBuilder.lengthOf(trainId: string): number
+	local def = TrainRegistry.getOrStarter(trainId)
+	local length = def.build.locoLength + 4
+	for _, spec in def.build.carriages do
+		length += spec.length + 4
+	end
+	return length
+end
+
+--- Builds a train with its front coupler at originCF. The consist trails
+--- behind along originCF's +Z axis, so the train faces and drives along -Z.
 function TrainBuilder.build(
 	trainId: string,
 	liveryId: string?,
@@ -25797,6 +27532,7 @@ function TrainBuilder.build(
 	local livery = TrainRegistry.getLivery(liveryId or def.defaultLivery)
 	local interior = TrainRegistry.getInterior(interiorId)
 	local rng = Random.new(seed or 20217)
+	followers = {}
 
 	local model = BuildKit.model("Train_" .. def.id, nil)
 
@@ -25879,23 +27615,63 @@ function TrainBuilder.build(
 		supplyRack = rack
 	end
 
+	-- Doors swing about their hinge, and everything else in the door rides on it.
+	for _, door in allDoors do
+		articulate(door.hinge, door.hinge.CFrame)
+		for _, part in door.model:GetDescendants() do
+			if part:IsA("BasePart") and part ~= door.hinge then
+				followers[part] = door.hinge
+			end
+		end
+	end
+
 	-- Weld the whole assembly to the root, then anchor only the root. This is
-	-- what makes the train a single cheap rigid body.
+	-- what makes the train a single cheap rigid body. Articulated parts get a
+	-- Weld whose C0 can be animated; see the Articulation section above.
 	for _, descendant in model:GetDescendants() do
 		if descendant:IsA("BasePart") and descendant ~= root then
-			local weld = Instance.new("WeldConstraint")
-			weld.Part0 = root
-			weld.Part1 = descendant
-			weld.Parent = root
+			local leader = followers[descendant]
+			if leader then
+				local weld = Instance.new("WeldConstraint")
+				weld.Part0 = leader
+				weld.Part1 = descendant
+				weld.Parent = descendant
+			elseif descendant:HasTag("Articulated") then
+				local relative = descendant:GetAttribute("ArticulationPivot")
+				local rel: CFrame = if typeof(relative) == "CFrame" then relative else CFrame.identity
+				local pivotWorld = descendant.CFrame * rel:Inverse()
+				local joint = Instance.new("Weld")
+				joint.Name = "Articulation"
+				joint.Part0 = root
+				joint.Part1 = descendant
+				joint.C0 = root.CFrame:ToObjectSpace(pivotWorld)
+				joint.C1 = rel:Inverse()
+				joint:SetAttribute("BaseC0", joint.C0)
+				joint.Parent = descendant
+			else
+				local weld = Instance.new("WeldConstraint")
+				weld.Part0 = root
+				weld.Part1 = descendant
+				weld.Parent = root
+			end
 			descendant.Anchored = false
 		end
 	end
 	root.Anchored = true
+	followers = {}
+
+	local totalLength = cursor
+	local volumeSize = Vector3.new(def.build.locoWidth + 2, def.build.locoHeight + 6, totalLength)
+	local volumeOffset = CFrame.new(0, def.build.locoHeight * 0.5 + 2, totalLength * 0.5)
+	-- Read by TrainRideController to decide who is aboard.
+	model:SetAttribute("VolumeSize", volumeSize)
+	model:SetAttribute("VolumeOffset", volumeOffset)
+	-- A passenger must never see half a train: it streams in and out whole.
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 
 	model:AddTag("Train")
 	model.Parent = parent
 
-	local totalLength = cursor
 	return {
 		model = model,
 		root = root,
@@ -25912,8 +27688,8 @@ function TrainBuilder.build(
 		repairPoint = loco.repairPoint,
 		supplyRack = supplyRack :: BasePart,
 		radioSet = loco.radioSet,
-		volumeSize = Vector3.new(def.build.locoWidth + 2, def.build.locoHeight + 6, totalLength),
-		volumeOffset = CFrame.new(0, def.build.locoHeight * 0.5 + 2, totalLength * 0.5),
+		volumeSize = volumeSize,
+		volumeOffset = volumeOffset,
 		partCount = BuildKit.countParts(model),
 	}
 end
@@ -25925,12 +27701,12 @@ return TrainBuilder
       </Item>
     </Item>
   </Item>
-  <Item class="ServerStorage" referent="63">
+  <Item class="ServerStorage" referent="67">
     <Properties>
       <string name="Name">ServerStorage</string>
     </Properties>
   </Item>
-  <Item class="SoundService" referent="64">
+  <Item class="SoundService" referent="68">
     <Properties>
       <string name="Name">SoundService</string>
       <float name="DistanceFactor">8</float>
@@ -25939,14 +27715,14 @@ return TrainBuilder
       <float name="RolloffScale">1.25</float>
     </Properties>
   </Item>
-  <Item class="StarterGui" referent="65">
+  <Item class="StarterGui" referent="69">
     <Properties>
       <string name="Name">StarterGui</string>
       <bool name="ResetPlayerGuiOnSpawn">false</bool>
       <token name="ScreenOrientation">4</token>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="66">
+  <Item class="StarterPlayer" referent="70">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <bool name="AutoJumpEnabled">false</bool>
@@ -25958,16 +27734,16 @@ return TrainBuilder
       <bool name="EnableMouseLockOption">false</bool>
       <bool name="LoadCharacterAppearance">true</bool>
     </Properties>
-    <Item class="StarterCharacterScripts" referent="67">
+    <Item class="StarterCharacterScripts" referent="71">
       <Properties>
         <string name="Name">StarterCharacterScripts</string>
       </Properties>
     </Item>
-    <Item class="StarterPlayerScripts" referent="68">
+    <Item class="StarterPlayerScripts" referent="72">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="69">
+      <Item class="LocalScript" referent="73">
         <Properties>
           <string name="Name">LastSignalClient</string>
           <string name="Source"><![CDATA[--!strict
@@ -26097,14 +27873,17 @@ task.spawn(function()
 	local profile = StateController.profile()
 	local isNew = profile ~= nil and (profile.sessionCount or 1) <= 1
 
-	if isNew then
-		task.wait(2)
-		hint(
-			"welcome",
-			"Tolbridge Yard",
-			"The crew board is under the shelter. Form a crew, or depart alone: everything in the chapter can be done by one person."
-		)
-	end
+	-- Every session opens by saying where the train is, because that is the
+	-- one thing a player cannot be left to discover. New players get the
+	-- longer version.
+	task.wait(2)
+	hint(
+		"welcome",
+		"The 02:17 is at Platform 1",
+		if isNew
+			then "The train straight ahead is yours. Press E at the DEPART post on the platform to leave alone or with a crew, then walk aboard. Everything in the chapter can be done by one person."
+			else "Press E at the DEPART post on the platform, or at the crew board in the shelter, then walk aboard."
+	)
 
 	StateController.Changed:Connect(function(key, value)
 		if key ~= "expedition" or type(value) ~= "table" then
@@ -26136,11 +27915,11 @@ else
 end
 ]]></string>
         </Properties>
-        <Item class="Folder" referent="70">
+        <Item class="Folder" referent="74">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="71">
+          <Item class="ModuleScript" referent="75">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--!strict
@@ -26797,7 +28576,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="72">
+          <Item class="ModuleScript" referent="76">
             <Properties>
               <string name="Name">CabController</string>
               <string name="Source"><![CDATA[--!strict
@@ -26830,6 +28609,7 @@ return AudioController
 
 local ContextActionService = game:GetService("ContextActionService")
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("LastSignal")
 
@@ -26891,7 +28671,7 @@ local function build()
 	local insets = Theme.safeInsets()
 	local frame = Widgets.panel({
 		name = "Cab",
-		size = UDim2.fromOffset(Theme.space(72), Theme.space(19)),
+		size = UDim2.fromOffset(Theme.space(72), Theme.space(22)),
 		position = UDim2.new(0.5, 0, 1, -insets.bottom - Theme.space(1)),
 		anchor = Vector2.new(0.5, 1),
 		padding = 1.25,
@@ -26930,6 +28710,7 @@ local function build()
 
 	Widgets.button({
 		text = "Throttle -",
+		fit = true,
 		width = UDim.new(0.18, 0),
 		parent = driveRow,
 		onClick = function()
@@ -26953,6 +28734,7 @@ local function build()
 
 	Widgets.button({
 		text = "Throttle +",
+		fit = true,
 		width = UDim.new(0.18, 0),
 		primary = true,
 		parent = driveRow,
@@ -26977,6 +28759,7 @@ local function build()
 
 	Widgets.button({
 		text = "Brake",
+		fit = true,
 		width = UDim.new(0.16, 0),
 		parent = driveRow,
 		layoutOrder = 5,
@@ -26992,6 +28775,7 @@ local function build()
 
 	Widgets.button({
 		text = "EMERGENCY",
+		fit = true,
 		width = UDim.new(0.2, 0),
 		danger = true,
 		parent = driveRow,
@@ -27009,6 +28793,7 @@ local function build()
 		local button = Widgets.button({
 			text = label,
 			width = UDim.new(0.135, 0),
+			fit = true,
 			parent = auxRow,
 			layoutOrder = order,
 			onClick = onClick,
@@ -27043,6 +28828,38 @@ local function build()
 	end)
 	auxButton("start_engine", "Start", 7, function()
 		control("start_engine", true)
+	end)
+
+	-- The keyboard map, so every control is reachable without the cursor.
+	Widgets.label({
+		text = "W / S throttle   Space brake   X emergency   R reverser   T start   H horn   L lights   O doors   Hold Alt for the cursor",
+		size = "small",
+		colour = Theme.colour("textFaint"),
+		align = Enum.TextXAlignment.Center,
+		parent = column,
+		layoutOrder = 5,
+	})
+
+	-- Holding Alt frees the cursor for the buttons above. In first person the
+	-- camera locks the mouse to the centre of the screen; a visible Modal
+	-- button is how Roblox lets it go.
+	local cursorRelease = Instance.new("TextButton")
+	cursorRelease.Name = "CursorRelease"
+	cursorRelease.BackgroundTransparency = 1
+	cursorRelease.Text = ""
+	cursorRelease.Size = UDim2.fromOffset(0, 0)
+	cursorRelease.Modal = true
+	cursorRelease.Visible = false
+	cursorRelease.Parent = screen
+	UserInputService.InputBegan:Connect(function(input)
+		if input.KeyCode == Enum.KeyCode.LeftAlt or input.KeyCode == Enum.KeyCode.RightAlt then
+			cursorRelease.Visible = frame.Visible
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.KeyCode == Enum.KeyCode.LeftAlt or input.KeyCode == Enum.KeyCode.RightAlt then
+			cursorRelease.Visible = false
+		end
 	end)
 end
 
@@ -27104,6 +28921,8 @@ local function refresh()
 			hint = "Open the throttle to move off."
 		elseif state.doorsOpen then
 			hint = "Doors are open. She will not exceed walking pace."
+		elseif state.protectionBraking then
+			hint = "Train protection is braking for the station ahead."
 		end
 		hintLabel.Text = hint
 		hintLabel.Visible = hint ~= ""
@@ -27155,6 +28974,12 @@ local function handleKey(_actionName: string, inputState: Enum.UserInputState, i
 		control("headlights", true)
 	elseif key == Enum.KeyCode.O then
 		control("doors", true)
+	elseif key == Enum.KeyCode.R then
+		local state = trainState()
+		local direction = if state then state.direction or 0 else 0
+		control("reverser", if direction == 1 then 0 elseif direction == 0 then -1 else 1)
+	elseif key == Enum.KeyCode.T then
+		control("start_engine", true)
 	end
 	return Enum.ContextActionResult.Sink
 end
@@ -27170,7 +28995,9 @@ local function bindKeys()
 		Enum.KeyCode.X,
 		Enum.KeyCode.H,
 		Enum.KeyCode.L,
-		Enum.KeyCode.O
+		Enum.KeyCode.O,
+		Enum.KeyCode.R,
+		Enum.KeyCode.T
 	)
 end
 
@@ -27196,11 +29023,32 @@ local function leaveControls()
 	log.debug("left the controls")
 end
 
-local function takeControls()
+--- Turns the first-person view to look out of the windscreen. The camera
+--- otherwise keeps whatever heading it had when the player sat down, which
+--- usually meant staring at the cab wall.
+local function faceForward(seat: BasePart)
+	local camera = workspace.CurrentCamera
+	if not camera then
+		return
+	end
+	local look = seat.CFrame.LookVector
+	local flat = Vector3.new(look.X, 0, look.Z)
+	if flat.Magnitude < 1e-3 then
+		return
+	end
+	local position = camera.CFrame.Position
+	camera.CFrame = CFrame.lookAt(position, position + flat.Unit + Vector3.new(0, -0.08, 0))
+end
+
+local function takeControls(seat: BasePart?)
 	if seated then
 		return
 	end
 	seated = true
+	if seat then
+		-- After the character has settled into the seat.
+		task.delay(0.1, faceForward, seat)
+	end
 	local result = Net.invokeServer("TrainCommand", "claim_driver")
 	if type(result) == "table" and result.ok then
 		isDriver = true
@@ -27234,7 +29082,7 @@ local function watchHumanoid(character: Model)
 
 	seatConnection = humanoid.Seated:Connect(function(active, seat)
 		if active and seat and seat:HasTag("DriverSeat") then
-			takeControls()
+			takeControls(seat)
 		else
 			leaveControls()
 		end
@@ -27243,7 +29091,7 @@ local function watchHumanoid(character: Model)
 	-- Cover the case where the character is already seated when this runs,
 	-- such as after a respawn directly into the cab.
 	if humanoid.SeatPart and humanoid.SeatPart:HasTag("DriverSeat") then
-		takeControls()
+		takeControls(humanoid.SeatPart)
 	end
 end
 
@@ -27285,7 +29133,7 @@ return CabController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="73">
+          <Item class="ModuleScript" referent="77">
             <Properties>
               <string name="Name">CameraController</string>
               <string name="Source"><![CDATA[--!strict
@@ -27327,6 +29175,7 @@ local Shared = ReplicatedStorage:WaitForChild("LastSignal")
 
 local Logger = require(Shared.Core.Logger)
 local Spring = require(Shared.Core.Spring)
+local Theme = require(script.Parent.Parent.UI.Theme)
 local StateController = require(script.Parent.StateController)
 
 local log = Logger.new("CameraController")
@@ -27510,68 +29359,117 @@ end
 -- Cinematic
 --------------------------------------------------------------------------
 
--- The opening sequence, as keyframes relative to the train. Each frame is a
--- position offset, a look-at offset, and the time it is reached. Defining it
--- as data means the sequence can be re-timed without touching any logic.
-local CINEMATIC_KEYFRAMES = {
-	-- Rain on the yard, looking along the train from outside.
-	{ t = 0.0, from = Vector3.new(38, 14, 62), to = Vector3.new(0, 8, 20) },
-	{ t = 7.0, from = Vector3.new(22, 10, 36), to = Vector3.new(0, 7, 4) },
-	-- Down the platform towards the cab, under the lamps.
-	{ t = 14.0, from = Vector3.new(16, 7, 6), to = Vector3.new(0, 6, -22) },
-	{ t = 20.0, from = Vector3.new(11, 6, -14), to = Vector3.new(-2, 6, -34) },
-	-- Boarding: through the door, into the carriage.
-	{ t = 25.0, from = Vector3.new(7, 5.5, 24), to = Vector3.new(0, 5.5, 8) },
-	{ t = 30.0, from = Vector3.new(0, 6, 30), to = Vector3.new(0, 6, 10) },
-	-- The treeline, and something in it.
-	{ t = 33.0, from = Vector3.new(-2, 7, 26), to = Vector3.new(-60, 10, 10) },
-	{ t = 38.0, from = Vector3.new(0, 6, 20), to = Vector3.new(0, 6, 2) },
+-- The opening sequence films the real departure: the yard train pulling
+-- out of Platform 1 and into the tunnel. It is a list of shots with hard cuts
+-- between them. Each shot eases from a start framing to an end framing, in
+-- one of two spaces:
+--
+--   world   relative to where the train stood when the sequence began, so
+--           the camera holds still and the train moves through the frame
+--   train   relative to the moving train, so the camera travels with it
+--
+-- Offsets are in the train's own frame: -Z is ahead, +X is the platform side.
+type Shot = {
+	t0: number,
+	t1: number,
+	space: "world" | "train",
+	fromA: Vector3,
+	lookA: Vector3,
+	fromB: Vector3,
+	lookB: Vector3,
+}
+
+local SHOTS: { Shot } = {
+	-- Low on the platform ahead of the train as it begins to move.
+	{
+		t0 = 0,
+		t1 = 6,
+		space = "world",
+		fromA = Vector3.new(16, 6, -60),
+		lookA = Vector3.new(0, 7, 10),
+		fromB = Vector3.new(16, 6.5, -57),
+		lookB = Vector3.new(0, 7, 2),
+	},
+	-- Running alongside the cab.
+	{
+		t0 = 6,
+		t1 = 11,
+		space = "train",
+		fromA = Vector3.new(15, 8, 6),
+		lookA = Vector3.new(0, 7, -25),
+		fromB = Vector3.new(15, 8, -6),
+		lookB = Vector3.new(0, 7, -36),
+	},
+	-- High and ahead, looking back down the length of the train.
+	{
+		t0 = 11,
+		t1 = 16,
+		space = "train",
+		fromA = Vector3.new(8, 24, -50),
+		lookA = Vector3.new(0, 6, 50),
+		fromB = Vector3.new(-8, 22, -46),
+		lookB = Vector3.new(0, 6, 60),
+	},
+	-- Beside the tunnel mouth as the train runs into the dark.
+	{
+		t0 = 16,
+		t1 = 30,
+		space = "world",
+		fromA = Vector3.new(24, 16, -230),
+		lookA = Vector3.new(0, 6, -150),
+		fromB = Vector3.new(22, 15, -236),
+		lookB = Vector3.new(0, 5, -205),
+	},
 }
 
 local cinematicAnchor: CFrame? = nil
+local cinematicModel: Model? = nil
 
-function CameraController.startCinematic(duration: number, anchor: CFrame?)
+function CameraController.startCinematic(duration: number, anchor: CFrame?, model: Model?)
 	cinematicStartedAt = os.clock()
 	cinematicDuration = duration
 	cinematicAnchor = anchor
+	cinematicModel = model
 	CameraController.setMode("cinematic")
 end
 
 function CameraController.stopCinematic()
 	cinematicStartedAt = 0
 	cinematicAnchor = nil
+	cinematicModel = nil
 	CameraController.restore()
 end
 
 local function cinematicCFrame(elapsed: number): CFrame
-	local anchor = cinematicAnchor or CFrame.new()
-	local frames = CINEMATIC_KEYFRAMES
-
-	-- Find the pair of keyframes surrounding the current time.
-	local previous = frames[1]
-	local nextFrame = frames[#frames]
-	for index = 1, #frames - 1 do
-		if elapsed >= frames[index].t and elapsed <= frames[index + 1].t then
-			previous = frames[index]
-			nextFrame = frames[index + 1]
+	local start = cinematicAnchor or CFrame.new()
+	local shot = SHOTS[#SHOTS]
+	for _, candidate in SHOTS do
+		if elapsed < candidate.t1 then
+			shot = candidate
 			break
 		end
 	end
 
-	local span = math.max(0.001, nextFrame.t - previous.t)
-	local alpha = math.clamp((elapsed - previous.t) / span, 0, 1)
-	-- Smoothstep, so each move eases rather than starting and stopping hard.
-	alpha = alpha * alpha * (3 - 2 * alpha)
+	local anchor = start
+	if shot.space == "train" then
+		local model = cinematicModel
+		local root = if model then model.PrimaryPart else nil
+		if root and root.Parent then
+			anchor = root.CFrame
+		end
+	end
 
-	local from = previous.from:Lerp(nextFrame.from, alpha)
-	local to = previous.to:Lerp(nextFrame.to, alpha)
-
-	local worldFrom = anchor:PointToWorldSpace(from)
-	local worldTo = anchor:PointToWorldSpace(to)
-
-	-- A slow drift, so even a held shot is not locked off.
-	local drift = Vector3.new(math.sin(elapsed * 0.4) * 0.5, math.cos(elapsed * 0.31) * 0.3, 0)
-	return CFrame.lookAt(worldFrom + drift, worldTo)
+	local alpha = math.clamp((elapsed - shot.t0) / math.max(0.001, shot.t1 - shot.t0), 0, 1)
+	if Theme.motionReduced() then
+		-- Reduced motion: each shot is a held frame, cut to cut.
+		alpha = 0
+	else
+		-- Smoothstep, so each move eases rather than starting and stopping hard.
+		alpha = alpha * alpha * (3 - 2 * alpha)
+	end
+	local from = anchor:PointToWorldSpace(shot.fromA:Lerp(shot.fromB, alpha))
+	local look = anchor:PointToWorldSpace(shot.lookA:Lerp(shot.lookB, alpha))
+	return CFrame.lookAt(from, look)
 end
 
 --------------------------------------------------------------------------
@@ -27740,7 +29638,7 @@ return CameraController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="74">
+          <Item class="ModuleScript" referent="78">
             <Properties>
               <string name="Name">CinematicController</string>
               <string name="Source"><![CDATA[--!strict
@@ -27900,21 +29798,20 @@ end
 
 type Beat = { at: number, title: string?, subtitle: string?, fade: number? }
 
--- The text of the sequence. Timings match the camera keyframes in
--- CameraController, so the words land on the right shots.
+-- The text of the sequence. Timings match the shots in CameraController, so
+-- the words land on the right shots. There is no closing fade here: the
+-- train running into the tunnel is the fade, sent by the server as a
+-- ScreenFade when it is actually inside.
 local BEATS: { Beat } = {
 	{ at = 0.0, fade = 0 },
-	{ at = 1.0, title = "LAST SIGNAL", subtitle = "A RIPGAMES production", fade = 1 },
-	{ at = 6.0, title = "", subtitle = "" },
-	{ at = 7.5, subtitle = "02:17. The last evacuation train out of Tolbridge Yard." },
-	{ at = 13.0, subtitle = "" },
-	{ at = 14.5, subtitle = "Regional communications failed eleven days ago." },
-	{ at = 20.0, subtitle = "" },
-	{ at = 21.5, subtitle = "The line runs ninety kilometres north, through the forest." },
-	{ at = 27.0, subtitle = "" },
-	{ at = 29.0, subtitle = "Keep her moving. Stay together." },
-	{ at = 33.0, subtitle = "Do not trust every voice on the radio." },
-	{ at = 37.0, subtitle = "", fade = 0 },
+	{ at = 0.6, title = "LAST SIGNAL", subtitle = "A RIPGAMES production", fade = 1 },
+	{ at = 5.0, title = "", subtitle = "" },
+	{ at = 6.5, subtitle = "02:17. The last evacuation train out of Tolbridge Yard." },
+	{ at = 11.0, subtitle = "" },
+	{ at = 12.0, subtitle = "Regional communications failed eleven days ago." },
+	{ at = 16.0, subtitle = "" },
+	{ at = 17.0, subtitle = "Ninety kilometres of line. Five stops. Do not trust every voice on the radio." },
+	{ at = 22.0, subtitle = "" },
 }
 
 local function applyBeat(beat: Beat)
@@ -27984,7 +29881,7 @@ local function finish()
 	log.info("cinematic finished; control restored")
 end
 
-local function begin(duration: number, skippableAfter: number, anchor: CFrame?)
+local function begin(duration: number, skippableAfter: number, anchor: CFrame?, model: Model?)
 	if running then
 		return
 	end
@@ -28003,13 +29900,9 @@ local function begin(duration: number, skippableAfter: number, anchor: CFrame?)
 	end
 	setLetterbox(true)
 
-	-- Reduced motion swaps the moving camera for held frames. The camera
-	-- controller is still driven, just not interpolated between shots.
-	if not Theme.motionReduced() then
-		CameraController.startCinematic(duration, anchor)
-	else
-		CameraController.startCinematic(duration, anchor)
-	end
+	-- Reduced motion swaps the moving camera for held frames; the camera
+	-- controller handles that itself.
+	CameraController.startCinematic(duration, anchor, model)
 
 	AudioController.loop("cinematic_music", "music_departure")
 
@@ -28045,15 +29938,73 @@ end
 
 --------------------------------------------------------------------------
 
+--------------------------------------------------------------------------
+-- Screen fade
+--------------------------------------------------------------------------
+
+-- A fade that is independent of the cinematic, for the tunnel crossing. It
+-- sits above everything and is used whether or not the sequence was skipped.
+local screenFade: Frame? = nil
+local fadeToken = 0
+
+local function buildScreenFade()
+	local playerGui = player:WaitForChild("PlayerGui")
+	local screen = Instance.new("ScreenGui")
+	screen.Name = "LastSignalFade"
+	screen.IgnoreGuiInset = true
+	screen.ResetOnSpawn = false
+	screen.DisplayOrder = 10000
+	screen.Parent = playerGui
+	local frame = Instance.new("Frame")
+	frame.Name = "Fade"
+	frame.BorderSizePixel = 0
+	frame.BackgroundColor3 = Color3.new(0, 0, 0)
+	frame.BackgroundTransparency = 1
+	frame.Size = UDim2.fromScale(1, 1)
+	frame.Parent = screen
+	screenFade = frame
+end
+
+local function fadeScreen(action: string, seconds: number)
+	local frame = screenFade
+	if not frame then
+		return
+	end
+	fadeToken += 1
+	local token = fadeToken
+	TweenService:Create(frame, TweenInfo.new(seconds, Enum.EasingStyle.Sine), {
+		BackgroundTransparency = if action == "out" then 0 else 1,
+	}):Play()
+	if action == "out" then
+		-- Never left black: if the matching fade-in is lost, clear anyway.
+		task.delay(6, function()
+			if fadeToken == token then
+				fadeScreen("in", 1)
+			end
+		end)
+	end
+end
+
 function CinematicController.start()
 	build()
+	buildScreenFade()
+
+	Net.onClientEvent("ScreenFade", function(payload)
+		if type(payload) ~= "table" then
+			return
+		end
+		local seconds = if type(payload.seconds) == "number" then math.clamp(payload.seconds, 0, 5) else 0.6
+		fadeScreen(if payload.action == "out" then "out" else "in", seconds)
+	end)
 
 	Net.onClientEvent("Cinematic", function(payload)
 		if type(payload) ~= "table" then
 			return
 		end
 		if payload.action == "play" then
-			begin(payload.duration or GameConfig.CinematicSeconds, payload.skippableAfter or 2, payload.trainCFrame)
+			local model = if typeof(payload.trainModel) == "Instance" and payload.trainModel:IsA("Model") then payload.trainModel else nil
+			local anchor = if typeof(payload.trainCFrame) == "CFrame" then payload.trainCFrame else nil
+			begin(payload.duration or GameConfig.CinematicSeconds, payload.skippableAfter or 2, anchor, model)
 		elseif payload.action == "stop" then
 			finish()
 		elseif payload.action == "skipvote" and skipLabel and running then
@@ -28105,7 +30056,7 @@ return CinematicController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="75">
+          <Item class="ModuleScript" referent="79">
             <Properties>
               <string name="Name">HUDController</string>
               <string name="Source"><![CDATA[--!strict
@@ -28843,6 +30794,62 @@ local function refreshDowned()
 	end
 end
 
+-- Boarding status for the 02:17, pushed by the server about twice a second
+-- while the crew walks aboard.
+local boarding: { [string]: any }? = nil
+local boardMarker: BillboardGui? = nil
+
+local function clearBoardMarker()
+	if boardMarker then
+		boardMarker:Destroy()
+		boardMarker = nil
+	end
+end
+
+--- A marker over the nearest carriage door, shown only to a crew member who
+--- is not yet aboard, so the train is findable from anywhere in the yard.
+local function showBoardMarker(target: Instance?)
+	if boardMarker and boardMarker.Parent then
+		return
+	end
+	if not target then
+		return
+	end
+	local door = target:FindFirstChild("CarriageDoor", true)
+	local anchor = if door then door:FindFirstChild("Leaf") else nil
+	if not anchor then
+		anchor = target:FindFirstChildWhichIsA("BasePart", true)
+	end
+	if not anchor or not anchor:IsA("BasePart") then
+		return
+	end
+	local marker = Instance.new("BillboardGui")
+	marker.Name = "BoardMarker"
+	marker.AlwaysOnTop = true
+	marker.Size = UDim2.fromOffset(150, 46)
+	marker.StudsOffset = Vector3.new(0, 6, 0)
+	marker.Adornee = anchor
+	marker.LightInfluence = 0
+	local label = Instance.new("TextLabel")
+	label.BackgroundColor3 = Theme.colour("backdrop")
+	label.BackgroundTransparency = 0.2
+	label.Size = UDim2.fromScale(1, 1)
+	label.Text = "BOARD HERE"
+	label.FontFace = Theme.Font.heading
+	label.TextColor3 = Theme.colour("brass")
+	label.TextScaled = true
+	label.Parent = marker
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 6)
+	corner.Parent = label
+	local pad = Instance.new("UIPadding")
+	pad.PaddingTop = UDim.new(0, 8)
+	pad.PaddingBottom = UDim.new(0, 8)
+	pad.Parent = label
+	marker.Parent = player:WaitForChild("PlayerGui")
+	boardMarker = marker
+end
+
 local function refreshDeparture()
 	local panel = departurePanel
 	if not panel then
@@ -28851,6 +30858,37 @@ local function refreshDeparture()
 
 	local expedition = StateController.get("expedition")
 	local crew = StateController.get("crew")
+
+	-- Boarding: the crew is walking onto the train at Platform 1.
+	local status = boarding
+	if expedition and expedition.state == "boarding" and status and status.state == "boarding" then
+		panel.Visible = true
+		local missing = if type(status.missing) == "table" then status.missing else {}
+		local remaining = tonumber(status.remaining) or 0
+		local meAboard = not table.find(missing, player.DisplayName)
+		if departureTitle then
+			departureTitle.Text = if meAboard then "Aboard the 02:17" else "Board the 02:17 at Platform 1"
+		end
+		if departureDetail then
+			if #missing == 0 then
+				departureDetail.Text = "Everyone is aboard. Doors closing."
+			elseif meAboard then
+				departureDetail.Text = "Waiting for " .. table.concat(missing, ", ")
+			else
+				departureDetail.Text = "Walk up the ramp and through an open door. The train leaves when the crew is aboard."
+			end
+		end
+		if departureMeter then
+			departureMeter.set(math.clamp(remaining / 60, 0, 1))
+		end
+		if meAboard then
+			clearBoardMarker()
+		else
+			showBoardMarker(status.target)
+		end
+		return
+	end
+	clearBoardMarker()
 
 	-- The lane is being built. This is the long one, so it gets the bar.
 	if expedition and expedition.state == "preparing" then
@@ -28875,7 +30913,7 @@ local function refreshDeparture()
 			departureTitle.Text = string.format("Departing in %d", math.ceil(remaining))
 		end
 		if departureDetail then
-			departureDetail.Text = "Board the train. The leader can still cancel."
+			departureDetail.Text = "The 02:17 is waiting at Platform 1. The leader can still cancel."
 		end
 		if departureMeter then
 			departureMeter.set(1 - math.clamp(remaining / 10, 0, 1))
@@ -28952,6 +30990,11 @@ function HUDController.start()
 	local playerGui = player:WaitForChild("PlayerGui")
 	local screen = Widgets.screen("LastSignalHUD", Theme.Layer.hud, playerGui)
 	gui = screen
+
+	Net.onClientEvent("Boarding", function(payload)
+		boarding = if type(payload) == "table" then payload else nil
+		refreshDeparture()
+	end)
 
 	local frame = Instance.new("Frame")
 	frame.Name = "Root"
@@ -29055,7 +31098,7 @@ return HUDController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="76">
+          <Item class="ModuleScript" referent="80">
             <Properties>
               <string name="Name">InputController</string>
               <string name="Source"><![CDATA[--!strict
@@ -29421,7 +31464,7 @@ return InputController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="77">
+          <Item class="ModuleScript" referent="81">
             <Properties>
               <string name="Name">InteractionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -29775,6 +31818,16 @@ end
 
 --------------------------------------------------------------------------
 
+-- A tall fixture hosts its prompt on an eye-level Attachment (see
+-- InteractionService); the interactable is the part that carries it.
+local function promptTarget(prompt: ProximityPrompt): Instance?
+	local parent = prompt.Parent
+	if parent and parent:IsA("Attachment") then
+		return parent.Parent
+	end
+	return parent
+end
+
 function InteractionController.start()
 	build()
 
@@ -29784,7 +31837,7 @@ function InteractionController.start()
 			return
 		end
 		activePrompt = prompt
-		local parent = prompt.Parent
+		local parent = promptTarget(prompt)
 		if not parent then
 			return
 		end
@@ -29813,7 +31866,7 @@ function InteractionController.start()
 		if triggeringPlayer ~= player then
 			return
 		end
-		local parent = prompt.Parent
+		local parent = promptTarget(prompt)
 		if not parent then
 			return
 		end
@@ -29977,7 +32030,7 @@ return InteractionController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="78">
+          <Item class="ModuleScript" referent="82">
             <Properties>
               <string name="Name">MenuController</string>
               <string name="Source"><![CDATA[--!strict
@@ -31603,7 +33656,7 @@ return MenuController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="79">
+          <Item class="ModuleScript" referent="83">
             <Properties>
               <string name="Name">StateController</string>
               <string name="Source"><![CDATA[--!strict
@@ -31858,96 +33911,137 @@ return StateController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="80">
+          <Item class="ModuleScript" referent="84">
             <Properties>
               <string name="Name">TrainRideController</string>
               <string name="Source"><![CDATA[--!strict
 --[[
 	TrainRideController
 	-------------------
-	Keeps the player with the train while the train moves.
+	Renders moving trains smoothly and keeps the player with the train they
+	are riding.
 
 	THE PROBLEM
 	-----------
 	The train is an anchored rigid assembly moved by CFrame on the server (see
-	TrainService for why). An anchored part imparts no velocity to what stands
-	on it, so without this controller a player standing in a moving carriage
-	would simply be left behind as the carriage slid out from under them.
+	TrainService for why). Two things follow from that:
 
-	Every other approach was worse. Welding players to the floor removes their
-	ability to walk. Unanchored physics rolling stock jitters and stretches with
-	six players aboard. Moving the world around a stationary train breaks
-	streaming and every position the server holds.
+	  - An anchored part imparts no velocity to what stands on it, so a player
+	    standing in a moving carriage would be left behind.
+	  - The server moves the train at its tick rate, and replicated CFrame
+	    changes on anchored parts are not interpolated. Drawn as received, the
+	    train visibly steps, and a passenger carried by those steps stutters.
 
 	THE SOLUTION
 	------------
-	The client owns its own character's physics, so the client is the correct
-	place to do this. Each frame, this controller computes how far the train
-	moved since the last frame and applies exactly that delta to the character's
-	root. The player's own walking is unaffected, because it happens in the same
-	frame on top of the delta. The result is smooth at any framerate and on any
-	connection, because nothing is being predicted or corrected.
+	The server publishes, as attributes on the train model, where the line
+	starts (OriginCFrame), how far along it the train is (Distance), how fast
+	it is moving (Velocity) and when that sample was taken (SampleTime). Every
+	frame, before the camera updates, this controller extrapolates the
+	distance from that sample, blends out any prediction error over a few
+	frames, and places the train locally. Each client therefore draws a train
+	that moves continuously, whatever the network rate.
+
+	A player riding the train is moved by exactly the change in the train's
+	rendered pose since the previous frame. The client owns its character's
+	physics, so the player's own walking happens on top of that delta and the
+	result has no lag, no jitter and no sliding.
 
 	CORRECTNESS DETAILS THAT MATTER
 	-------------------------------
-	  - The delta is applied only while the character is inside the train's
-	    volume, tested in the train's local space so it works at any position.
-	  - Entering and leaving are hysteretic: the volume used to leave is
-	    slightly larger than the one used to enter, so standing exactly on the
-	    boundary does not flicker.
+	  - "Aboard" is tested against the volume the train was built with
+	    (VolumeSize and VolumeOffset attributes), in the train's local space.
+	  - Entering and leaving are hysteretic, so standing in a doorway does not
+	    flicker.
 	  - Vertical velocity is preserved, so jumping inside a moving carriage
 	    works and lands correctly.
-	  - Nothing is applied while the character is falling outside the train,
-	    so jumping off a moving train genuinely leaves you behind, which is
-	    both correct and a real hazard the game uses.
+	  - A player falling clear of the train is not carried, so jumping off a
+	    moving train genuinely leaves you behind.
+	  - The pose is reasserted in Stepped, before physics, in case replication
+	    wrote the server's pose in between.
 ]]
 
+local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("LastSignal")
 
 local Logger = require(Shared.Core.Logger)
-local StateController = require(script.Parent.StateController)
+local Net = require(Shared.Core.Net)
 
 local log = Logger.new("TrainRideController")
 local player = Players.LocalPlayer
 
 local TrainRideController = {}
 
-local lastTrainCF: CFrame? = nil
-local aboard = false
-local trainModel: Model? = nil
+type Tracked = {
+	rendered: number, -- distance currently drawn
+	lastPose: CFrame?,
+}
 
---- Finds the train model in the workspace. Cached, and re-resolved whenever
---- the expedition changes, because a new run builds a new train.
-local function resolveTrain(): Model?
-	if trainModel and trainModel.Parent then
-		return trainModel
-	end
-	for _, instance in game:GetService("CollectionService"):GetTagged("Train") do
-		if instance:IsA("Model") and instance.Parent then
-			trainModel = instance
-			return instance
-		end
+local tracked: { [Model]: Tracked } = {}
+local riding: Model? = nil
+
+-- How quickly a prediction error is blended out, per second. High enough
+-- that a stop lands where the server says, low enough to hide a late packet.
+local CORRECTION_RATE = 6
+-- Errors beyond this are a teleport (a new run, a reset), not drift.
+local SNAP_DISTANCE = 40
+
+--------------------------------------------------------------------------
+
+local function attribute<T>(model: Model, name: string, kind: string): T?
+	local value = model:GetAttribute(name)
+	if typeof(value) == kind then
+		return value :: any
 	end
 	return nil
 end
 
---- The train's volume, from the state the server replicates plus the model's
---- own bounding box as a fallback.
-local function trainVolume(model: Model): (CFrame, Vector3)
-	local root = model:FindFirstChild("TrainRoot")
-	local cf = if root and root:IsA("BasePart") then root.CFrame else model:GetPivot()
-	local _, size = model:GetBoundingBox()
-	-- The volume is the model's box, raised so it covers the interior rather
-	-- than the bogies, and shortened slightly so standing on the buffers does
-	-- not count as being aboard.
-	return cf * CFrame.new(0, size.Y * 0.4, -size.Z * 0.5), Vector3.new(size.X + 2, size.Y, size.Z)
+--- The distance the server's latest sample says the train is at now.
+local function predictedDistance(model: Model): number?
+	local distance = attribute(model, "Distance", "number") :: number?
+	if not distance then
+		return nil
+	end
+	local velocity = (attribute(model, "Velocity", "number") :: number?) or 0
+	local sampleTime = (attribute(model, "SampleTime", "number") :: number?) or Workspace:GetServerTimeNow()
+	local age = math.clamp(Workspace:GetServerTimeNow() - sampleTime, 0, 0.5)
+	local predicted = distance + velocity * age
+	-- Never extrapolate through a stop point: the server will not pass it.
+	local stop = attribute(model, "StopDistance", "number") :: number?
+	if stop and velocity > 0 and predicted > stop then
+		predicted = stop
+	end
+	return math.max(predicted, 0)
 end
 
-local function isInside(point: Vector3, volumeCF: CFrame, half: Vector3, margin: number): boolean
-	local localPoint = volumeCF:PointToObjectSpace(point)
+local function poseFor(model: Model, distance: number): CFrame?
+	local origin = attribute(model, "OriginCFrame", "CFrame") :: CFrame?
+	if not origin then
+		return nil
+	end
+	return origin * CFrame.new(0, 0, -distance)
+end
+
+local function rootOf(model: Model): BasePart?
+	local root = model.PrimaryPart
+	if root and root.Parent then
+		return root
+	end
+	return nil
+end
+
+local function isInside(model: Model, pose: CFrame, point: Vector3, margin: number): boolean
+	local size = attribute(model, "VolumeSize", "Vector3") :: Vector3?
+	local offset = attribute(model, "VolumeOffset", "CFrame") :: CFrame?
+	if not size or not offset then
+		return false
+	end
+	local localPoint = (pose * offset):PointToObjectSpace(point)
+	local half = size * 0.5
 	return math.abs(localPoint.X) <= half.X + margin
 		and math.abs(localPoint.Y) <= half.Y + margin
 		and math.abs(localPoint.Z) <= half.Z + margin
@@ -31955,115 +34049,219 @@ end
 
 --------------------------------------------------------------------------
 
-local function onStepped()
-	local trainState = StateController.get("train")
-	if not trainState then
-		lastTrainCF = nil
-		aboard = false
-		return
+--- Advances one train's rendered distance and returns its pose this frame
+--- and the pose it had last frame.
+local function advance(model: Model, state: Tracked, dt: number): (CFrame?, CFrame?)
+	local target = predictedDistance(model)
+	if not target then
+		return nil, nil
 	end
-
-	local model = resolveTrain()
-	if not model then
-		lastTrainCF = nil
-		return
+	local velocity = (attribute(model, "Velocity", "number") :: number?) or 0
+	local rendered = state.rendered + velocity * dt
+	local err = target - rendered
+	if math.abs(err) > SNAP_DISTANCE then
+		rendered = target
+	else
+		rendered += err * math.min(1, CORRECTION_RATE * dt)
 	end
+	state.rendered = rendered
+	local pose = poseFor(model, rendered)
+	local previous = state.lastPose
+	state.lastPose = pose
+	return pose, previous
+end
 
-	local rootPart = model:FindFirstChild("TrainRoot")
-	if not rootPart or not rootPart:IsA("BasePart") then
-		return
-	end
-	local currentCF = rootPart.CFrame
-
-	local previous = lastTrainCF
-	lastTrainCF = currentCF
-	if not previous then
-		return
-	end
-
+local function carryCharacter(model: Model, pose: CFrame, previous: CFrame)
 	local character = player.Character
 	local root = if character then character:FindFirstChild("HumanoidRootPart") else nil
 	local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
 	if not root or not root:IsA("BasePart") or not humanoid or humanoid.Health <= 0 then
-		aboard = false
+		if riding == model then
+			riding = nil
+		end
 		return
 	end
 
-	local volumeCF, size = trainVolume(model)
-	local half = size * 0.5
-
-	-- Hysteresis: a larger margin to stay aboard than to get aboard, so the
-	-- boundary does not flicker when standing in a doorway.
-	local margin = if aboard then 4 else 0
-	local inside = isInside(root.Position, volumeCF, half, margin)
-
-	if inside and not aboard then
-		aboard = true
-	elseif not inside and aboard then
-		aboard = false
+	-- Hysteresis: a larger margin to stay aboard than to get aboard.
+	local wasAboard = riding == model
+	local inside = isInside(model, previous, root.Position, if wasAboard then 3 else 0)
+	if inside and not wasAboard then
+		riding = model
+	elseif not inside and wasAboard then
+		riding = nil
 	end
-
-	if not aboard then
+	if riding ~= model then
 		return
 	end
 
-	-- Falling clear of the train is not riding it. Without this check, jumping
-	-- out of a door would carry the player along with the train in mid-air.
+	-- A seated passenger is welded to a seat on the train and already moves
+	-- with it; carrying them as well would move them twice.
+	local seat = humanoid.SeatPart
+	if seat and seat:IsDescendantOf(model) then
+		return
+	end
+
+	-- Falling clear of the train is not riding it.
 	if humanoid.FloorMaterial == Enum.Material.Air and root.AssemblyLinearVelocity.Y < -8 then
-		local groundedInside = isInside(root.Position - Vector3.new(0, 6, 0), volumeCF, half, 0)
-		if not groundedInside then
-			aboard = false
+		if not isInside(model, previous, root.Position - Vector3.new(0, 6, 0), 0) then
+			riding = nil
 			return
 		end
 	end
 
-	-- The delta. Applying the full transform rather than just the translation
-	-- means a train that turned would carry the player's facing with it; the
-	-- line is straight in this chapter, but the maths is correct either way.
-	local delta = currentCF * previous:Inverse()
-	local moved = delta.Position
-	if moved.Magnitude < 1e-5 then
+	local delta = pose * previous:Inverse()
+	if delta.Position.Magnitude < 1e-5 then
 		return
 	end
-
-	-- Preserve the player's own velocity. Setting CFrame alone would otherwise
-	-- fight the physics solver and make jumps feel wrong.
 	local velocity = root.AssemblyLinearVelocity
 	root.CFrame = delta * root.CFrame
 	root.AssemblyLinearVelocity = velocity
 end
 
+local function onRender(dt: number)
+	for model, state in tracked do
+		if not model.Parent then
+			tracked[model] = nil
+			continue
+		end
+		local root = rootOf(model)
+		local pose, previous = advance(model, state, dt)
+		if not root or not pose then
+			continue
+		end
+		root.CFrame = pose
+		if previous then
+			carryCharacter(model, pose, previous)
+		end
+	end
+end
+
+-- Physics runs after rendering. Replication may have written the server's
+-- pose in between, so the rendered pose is reasserted before the solver
+-- sees the floor the character is standing on.
+local function onStepped()
+	for model, state in tracked do
+		local root = rootOf(model)
+		if root and state.lastPose then
+			root.CFrame = state.lastPose
+		end
+	end
+end
+
+local function track(instance: Instance)
+	if not instance:IsA("Model") or tracked[instance] then
+		return
+	end
+	tracked[instance] = { rendered = predictedDistance(instance) or 0, lastPose = nil }
+end
+
 --------------------------------------------------------------------------
 
 function TrainRideController.isAboard(): boolean
-	return aboard
+	return riding ~= nil
+end
+
+--- The train the local player is riding, if any.
+function TrainRideController.ridingModel(): Model?
+	return riding
+end
+
+--- The tunnel crossing. The server names where on the expedition train this
+--- player should stand; the client, which owns its character, moves there,
+--- and holds the character still until the train it is standing in has
+--- streamed in, so nobody falls through a floor that has not arrived yet.
+type Crossing = {
+	relative: CFrame,
+	model: Model?,
+	origin: CFrame,
+	distance: number,
+	velocity: number,
+	sampleTime: number,
+}
+
+local function crossToLine(crossing: Crossing)
+	local character = player.Character
+	local root = if character then character:FindFirstChild("HumanoidRootPart") else nil
+	local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
+	if not root or not root:IsA("BasePart") or not humanoid then
+		return
+	end
+	humanoid.Sit = false
+	riding = nil
+
+	-- Where the train is now: from the model once it has streamed in, and
+	-- until then from the motion sample the server sent with the crossing.
+	-- The train is rolling, so the character is held to the moving train,
+	-- not to a fixed point it would be left behind at.
+	local function trainPose(): (CFrame, boolean)
+		local model = crossing.model
+		if model and model.Parent and model.PrimaryPart then
+			return model.PrimaryPart.CFrame, true
+		end
+		local age = Workspace:GetServerTimeNow() - crossing.sampleTime
+		return crossing.origin * CFrame.new(0, 0, -(crossing.distance + crossing.velocity * age)), false
+	end
+
+	root.Anchored = true
+	local deadline = os.clock() + 5
+	repeat
+		local pose, streamed = trainPose()
+		root.CFrame = pose * crossing.relative
+		root.AssemblyLinearVelocity = Vector3.zero
+		if streamed then
+			break
+		end
+		RunService.Heartbeat:Wait()
+	until os.clock() > deadline
+	root.Anchored = false
+	local pose = trainPose()
+	root.CFrame = pose * crossing.relative
+	root.AssemblyLinearVelocity = Vector3.zero
 end
 
 function TrainRideController.start()
-	-- Stepped rather than RenderStepped: it runs before physics, so the
-	-- character is moved and then simulated in the same frame, which is what
-	-- removes the visible lag between the carriage and the player.
-	RunService.Stepped:Connect(onStepped)
-
-	StateController.Changed:Connect(function(key, value)
-		if key ~= "expedition" then
+	Net.onClientEvent("CrossToLine", function(payload)
+		if
+			type(payload) ~= "table"
+			or typeof(payload.relative) ~= "CFrame"
+			or typeof(payload.origin) ~= "CFrame"
+			or type(payload.distance) ~= "number"
+			or type(payload.velocity) ~= "number"
+			or type(payload.sampleTime) ~= "number"
+		then
 			return
 		end
-		-- A new expedition means a new train; drop the cached references so
-		-- the next frame resolves the new one.
-		trainModel = nil
-		lastTrainCF = nil
-		aboard = false
-		if type(value) == "table" and value.state == "lobby" then
-			log.debug("left the expedition; ride tracking cleared")
+		crossToLine({
+			relative = payload.relative,
+			model = if typeof(payload.model) == "Instance" and payload.model:IsA("Model") then payload.model else nil,
+			origin = payload.origin,
+			distance = payload.distance,
+			velocity = payload.velocity,
+			sampleTime = payload.sampleTime,
+		})
+	end)
+
+	for _, instance in CollectionService:GetTagged("Train") do
+		track(instance)
+	end
+	CollectionService:GetInstanceAddedSignal("Train"):Connect(track)
+	CollectionService:GetInstanceRemovedSignal("Train"):Connect(function(instance)
+		if instance:IsA("Model") then
+			tracked[instance] = nil
+			if riding == instance then
+				riding = nil
+			end
 		end
 	end)
 
+	-- Before the camera, so the first-person view is drawn from where the
+	-- carried character actually is this frame.
+	RunService:BindToRenderStep("LastSignalTrainRide", Enum.RenderPriority.Camera.Value - 1, onRender)
+	RunService.Stepped:Connect(onStepped)
+
 	player.CharacterAdded:Connect(function()
-		-- A fresh character is not aboard until it is tested, which stops a
-		-- respawn inheriting the previous character's ride state.
-		aboard = false
-		lastTrainCF = nil
+		-- A fresh character is not aboard until it is tested.
+		riding = nil
 	end)
 
 	log.info("started")
@@ -32073,7 +34271,7 @@ return TrainRideController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="81">
+          <Item class="ModuleScript" referent="85">
             <Properties>
               <string name="Name">WeaponController</string>
               <string name="Source"><![CDATA[--!strict
@@ -32632,11 +34830,11 @@ return WeaponController
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="82">
+        <Item class="Folder" referent="86">
           <Properties>
             <string name="Name">UI</string>
           </Properties>
-          <Item class="ModuleScript" referent="83">
+          <Item class="ModuleScript" referent="87">
             <Properties>
               <string name="Name">Theme</string>
               <string name="Source"><![CDATA[--!strict
@@ -32910,7 +35108,7 @@ return Theme
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="84">
+          <Item class="ModuleScript" referent="88">
             <Properties>
               <string name="Name">Widgets</string>
               <string name="Source"><![CDATA[--!strict
@@ -33143,6 +35341,8 @@ export type ButtonOptions = {
 	onClick: (() -> ())?,
 	name: string?,
 	subtitle: string?,
+	-- Shrink the label to fit a narrow button rather than truncating it.
+	fit: boolean?,
 }
 
 export type Button = {
@@ -33176,6 +35376,14 @@ function Widgets.button(options: ButtonOptions): Button
 	label.TextXAlignment = Enum.TextXAlignment.Center
 	label.TextYAlignment = Enum.TextYAlignment.Center
 	label.TextTruncate = Enum.TextTruncate.AtEnd
+	if options.fit then
+		label.TextTruncate = Enum.TextTruncate.None
+		label.TextScaled = true
+		local limit = Instance.new("UITextSizeConstraint")
+		limit.MaxTextSize = Theme.textSize("body")
+		limit.MinTextSize = 8
+		limit.Parent = label
+	end
 	label.Parent = button
 
 	local padding = Instance.new("UIPadding")
@@ -33500,6 +35708,12 @@ function Widgets.modalBackdrop(parent: Instance, onDismiss: () -> ()): TextButto
 	backdrop.BackgroundTransparency = 0.35
 	backdrop.BorderSizePixel = 0
 	backdrop.Size = UDim2.fromScale(1, 1)
+	-- Modal frees the cursor while the backdrop is visible. In first person
+	-- the camera locks the mouse to the centre of the screen every frame, so
+	-- without this a player could open a panel but never move the cursor to
+	-- a button: every click landed mid-screen, on this backdrop, and closed
+	-- the panel. That is why "Depart alone" could not be clicked.
+	backdrop.Modal = true
 	backdrop.Activated:Connect(onDismiss)
 	backdrop.Parent = parent
 	return backdrop
@@ -33602,13 +35816,13 @@ return Widgets
       </Item>
     </Item>
   </Item>
-  <Item class="TextChatService" referent="85">
+  <Item class="TextChatService" referent="89">
     <Properties>
       <string name="Name">TextChatService</string>
       <token name="ChatVersion">1</token>
     </Properties>
   </Item>
-  <Item class="Workspace" referent="86">
+  <Item class="Workspace" referent="90">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>
@@ -33620,7 +35834,7 @@ return Widgets
       <int name="StreamingMinRadius">192</int>
       <int name="StreamingTargetRadius">640</int>
     </Properties>
-    <Item class="Terrain" referent="87">
+    <Item class="Terrain" referent="91">
       <Properties>
         <string name="Name">Terrain</string>
       </Properties>

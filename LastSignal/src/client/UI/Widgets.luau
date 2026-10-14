@@ -228,6 +228,8 @@ export type ButtonOptions = {
 	onClick: (() -> ())?,
 	name: string?,
 	subtitle: string?,
+	-- Shrink the label to fit a narrow button rather than truncating it.
+	fit: boolean?,
 }
 
 export type Button = {
@@ -261,6 +263,14 @@ function Widgets.button(options: ButtonOptions): Button
 	label.TextXAlignment = Enum.TextXAlignment.Center
 	label.TextYAlignment = Enum.TextYAlignment.Center
 	label.TextTruncate = Enum.TextTruncate.AtEnd
+	if options.fit then
+		label.TextTruncate = Enum.TextTruncate.None
+		label.TextScaled = true
+		local limit = Instance.new("UITextSizeConstraint")
+		limit.MaxTextSize = Theme.textSize("body")
+		limit.MinTextSize = 8
+		limit.Parent = label
+	end
 	label.Parent = button
 
 	local padding = Instance.new("UIPadding")
@@ -585,6 +595,12 @@ function Widgets.modalBackdrop(parent: Instance, onDismiss: () -> ()): TextButto
 	backdrop.BackgroundTransparency = 0.35
 	backdrop.BorderSizePixel = 0
 	backdrop.Size = UDim2.fromScale(1, 1)
+	-- Modal frees the cursor while the backdrop is visible. In first person
+	-- the camera locks the mouse to the centre of the screen every frame, so
+	-- without this a player could open a panel but never move the cursor to
+	-- a button: every click landed mid-screen, on this backdrop, and closed
+	-- the panel. That is why "Depart alone" could not be clicked.
+	backdrop.Modal = true
 	backdrop.Activated:Connect(onDismiss)
 	backdrop.Parent = parent
 	return backdrop

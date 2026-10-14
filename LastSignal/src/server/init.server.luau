@@ -79,6 +79,7 @@ local BOOT_ORDER: { ServiceEntry } = {
 
 	{ name = "CrewService", module = Services.CrewService, stage = "Session" },
 	{ name = "TrainService", module = Services.TrainService, stage = "Session" },
+	{ name = "DepartureService", module = Services.DepartureService, stage = "Session" },
 	{ name = "ExpeditionService", module = Services.ExpeditionService, stage = "Session" },
 
 	{ name = "SurvivalService", module = Services.SurvivalService, stage = "Gameplay" },
@@ -212,8 +213,10 @@ local function onPlayerAdded(player: Player)
 				local target = if currentLobby then currentLobby.spawnCFrames[math.random(1, #currentLobby.spawnCFrames)] else spawnCF
 				-- Only reposition when the player is not on an expedition;
 				-- ExpeditionService places its own crew.
+				-- A crew still boarding at Platform 1 is in the yard too.
 				local ExpeditionService = loaded.ExpeditionService
-				if not (ExpeditionService and ExpeditionService.forPlayer(player)) then
+				local expedition = if ExpeditionService then ExpeditionService.forPlayer(player) else nil
+				if not expedition or expedition.state == "preparing" or expedition.state == "boarding" then
 					character:PivotTo(target)
 				end
 			end

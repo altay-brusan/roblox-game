@@ -82,11 +82,34 @@ export type TrainState = {
 	targetDistance: number,
 	stopDistance: number?,
 
+	-- Where distance zero is. The pose is always origin * (0, 0, -distance).
+	origin: CFrame,
+
+	-- True while train protection is braking for a stop.
+	protectionBraking: boolean,
+
+	-- A yard service train is worked by the yard pilot, not by players: it
+	-- drives itself to a target speed and refuses driver and door controls.
+	pilot: Pilot?,
+	isService: boolean,
+
 	-- Bookkeeping.
 	lastTick: number,
 	lastCFrame: CFrame,
 	emergencyBrakeCooldown: { [number]: number },
 	doorCooldown: { [number]: number },
+}
+
+export type Pilot = {
+	targetSpeed: number,
+	acceleration: number,
+}
+
+export type SpawnOptions = {
+	-- Doors open on arrival. Defaults to true, which is how a train waits.
+	doorsOpen: boolean?,
+	-- A yard service train worked by the yard pilot.
+	service: boolean?,
 }
 
 local trains: { [string]: TrainState } = {}
@@ -102,7 +125,16 @@ TrainService.DoorsToggled = Signal.new() :: Signal.Signal<TrainState, boolean>
 -- Creation
 --------------------------------------------------------------------------
 
-function TrainService.spawn(crewId: string, trainId: string, liveryId: string?, interiorId: string?, originCF: CFrame, parent: Instance): TrainState
+function TrainService.spawn(
+	crewId: string,
+	trainId: string,
+	liveryId: string?,
+	interiorId: string?,
+	originCF: CFrame,
+	parent: Instance,
+	options: SpawnOptions?
+): TrainState
+	local opts: SpawnOptions = options or {}
 	local def = TrainRegistry.getOrStarter(trainId)
 	local built = TrainBuilder.build(trainId, liveryId, interiorId, originCF, parent, 20217)
 
@@ -125,11 +157,15 @@ function TrainService.spawn(crewId: string, trainId: string, liveryId: string?, 
 		cabinLights = true,
 		interiorLights = true,
 		wipers = false,
-		doorsOpen = true,
+		doorsOpen = if opts.doorsOpen == nil then true else opts.doorsOpen,
 		engineRunning = true,
 		driverUserId = nil,
 		targetDistance = 0,
 		stopDistance = nil,
+		origin = originCF,
+		protectionBraking = false,
+		pilot = nil,
+		isService = opts.service == true,
 		lastTick = os.clock(),
 		lastCFrame = originCF,
 		emergencyBrakeCooldown = {},
@@ -137,6 +173,7 @@ function TrainService.spawn(crewId: string, trainId: string, liveryId: string?, 
 	}
 
 	trains[crewId] = state
+	TrainService.publishMotion(state, true)
 	TrainService.applyLights(state)
 	TrainService.applyDoors(state, true)
 	log.info(string.format("spawned %s for crew %s (%d parts)", def.name, crewId, built.partCount))
@@ -188,58 +225,59 @@ function TrainService.applyLights(state: TrainState)
 	end
 end
 
-function TrainService.applyDoors(state: TrainState, immediate: boolean?)
-	local openAngle = math.rad(105)
-	for _, door in state.built.doors do
+local DOOR_OPEN_ANGLE = math.rad(105)
+
+--- Swings every door of a built train open or closed. Doors are articulated
+--- joints (see TrainBuilder), so this moves the leaves and nothing else.
+function TrainService.setDoorsPose(built: TrainBuilder.BuiltTrain, open: boolean, immediate: boolean?)
+	local target = if open then DOOR_OPEN_ANGLE else 0
+	for _, door in built.doors do
 		local hinge = door.hinge
-		local model = door.model
-		local closed = model:GetAttribute("ClosedCFrame")
-		if typeof(closed) ~= "CFrame" then
-			closed = hinge.CFrame
-			model:SetAttribute("ClosedCFrame", closed)
+		-- A new request supersedes a swing still in progress.
+		local token = (tonumber(hinge:GetAttribute("SwingToken")) or 0) + 1
+		hinge:SetAttribute("SwingToken", token)
+		local from = tonumber(hinge:GetAttribute("OpenAngle")) or 0
+		if immediate or from == target then
+			hinge:SetAttribute("OpenAngle", target)
+			TrainBuilder.pose(hinge, CFrame.Angles(0, target, 0))
+			continue
 		end
-		local target = (closed :: CFrame) * CFrame.Angles(0, if state.doorsOpen then openAngle else 0, 0)
-		if immediate then
-			model:PivotTo(target)
-		else
-			-- Doors swing over their configured duration. A tween per door is
-			-- cheap because there are at most a dozen and they move rarely.
-			local start = model:GetPivot()
-			local duration = Balance.Train.doorOpenSeconds
-			task.spawn(function()
-				local elapsed = 0
-				while elapsed < duration do
-					local dt = task.wait()
-					elapsed += dt
-					local alpha = math.clamp(elapsed / duration, 0, 1)
-					-- Ease out, so a pneumatic door does not snap.
-					alpha = 1 - (1 - alpha) ^ 3
-					model:PivotTo(start:Lerp(target, alpha))
+		local duration = Balance.Train.doorOpenSeconds
+		task.spawn(function()
+			local elapsed = 0
+			while elapsed < duration do
+				elapsed += task.wait()
+				if hinge:GetAttribute("SwingToken") ~= token or not hinge.Parent then
+					return
 				end
-				model:PivotTo(target)
-			end)
-		end
+				-- Ease out, so a pneumatic door does not snap.
+				local alpha = 1 - (1 - math.clamp(elapsed / duration, 0, 1)) ^ 3
+				local angle = from + (target - from) * alpha
+				hinge:SetAttribute("OpenAngle", angle)
+				TrainBuilder.pose(hinge, CFrame.Angles(0, angle, 0))
+			end
+		end)
 	end
+end
+
+function TrainService.applyDoors(state: TrainState, immediate: boolean?)
+	TrainService.setDoorsPose(state.built, state.doorsOpen, immediate)
 	TrainService.DoorsToggled:Fire(state, state.doorsOpen)
 end
 
 local function applyGauges(state: TrainState)
 	local cab = state.built.cab
 	local function setNeedle(needle: BasePart, fraction: number)
-		local base = needle:GetAttribute("BaseCFrame")
-		if typeof(base) ~= "CFrame" then
-			base = needle.CFrame
-			needle:SetAttribute("BaseCFrame", base)
-		end
-		-- Needles sweep 240 degrees, which is what a real dial does.
+		-- Needles sweep 240 degrees, which is what a real dial does. The needle
+		-- is an articulated joint, so only it moves; and it is only rewritten
+		-- when it would visibly move, to keep replication quiet.
 		local angle = math.rad(-120 + math.clamp(fraction, 0, 1) * 240)
-		-- The needle is welded, so the weld is what must move. Rotating the
-		-- part directly would be undone by the weld on the next physics step.
-		local weld = needle:FindFirstChildOfClass("WeldConstraint")
-		if weld then
-			weld:Destroy()
+		local last = tonumber(needle:GetAttribute("NeedleAngle"))
+		if last and math.abs(last - angle) < math.rad(0.75) then
+			return
 		end
-		needle.CFrame = (base :: CFrame) * CFrame.Angles(0, angle, 0)
+		needle:SetAttribute("NeedleAngle", angle)
+		TrainBuilder.pose(needle, CFrame.Angles(0, angle, 0))
 	end
 
 	setNeedle(cab.speedNeedle, state.speed / (Balance.Train.maxSpeed * state.def.handling.maxSpeedMultiplier))
@@ -253,6 +291,18 @@ end
 
 local function targetAcceleration(state: TrainState): number
 	local handling = state.def.handling
+	local pilot = state.pilot
+	if pilot then
+		-- The pilot drives smoothly to its target speed and coasts above it.
+		-- Train protection still applies on top, so a piloted train always
+		-- draws up at its stop point.
+		if state.speed < pilot.targetSpeed - 0.5 then
+			return pilot.acceleration
+		elseif state.speed > pilot.targetSpeed + 0.5 then
+			return -Balance.Train.serviceBrakeDeceleration * 0.4
+		end
+		return 0
+	end
 	if state.emergencyBrake then
 		return -Balance.Train.emergencyBrakeDeceleration * handling.brakingMultiplier
 	end
@@ -281,6 +331,24 @@ local function maxSpeedFor(state: TrainState): number
 	return base
 end
 
+--- Publishes the motion sample TrainRideController extrapolates from. Only
+--- written while something changes, so a parked train costs no bandwidth.
+function TrainService.publishMotion(state: TrainState, force: boolean?)
+	local model = state.built.model
+	local velocity = if state.direction ~= 0 then state.speed * state.direction else 0
+	local moving = math.abs(velocity) > 1e-3
+	local wasMoving = model:GetAttribute("Velocity") ~= 0
+	if force then
+		model:SetAttribute("OriginCFrame", state.origin)
+	end
+	if force or moving or wasMoving then
+		model:SetAttribute("Distance", state.distance)
+		model:SetAttribute("Velocity", velocity)
+		model:SetAttribute("SampleTime", workspace:GetServerTimeNow())
+	end
+	model:SetAttribute("StopDistance", state.stopDistance)
+end
+
 local function step(state: TrainState, dt: number)
 	local handling = state.def.handling
 
@@ -288,6 +356,23 @@ local function step(state: TrainState, dt: number)
 	local acceleration = targetAcceleration(state)
 	state.speed = math.max(0, state.speed + acceleration * dt)
 	state.speed = math.min(state.speed, maxSpeedFor(state))
+
+	-- Train protection. Approaching a stop point, speed is held to the curve
+	-- from which the train can still draw up at it, and the train brakes
+	-- itself, firmly but not violently, when the driver comes in too fast.
+	state.protectionBraking = false
+	local stop = state.stopDistance
+	if stop and state.direction > 0 then
+		local remaining = math.max(0, stop - state.distance)
+		local curve = math.sqrt(2 * Balance.Train.stationApproachDeceleration * remaining) + 1.5
+		if state.speed > curve then
+			-- Protection cuts traction as it brakes, as the real thing does;
+			-- otherwise an open throttle cancels the braking out.
+			state.throttle = 0
+			state.speed = math.max(curve, state.speed - Balance.Train.emergencyBrakeDeceleration * dt)
+			state.protectionBraking = true
+		end
+	end
 
 	-- A train with the doors open does not move above a crawl, which removes
 	-- the entire class of "somebody drove off while I was boarding" problems
@@ -350,15 +435,11 @@ local function step(state: TrainState, dt: number)
 		state.wheelAngle = (state.wheelAngle + delta / radius) % (math.pi * 2)
 	end
 
-	-- Write the pose.
+	-- Write the pose, and publish the motion sample clients render from.
 	local root = state.built.root
-	local origin = root:GetAttribute("OriginCFrame")
-	if typeof(origin) ~= "CFrame" then
-		origin = root.CFrame
-		root:SetAttribute("OriginCFrame", origin)
-	end
 	state.lastCFrame = root.CFrame
-	root.CFrame = (origin :: CFrame) * CFrame.new(0, 0, -state.distance)
+	root.CFrame = state.origin * CFrame.new(0, 0, -state.distance)
+	TrainService.publishMotion(state)
 
 	applyGauges(state)
 end
@@ -384,6 +465,9 @@ end
 
 --- Claims the controls. Refused when somebody else is already driving.
 function TrainService.claimDriver(state: TrainState, player: Player): (boolean, string?)
+	if state.isService then
+		return false, "SERVICE_TRAIN"
+	end
 	local seat = state.built.cab.driverSeat
 	local occupant = seat.Occupant
 	if not occupant then
@@ -433,6 +517,10 @@ local CONTROLS = {
 }
 
 function TrainService.applyControl(player: Player, state: TrainState, control: string, value: any): (boolean, string?)
+	if state.isService then
+		-- The yard pilot works this train; passengers ride it.
+		return false, "SERVICE_TRAIN"
+	end
 	if not isDriver(state, player) then
 		-- Doors are the exception: any crew member can work a carriage door
 		-- from inside, which is how boarding works with one driver.
@@ -574,6 +662,38 @@ function TrainService.setOverheating(state: TrainState, overheating: boolean)
 	state.overheating = overheating
 end
 
+--- Puts a train at a distance along its line, at rest. Used to stand a
+--- train at a platform without driving it there.
+function TrainService.place(state: TrainState, distance: number)
+	state.distance = distance
+	state.speed = 0
+	state.built.root.CFrame = state.origin * CFrame.new(0, 0, -distance)
+	TrainService.publishMotion(state, true)
+end
+
+--- Hands the train to the yard pilot (or takes it back with nil). The pilot
+--- drives forward to the target speed at the given acceleration.
+function TrainService.setPilot(state: TrainState, targetSpeed: number?, acceleration: number?)
+	if targetSpeed then
+		state.pilot = { targetSpeed = targetSpeed, acceleration = acceleration or 1.5 }
+		state.direction = 1
+		state.serviceBrake = 0
+		state.emergencyBrake = false
+		state.throttle = 0
+	else
+		state.pilot = nil
+	end
+end
+
+--- Whether a world position is inside the train, using the volume the
+--- builder recorded. The same test TrainRideController uses on the client.
+function TrainService.isInside(state: TrainState, position: Vector3, margin: number?): boolean
+	local localPoint = (state.built.root.CFrame * state.built.volumeOffset):PointToObjectSpace(position)
+	local half = state.built.volumeSize * 0.5
+	local m = margin or 0
+	return math.abs(localPoint.X) <= half.X + m and math.abs(localPoint.Y) <= half.Y + m and math.abs(localPoint.Z) <= half.Z + m
+end
+
 --- Sets the next hard stop. The expedition uses this to hold the train at a
 --- station until its objectives are done.
 function TrainService.setStopDistance(state: TrainState, distance: number?)
@@ -613,6 +733,7 @@ local function describe(state: TrainState): { [string]: any }
 		-- the wheel animation need.
 		cframe = state.built.root.CFrame,
 		stopDistance = state.stopDistance,
+		protectionBraking = state.protectionBraking,
 	}
 end
 

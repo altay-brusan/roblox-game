@@ -34,8 +34,14 @@ export type BuiltLobby = {
 	workshopBench: BasePart,
 	storesCounter: BasePart,
 	noticeBoard: BasePart,
-	trainPreviewCF: CFrame,
-	departureCF: CFrame,
+	-- The yard service train runs along the departure road. At distance D its
+	-- front coupler is at serviceOrigin * (0, 0, -D).
+	serviceOrigin: CFrame,
+	platformDistance: number,
+	tunnelDistance: number,
+	departurePost: BasePart,
+	departureStatus: TextLabel,
+	platformCFrame: CFrame,
 	lights: { Light },
 	partCount: number,
 }
@@ -485,6 +491,263 @@ end
 
 --------------------------------------------------------------------------
 
+--------------------------------------------------------------------------
+-- Platform 1
+--------------------------------------------------------------------------
+
+-- Where the 02:17 stands. The platform runs along the east side of the
+-- departure road, directly in front of the spawn, so the first thing a new
+-- player sees is a lit train with its doors open and a way up to it.
+-- The platform edge sits just clear of the widest fixed part of the train
+-- (locomotive handrails at 6.45), less than a stud from the carriage sides.
+local PLATFORM_X = 12.7
+local PLATFORM_WIDTH = 12
+local PLATFORM_LENGTH = 190
+local PLATFORM_TOP = 3.2
+
+local function buildPlatform(originCF: CFrame, parent: Instance, lights: { Light }, rng: Random): (BasePart, TextLabel)
+	local deckCF = originCF * CFrame.new(PLATFORM_X, 0, 0)
+	BuildKit.part({
+		name = "PlatformDeck",
+		size = Vector3.new(PLATFORM_WIDTH, PLATFORM_TOP - 0.6, PLATFORM_LENGTH),
+		cf = deckCF * CFrame.new(0, 0.6 + (PLATFORM_TOP - 0.6) * 0.5, 0),
+		colour = C(118, 114, 106),
+		material = Enum.Material.Concrete,
+		parent = parent,
+	})
+	-- Coping stones and the painted safety line along the track edge.
+	BuildKit.part({
+		name = "PlatformCoping",
+		size = Vector3.new(1.4, 0.3, PLATFORM_LENGTH),
+		cf = deckCF * CFrame.new(-PLATFORM_WIDTH * 0.5 + 0.7, PLATFORM_TOP + 0.15, 0),
+		colour = C(150, 146, 136),
+		material = Enum.Material.Concrete,
+		parent = parent,
+	})
+	BuildKit.detail({
+		name = "SafetyLine",
+		size = Vector3.new(0.5, 0.05, PLATFORM_LENGTH),
+		cf = deckCF * CFrame.new(-PLATFORM_WIDTH * 0.5 + 2.2, PLATFORM_TOP + 0.02, 0),
+		colour = C(214, 178, 62),
+		material = Enum.Material.SmoothPlastic,
+		parent = parent,
+	})
+	-- Wet patches on the deck catch the lamplight.
+	for _ = 1, 8 do
+		local size = rng:NextNumber(3, 7)
+		BuildKit.detail({
+			name = "Puddle",
+			size = Vector3.new(size * 0.7, 0.04, size),
+			cf = deckCF * CFrame.new(rng:NextNumber(-3, 4), PLATFORM_TOP + 0.03, rng:NextNumber(-85, 85)),
+			colour = C(40, 44, 48),
+			material = Enum.Material.Glass,
+			transparency = 0.3,
+			reflectance = 0.4,
+			parent = parent,
+		})
+	end
+
+	-- Ramps up from the yard, one directly in front of the spawn.
+	for _, z in { -12, 52 } do
+		local rampLength = 10
+		BuildKit.wedge({
+			name = "PlatformRamp",
+			size = Vector3.new(8, PLATFORM_TOP - 0.6, rampLength),
+			cf = deckCF
+				* CFrame.new(PLATFORM_WIDTH * 0.5 + rampLength * 0.5, 0.6 + (PLATFORM_TOP - 0.6) * 0.5, z)
+				* CFrame.Angles(0, math.rad(-90), 0),
+			colour = C(110, 106, 98),
+			material = Enum.Material.Concrete,
+			parent = parent,
+		})
+		for _, side in { -1, 1 } do
+			BuildKit.detail({
+				name = "RampRail",
+				size = Vector3.new(rampLength, 0.2, 0.2),
+				cf = deckCF
+					* CFrame.new(PLATFORM_WIDTH * 0.5 + rampLength * 0.5, 0.6 + (PLATFORM_TOP - 0.6) * 0.5 + 2.6, z + side * 4.1)
+					* CFrame.Angles(0, 0, math.rad(-math.deg(math.atan2(PLATFORM_TOP - 0.6, rampLength)))),
+				colour = C(170, 140, 58),
+				material = Enum.Material.Metal,
+				parent = parent,
+			})
+		end
+	end
+
+	-- Canopy over the middle of the platform: columns, a ribbed roof and
+	-- pendant lamps.
+	local canopyLength = 96
+	local canopyHeight = PLATFORM_TOP + 10
+	for i = 0, 8 do
+		local z = -canopyLength * 0.5 + i * (canopyLength / 8)
+		BuildKit.part({
+			name = "CanopyColumn",
+			size = Vector3.new(0.8, canopyHeight - PLATFORM_TOP, 0.8),
+			cf = deckCF * CFrame.new(2.5, PLATFORM_TOP + (canopyHeight - PLATFORM_TOP) * 0.5, z),
+			colour = C(52, 70, 62),
+			material = Enum.Material.Metal,
+			parent = parent,
+		})
+		BuildKit.detail({
+			name = "CanopyBracket",
+			size = Vector3.new(PLATFORM_WIDTH - 1, 0.5, 0.4),
+			cf = deckCF * CFrame.new(-0.5, canopyHeight - 0.6, z),
+			colour = C(52, 70, 62),
+			material = Enum.Material.Metal,
+			parent = parent,
+		})
+		if i % 2 == 0 then
+			local _, light = BuildKit.lamp(deckCF * CFrame.new(-1, canopyHeight - 1.6, z), "pendant", C(255, 214, 160), 3, 36, parent)
+			table.insert(lights, light)
+		end
+	end
+	BuildKit.part({
+		name = "CanopyRoof",
+		size = Vector3.new(PLATFORM_WIDTH + 1, 0.5, canopyLength + 4),
+		cf = deckCF * CFrame.new(-0.5, canopyHeight, 0) * CFrame.Angles(0, 0, math.rad(4)),
+		colour = C(46, 52, 52),
+		material = Enum.Material.Metal,
+		parent = parent,
+	})
+	BuildKit.detail({
+		name = "CanopyValance",
+		size = Vector3.new(0.3, 1.4, canopyLength + 4),
+		cf = deckCF * CFrame.new(-PLATFORM_WIDTH * 0.5 - 0.3, canopyHeight - 0.8, 0),
+		colour = C(118, 92, 58),
+		material = Enum.Material.WoodPlanks,
+		parent = parent,
+	})
+
+	-- Lamp posts beyond the canopy, so the whole length of the train is lit.
+	for _, z in { -80, -62, 62, 80 } do
+		BuildKit.part({
+			name = "PlatformLampPost",
+			size = Vector3.new(0.5, 11, 0.5),
+			cf = deckCF * CFrame.new(3.5, PLATFORM_TOP + 5.5, z),
+			colour = C(52, 70, 62),
+			material = Enum.Material.Metal,
+			parent = parent,
+		})
+		local _, light = BuildKit.lamp(deckCF * CFrame.new(2.4, PLATFORM_TOP + 10.6, z), "pendant", C(255, 206, 150), 3, 40, parent)
+		table.insert(lights, light)
+	end
+
+	-- Benches and a luggage barrow: the platform is a place people wait.
+	for _, z in { -30, 18 } do
+		BuildKit.part({
+			name = "PlatformBenchSeat",
+			size = Vector3.new(1.6, 0.3, 6),
+			cf = deckCF * CFrame.new(4.2, PLATFORM_TOP + 1.5, z),
+			colour = BuildKit.weather(P.planking, 0.04, rng),
+			material = Enum.Material.WoodPlanks,
+			parent = parent,
+		})
+		BuildKit.detail({
+			name = "PlatformBenchBack",
+			size = Vector3.new(0.3, 1.6, 6),
+			cf = deckCF * CFrame.new(5, PLATFORM_TOP + 2.4, z),
+			colour = BuildKit.weather(P.planking, 0.04, rng),
+			material = Enum.Material.WoodPlanks,
+			parent = parent,
+		})
+		for _, offset in { -2.6, 2.6 } do
+			BuildKit.detail({
+				name = "PlatformBenchLeg",
+				size = Vector3.new(1.6, 1.4, 0.3),
+				cf = deckCF * CFrame.new(4.2, PLATFORM_TOP + 0.7, z + offset),
+				colour = C(40, 44, 42),
+				material = Enum.Material.Metal,
+				parent = parent,
+			})
+		end
+	end
+	BuildKit.part({
+		name = "LuggageBarrow",
+		size = Vector3.new(2.6, 0.4, 5),
+		cf = deckCF * CFrame.new(3.6, PLATFORM_TOP + 1.2, 36),
+		colour = C(92, 70, 50),
+		material = Enum.Material.WoodPlanks,
+		parent = parent,
+	})
+	for i = 0, 2 do
+		BuildKit.part({
+			name = "Suitcase",
+			size = Vector3.new(1.8, 1.0, 2.4),
+			cf = deckCF
+				* CFrame.new(3.6, PLATFORM_TOP + 1.9 + i * 1.0, 35 + i * 0.6)
+				* CFrame.Angles(0, math.rad(rng:NextNumber(-12, 12)), 0),
+			colour = BuildKit.weather(C(86, 58, 44), 0.05, rng),
+			material = Enum.Material.Leather,
+			parent = parent,
+		})
+	end
+
+	-- The departure board, hung from the canopy facing the yard. Its text is
+	-- driven live by DepartureService.
+	local board = BuildKit.part({
+		name = "DepartureBoard",
+		size = Vector3.new(0.4, 3.6, 12),
+		cf = deckCF * CFrame.new(PLATFORM_WIDTH * 0.5 - 0.2, canopyHeight - 3, -6),
+		colour = C(22, 24, 26),
+		material = Enum.Material.Metal,
+		parent = parent,
+	})
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "BoardFace"
+	gui.Face = Enum.NormalId.Right
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 40
+	gui.LightInfluence = 0
+	gui.Brightness = 2
+	gui.Parent = board
+	local heading = Instance.new("TextLabel")
+	heading.Name = "Heading"
+	heading.BackgroundTransparency = 1
+	heading.Size = UDim2.fromScale(1, 0.42)
+	heading.Text = "02:17  UP MAIN  -  WARD HILL"
+	heading.FontFace = Font.fromEnum(Enum.Font.Code)
+	heading.TextScaled = true
+	heading.TextColor3 = C(255, 176, 64)
+	heading.Parent = gui
+	local status = Instance.new("TextLabel")
+	status.Name = "Status"
+	status.BackgroundTransparency = 1
+	status.Position = UDim2.fromScale(0, 0.48)
+	status.Size = UDim2.fromScale(1, 0.4)
+	status.Text = "NOW BOARDING"
+	status.FontFace = Font.fromEnum(Enum.Font.Code)
+	status.TextScaled = true
+	status.TextColor3 = C(255, 206, 120)
+	status.Parent = gui
+
+	-- The departure post: the same crew panel as the board in the shelter,
+	-- right beside the train, at a height where its prompt is actually seen.
+	local post = BuildKit.part({
+		name = "DeparturePost",
+		size = Vector3.new(1.4, 4.6, 2.4),
+		cf = deckCF * CFrame.new(2.2, PLATFORM_TOP + 2.3, -14),
+		colour = C(52, 70, 62),
+		material = Enum.Material.Metal,
+		parent = parent,
+	})
+	post:AddTag("CrewBoard")
+	BuildKit.label(post, Enum.NormalId.Right, "DEPART", "Alone or with a crew")
+	local _, postLight = BuildKit.lamp(deckCF * CFrame.new(3.2, PLATFORM_TOP + 5.2, -14), "bulkhead", C(255, 196, 120), 0.9, 12, parent)
+	table.insert(lights, postLight)
+
+	-- Platform nameboards at both ends, readable from the yard.
+	for _, z in { -88, 88 } do
+		BuildKit.postSign(deckCF * CFrame.new(4.5, PLATFORM_TOP, z) * CFrame.Angles(0, math.rad(90), 0), "PLATFORM 1", parent, {
+			width = 12,
+			height = 8,
+			subtitle = "02:17 Up Main",
+			plate = C(32, 44, 38),
+		})
+	end
+
+	return post, status
+end
+
 function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): BuiltLobby
 	local rng = Random.new(seed or 217)
 	local model = BuildKit.model("Lobby", nil)
@@ -496,7 +759,9 @@ function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): B
 	--------------------------------------------------------------
 	BuildKit.part({
 		name = "YardGround",
-		size = Vector3.new(420, 2, 520),
+		-- Long enough to carry the departure road from the south approach,
+		-- where the next service appears, to the tunnel in the north.
+		size = Vector3.new(520, 2, 1700),
 		cf = originCF * CFrame.new(0, -1, 0),
 		colour = P.soil,
 		material = Enum.Material.Ground,
@@ -530,7 +795,9 @@ function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): B
 	-- Tracks: departure road plus two sidings
 	--------------------------------------------------------------
 	local departureX = 0
-	BuildKit.trackSection(originCF * CFrame.new(departureX, 0, 240), 480, model, rng)
+	-- The departure road runs the full length of the yard: in from the south,
+	-- past Platform 1, and north into the tunnel towards the line.
+	BuildKit.trackSection(originCF * CFrame.new(departureX, 0, 820), 1560, model, rng)
 	BuildKit.trackSection(originCF * CFrame.new(departureX - 34, 0, 180), 300, model, rng)
 	BuildKit.trackSection(originCF * CFrame.new(departureX + 34, 0, 180), 300, model, rng)
 
@@ -574,7 +841,7 @@ function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): B
 
 	-- Water column by the departure road, the classic yard silhouette.
 	do
-		local columnCF = originCF * CFrame.new(departureX + 16, 0, 40)
+		local columnCF = originCF * CFrame.new(departureX - 16, 0, 40)
 		BuildKit.part({
 			name = "WaterColumn",
 			size = Vector3.new(2.0, 18, 2.0),
@@ -616,7 +883,7 @@ function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): B
 			Vector3.new(40, 0, 90),
 			Vector3.new(-40, 0, -60),
 			Vector3.new(40, 0, -60),
-			Vector3.new(0, 0, 150),
+			Vector3.new(-16, 0, 150),
 		}
 	do
 		local mastCF = originCF * CFrame.new(spec)
@@ -651,7 +918,12 @@ function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): B
 
 	-- Scattered yard clutter: pallets, drums, a permanent way trolley, sleepers.
 	for _ = 1, 16 do
-		local pos = originCF * CFrame.new(rng:NextNumber(-95, 95), 0, rng:NextNumber(-130, 130))
+		local clutterX = rng:NextNumber(-95, 95)
+		-- Nothing is dumped on the departure road, the platform or its ramps.
+		if clutterX > -12 and clutterX < 34 then
+			clutterX += if clutterX < 11 then -26 else 26
+		end
+		local pos = originCF * CFrame.new(clutterX, 0, rng:NextNumber(-130, 130))
 		local pick = rng:NextInteger(1, 4)
 		if pick == 1 then
 			BuildKit.part({
@@ -725,9 +997,10 @@ function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): B
 	local spawnCFrames: { CFrame } = {}
 	for i = 0, 11 do
 		local angle = math.rad(i * 30)
+		-- Facing west, across the ramp to Platform 1 and the waiting train.
 		spawnCFrames[i + 1] = originCF
-			* CFrame.new(38 + math.cos(angle) * 9, 3, -14 + math.sin(angle) * 9)
-			* CFrame.Angles(0, math.rad(-90), 0)
+			* CFrame.new(36 + math.cos(angle) * 5, 3, 8 + math.sin(angle) * 5)
+			* CFrame.Angles(0, math.rad(90), 0)
 	end
 
 	--------------------------------------------------------------
@@ -741,7 +1014,7 @@ function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): B
 	BuildKit.label(noticeBoard, Enum.NormalId.Left, "NOTICES", "Orders, rewards and events")
 
 	-- The yard nameboard, on the approach to the shelter.
-	BuildKit.postSign(originCF * CFrame.new(20, 0, -80) * CFrame.Angles(0, math.rad(180), 0), "TOLBRIDGE YARD", model, {
+	BuildKit.postSign(originCF * CFrame.new(46, 0, -72) * CFrame.Angles(0, math.rad(180), 0), "TOLBRIDGE YARD", model, {
 		width = 22,
 		height = 11,
 		subtitle = "Regional Permanent Way Depot",
@@ -767,7 +1040,7 @@ function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): B
 
 	-- The departure road is marked, because the preview train sits on the
 	-- siding beside it and the two need telling apart.
-	BuildKit.postSign(originCF * CFrame.new(departureX + 14, 0, 110) * CFrame.Angles(0, math.rad(180), 0), "DEPARTURE ROAD", model, {
+	BuildKit.postSign(originCF * CFrame.new(departureX + 22, 0, 110) * CFrame.Angles(0, math.rad(180), 0), "DEPARTURE ROAD", model, {
 		width = 17,
 		height = 6,
 		subtitle = "Up main to the north",
@@ -780,6 +1053,10 @@ function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): B
 		plate = C(44, 34, 30),
 	})
 
+	-- Platform 1, and the tunnel the line leaves the yard through.
+	local departurePost, departureStatus = buildPlatform(originCF, model, lights, rng)
+	BuildKit.tunnel(originCF * CFrame.new(departureX, 0, -330) * CFrame.Angles(0, math.rad(180), 0), 300, model, rng)
+
 	model:AddTag("Lobby")
 	model.Parent = parent
 
@@ -790,10 +1067,15 @@ function LobbyBuilder.build(origin: Vector3, parent: Instance, seed: number?): B
 		workshopBench = workshopBench,
 		storesCounter = storesCounter,
 		noticeBoard = noticeBoard,
-		-- The preview road, where the selected train is displayed.
-		trainPreviewCF = originCF * CFrame.new(departureX - 34, 0, 40) * CFrame.Angles(0, math.rad(180), 0),
-		-- Where the expedition train sits before departure.
-		departureCF = originCF * CFrame.new(departureX, 0, 60) * CFrame.Angles(0, math.rad(180), 0),
+		-- The next service appears out of sight to the south (distance 0), draws
+		-- up with its consist along Platform 1, and swaps to the line once it is
+		-- well inside the tunnel.
+		serviceOrigin = originCF * CFrame.new(departureX, 0, 640),
+		platformDistance = 716,
+		tunnelDistance = 1090,
+		departurePost = departurePost,
+		departureStatus = departureStatus,
+		platformCFrame = originCF * CFrame.new(PLATFORM_X + 2, PLATFORM_TOP + 3, 0) * CFrame.Angles(0, math.rad(-90), 0),
 		lights = lights,
 		partCount = BuildKit.countParts(model),
 	}

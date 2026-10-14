@@ -912,12 +912,26 @@ function InteractionService.start()
 	-- Attach proximity prompts to every interactable the world builders tagged.
 	-- Prompts are created on the server so the client cannot fabricate one for
 	-- an object that has no behaviour.
-	local function attachPrompt(instance: Instance, actionText: string, objectText: string, hold: number?)
+	local function attachPrompt(instance: Instance, actionText: string, objectText: string, hold: number?, eyeLevel: boolean?)
 		if not instance:IsA("BasePart") then
 			return
 		end
-		if instance:FindFirstChildOfClass("ProximityPrompt") then
+		if instance:FindFirstChildOfClass("ProximityPrompt") or instance:FindFirstChild("PromptAnchor") then
 			return
+		end
+		-- Roblox only shows a prompt whose anchor is on screen. A tall board's
+		-- centre sits above the eye line at arm's length, so its prompt never
+		-- appeared unless the player happened to look up. Tall fixtures anchor
+		-- the prompt near their lower edge instead, where a player looking at
+		-- the fixture is actually looking. The client resolves the attachment
+		-- back to the tagged part.
+		local host: Instance = instance
+		if eyeLevel and instance.Size.Y > 4 then
+			local anchor = Instance.new("Attachment")
+			anchor.Name = "PromptAnchor"
+			anchor.Position = Vector3.new(0, -instance.Size.Y * 0.5 + 1.5, 0)
+			anchor.Parent = instance
+			host = anchor
 		end
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.ActionText = actionText
@@ -926,15 +940,15 @@ function InteractionService.start()
 		prompt.MaxActivationDistance = MAX_REACH - 2
 		prompt.RequiresLineOfSight = false
 		prompt.Style = Enum.ProximityPromptStyle.Custom
-		prompt.Parent = instance
+		prompt.Parent = host
 	end
 
-	local function wire(tag: string, actionText: string, objectText: string)
+	local function wire(tag: string, actionText: string, objectText: string, eyeLevel: boolean?)
 		for _, instance in CollectionService:GetTagged(tag) do
-			attachPrompt(instance, actionText, objectText)
+			attachPrompt(instance, actionText, objectText, nil, eyeLevel)
 		end
 		CollectionService:GetInstanceAddedSignal(tag):Connect(function(instance)
-			attachPrompt(instance, actionText, objectText)
+			attachPrompt(instance, actionText, objectText, nil, eyeLevel)
 		end)
 	end
 
@@ -950,10 +964,10 @@ function InteractionService.start()
 	-- Lobby fixtures. Without these the crew board is scenery and the only way
 	-- to start an expedition is to guess a keyboard shortcut, which is how the
 	-- first build shipped and why nobody could find the train.
-	wire("CrewBoard", "Form a crew", "Crew board")
-	wire("NoticeBoard", "Read", "Notice board")
-	wire("StoresCounter", "Browse", "Stores")
-	wire("WorkshopBench", "Open loadout", "Workshop bench")
+	wire("CrewBoard", "Form a crew", "Crew board", true)
+	wire("NoticeBoard", "Read", "Notice board", true)
+	wire("StoresCounter", "Browse", "Stores", true)
+	wire("WorkshopBench", "Open loadout", "Workshop bench", true)
 
 	log.info("started")
 end

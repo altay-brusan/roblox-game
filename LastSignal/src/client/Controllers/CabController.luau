@@ -28,6 +28,7 @@
 
 local ContextActionService = game:GetService("ContextActionService")
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("LastSignal")
 
@@ -89,7 +90,7 @@ local function build()
 	local insets = Theme.safeInsets()
 	local frame = Widgets.panel({
 		name = "Cab",
-		size = UDim2.fromOffset(Theme.space(72), Theme.space(19)),
+		size = UDim2.fromOffset(Theme.space(72), Theme.space(22)),
 		position = UDim2.new(0.5, 0, 1, -insets.bottom - Theme.space(1)),
 		anchor = Vector2.new(0.5, 1),
 		padding = 1.25,
@@ -128,6 +129,7 @@ local function build()
 
 	Widgets.button({
 		text = "Throttle -",
+		fit = true,
 		width = UDim.new(0.18, 0),
 		parent = driveRow,
 		onClick = function()
@@ -151,6 +153,7 @@ local function build()
 
 	Widgets.button({
 		text = "Throttle +",
+		fit = true,
 		width = UDim.new(0.18, 0),
 		primary = true,
 		parent = driveRow,
@@ -175,6 +178,7 @@ local function build()
 
 	Widgets.button({
 		text = "Brake",
+		fit = true,
 		width = UDim.new(0.16, 0),
 		parent = driveRow,
 		layoutOrder = 5,
@@ -190,6 +194,7 @@ local function build()
 
 	Widgets.button({
 		text = "EMERGENCY",
+		fit = true,
 		width = UDim.new(0.2, 0),
 		danger = true,
 		parent = driveRow,
@@ -207,6 +212,7 @@ local function build()
 		local button = Widgets.button({
 			text = label,
 			width = UDim.new(0.135, 0),
+			fit = true,
 			parent = auxRow,
 			layoutOrder = order,
 			onClick = onClick,
@@ -241,6 +247,38 @@ local function build()
 	end)
 	auxButton("start_engine", "Start", 7, function()
 		control("start_engine", true)
+	end)
+
+	-- The keyboard map, so every control is reachable without the cursor.
+	Widgets.label({
+		text = "W / S throttle   Space brake   X emergency   R reverser   T start   H horn   L lights   O doors   Hold Alt for the cursor",
+		size = "small",
+		colour = Theme.colour("textFaint"),
+		align = Enum.TextXAlignment.Center,
+		parent = column,
+		layoutOrder = 5,
+	})
+
+	-- Holding Alt frees the cursor for the buttons above. In first person the
+	-- camera locks the mouse to the centre of the screen; a visible Modal
+	-- button is how Roblox lets it go.
+	local cursorRelease = Instance.new("TextButton")
+	cursorRelease.Name = "CursorRelease"
+	cursorRelease.BackgroundTransparency = 1
+	cursorRelease.Text = ""
+	cursorRelease.Size = UDim2.fromOffset(0, 0)
+	cursorRelease.Modal = true
+	cursorRelease.Visible = false
+	cursorRelease.Parent = screen
+	UserInputService.InputBegan:Connect(function(input)
+		if input.KeyCode == Enum.KeyCode.LeftAlt or input.KeyCode == Enum.KeyCode.RightAlt then
+			cursorRelease.Visible = frame.Visible
+		end
+	end)
+	UserInputService.InputEnded:Connect(function(input)
+		if input.KeyCode == Enum.KeyCode.LeftAlt or input.KeyCode == Enum.KeyCode.RightAlt then
+			cursorRelease.Visible = false
+		end
 	end)
 end
 
@@ -302,6 +340,8 @@ local function refresh()
 			hint = "Open the throttle to move off."
 		elseif state.doorsOpen then
 			hint = "Doors are open. She will not exceed walking pace."
+		elseif state.protectionBraking then
+			hint = "Train protection is braking for the station ahead."
 		end
 		hintLabel.Text = hint
 		hintLabel.Visible = hint ~= ""
@@ -353,6 +393,12 @@ local function handleKey(_actionName: string, inputState: Enum.UserInputState, i
 		control("headlights", true)
 	elseif key == Enum.KeyCode.O then
 		control("doors", true)
+	elseif key == Enum.KeyCode.R then
+		local state = trainState()
+		local direction = if state then state.direction or 0 else 0
+		control("reverser", if direction == 1 then 0 elseif direction == 0 then -1 else 1)
+	elseif key == Enum.KeyCode.T then
+		control("start_engine", true)
 	end
 	return Enum.ContextActionResult.Sink
 end
@@ -368,7 +414,9 @@ local function bindKeys()
 		Enum.KeyCode.X,
 		Enum.KeyCode.H,
 		Enum.KeyCode.L,
-		Enum.KeyCode.O
+		Enum.KeyCode.O,
+		Enum.KeyCode.R,
+		Enum.KeyCode.T
 	)
 end
 
@@ -394,11 +442,32 @@ local function leaveControls()
 	log.debug("left the controls")
 end
 
-local function takeControls()
+--- Turns the first-person view to look out of the windscreen. The camera
+--- otherwise keeps whatever heading it had when the player sat down, which
+--- usually meant staring at the cab wall.
+local function faceForward(seat: BasePart)
+	local camera = workspace.CurrentCamera
+	if not camera then
+		return
+	end
+	local look = seat.CFrame.LookVector
+	local flat = Vector3.new(look.X, 0, look.Z)
+	if flat.Magnitude < 1e-3 then
+		return
+	end
+	local position = camera.CFrame.Position
+	camera.CFrame = CFrame.lookAt(position, position + flat.Unit + Vector3.new(0, -0.08, 0))
+end
+
+local function takeControls(seat: BasePart?)
 	if seated then
 		return
 	end
 	seated = true
+	if seat then
+		-- After the character has settled into the seat.
+		task.delay(0.1, faceForward, seat)
+	end
 	local result = Net.invokeServer("TrainCommand", "claim_driver")
 	if type(result) == "table" and result.ok then
 		isDriver = true
@@ -432,7 +501,7 @@ local function watchHumanoid(character: Model)
 
 	seatConnection = humanoid.Seated:Connect(function(active, seat)
 		if active and seat and seat:HasTag("DriverSeat") then
-			takeControls()
+			takeControls(seat)
 		else
 			leaveControls()
 		end
@@ -441,7 +510,7 @@ local function watchHumanoid(character: Model)
 	-- Cover the case where the character is already seated when this runs,
 	-- such as after a respawn directly into the cab.
 	if humanoid.SeatPart and humanoid.SeatPart:HasTag("DriverSeat") then
-		takeControls()
+		takeControls(humanoid.SeatPart)
 	end
 end
 

@@ -50,12 +50,14 @@ local RadioScript = require(Shared.Registry.RadioScript)
 local StationRegistry = require(Shared.Registry.StationRegistry)
 
 local CrewService = require(script.Parent.CrewService)
+local DepartureService = require(script.Parent.DepartureService)
 local DataService = require(script.Parent.DataService)
 local InventoryService = require(script.Parent.InventoryService)
 local ProgressionService = require(script.Parent.ProgressionService)
 local ShopService = require(script.Parent.ShopService)
 local TrainService = require(script.Parent.TrainService)
 local WorldService = require(script.Parent.WorldService)
+local TrainBuilder = require(script.Parent.Parent.World.TrainBuilder)
 
 local log = Logger.new("ExpeditionService")
 
@@ -618,29 +620,27 @@ function ExpeditionService.begin(crew: CrewService.Crew, members: { Player })
 		end
 	end)
 
-	if not lane then
-		-- Every lane is busy. This is a real limit of single-place mode and the
-		-- crew is told plainly rather than left waiting.
+	local function abandonStart(title: string, body: string, reason: string)
 		for _, player in members do
-			Net.fireClient("Notify", player, {
-				kind = "error",
-				title = "The line is occupied",
-				body = string.format(
-					"All %d expedition lines on this server are in use. Try another server, or wait for a crew to return.",
-					GameConfig.MaxConcurrentExpeditions
-				),
-				duration = 10,
-			})
+			Net.fireClient("Notify", player, { kind = "error", title = title, body = body, duration = 10 })
 			Net.fireClient("ExpeditionState", player, { state = "cancelled", id = id })
 			ShopService.setBlockedState(player, nil)
 		end
-		CrewService.close(crew, "no lane available")
-		return
+		CrewService.close(crew, reason)
 	end
 
-	local memberIds: { number } = {}
-	for _, player in members do
-		table.insert(memberIds, player.UserId)
+	if not lane then
+		-- Every lane is busy. This is a real limit of single-place mode and the
+		-- crew is told plainly rather than left waiting.
+		abandonStart(
+			"The line is occupied",
+			string.format(
+				"All %d expedition lines on this server are in use. Try another server, or wait for a crew to return.",
+				GameConfig.MaxConcurrentExpeditions
+			),
+			"no lane available"
+		)
+		return
 	end
 
 	local leader = Players:GetPlayerByUserId(crew.leaderUserId)
@@ -648,8 +648,40 @@ function ExpeditionService.begin(crew: CrewService.Crew, members: { Player })
 	local livery = if leaderProfile then leaderProfile.loadout.livery else nil
 	local interior = if leaderProfile then leaderProfile.loadout.interior else nil
 
-	local trainOrigin = CFrame.new(lane.origin + Vector3.new(0, 0, 60)) * CFrame.Angles(0, math.rad(180), 0)
-	local train = TrainService.spawn(crew.id, crew.trainId, livery, interior, trainOrigin, lane.trainContainer)
+	-- The train at Platform 1 is the crew's train. If it is out on a run, the
+	-- crew waits for the next one and is told so.
+	for _, player in members do
+		Net.fireClient("ExpeditionState", player, { state = "preparing", id = id, progress = 1, label = "Calling the train" })
+	end
+	local service = DepartureService.reserve(crew.id, crew.trainId, livery, interior, function(message)
+		for _, player in members do
+			Net.fireClient("Notify", player, { kind = "info", title = "Platform 1", body = message, duration = 8 })
+		end
+	end)
+	if not service then
+		WorldService.releaseLane(lane)
+		abandonStart(
+			"No train is available",
+			"No service reached Platform 1 in time. You are back in the yard; try departing again.",
+			"no service"
+		)
+		return
+	end
+	local yard = service :: DepartureService.Service
+
+	local memberIds: { number } = {}
+	for _, player in members do
+		table.insert(memberIds, player.UserId)
+	end
+
+	-- The expedition train waits inside the tunnel at the start of the line.
+	-- It is the same type, livery and interior as the yard train, so the crew
+	-- crosses into an identical carriage.
+	local halfLength = TrainBuilder.lengthOf(yard.trainId) * 0.5
+	local trainOrigin = CFrame.new(lane.origin + Vector3.new(0, 0, -halfLength))
+	local train = TrainService.spawn(crew.id, yard.trainId, yard.liveryId, yard.interiorId, trainOrigin, lane.trainContainer, {
+		doorsOpen = false,
+	})
 
 	local expedition: Expedition = {
 		id = id,
@@ -702,7 +734,7 @@ function ExpeditionService.begin(crew: CrewService.Crew, members: { Player })
 
 	for _, player in members do
 		playerExpedition[player.UserId] = id
-		InventoryService.create(player, crew.trainId, sharedSlots, sharedWeight)
+		InventoryService.create(player, yard.trainId, sharedSlots, sharedWeight)
 		InventoryService.bindCrewStore(crew.id, player)
 		ProgressionService.addStat(player, "expeditions_started", 1)
 		DataService.update(player, function(p)
@@ -711,41 +743,188 @@ function ExpeditionService.begin(crew: CrewService.Crew, members: { Player })
 		-- Starting kit, so nobody begins with nothing.
 		InventoryService.add(player, "bandage", 2)
 		InventoryService.add(player, "battery", 1)
-		spawnIntoTrain(expedition, player)
 	end
 
 	InventoryService.configureDrops(lane.dropContainer, WorldService.buildDroppedItem)
 
-	-- Cinematic, synchronised across the crew.
+	------------------------------------------------------------------
+	-- Boarding: the crew walks onto the train at Platform 1.
+	------------------------------------------------------------------
+	setState(expedition, "boarding")
+	local boardTarget = yard.train.built.carriages[1] or yard.train.built.model
+	DepartureService.board(yard, function()
+		return playersOf(expedition)
+	end, function(missing, remaining)
+		local names: { string } = {}
+		for _, player in missing do
+			table.insert(names, player.DisplayName)
+		end
+		broadcast(expedition, "Boarding", {
+			state = "boarding",
+			target = boardTarget,
+			missing = names,
+			remaining = remaining,
+			total = #expedition.members,
+		})
+	end)
+	if expedition.state == "closed" then
+		DepartureService.release(yard)
+		return
+	end
+	broadcast(expedition, "Boarding", { state = "aboard" })
+
+	------------------------------------------------------------------
+	-- Departure: doors close, the yard pilot takes the train out, and the
+	-- opening sequence films it leaving.
+	------------------------------------------------------------------
+	DepartureService.depart(yard, expedition.members)
 	setState(expedition, "cinematic")
 	broadcast(expedition, "Cinematic", {
 		action = "play",
 		duration = GameConfig.CinematicSeconds,
 		skippableAfter = GameConfig.CinematicSkippableAfter,
-		trainCFrame = train.built.root.CFrame,
+		trainModel = yard.train.built.model,
+		trainCFrame = yard.train.built.root.CFrame,
 	})
 	ExpeditionService.fireRadio(expedition, "expedition_start")
 
-	expedition.maid:Give(task.delay(GameConfig.CinematicSeconds, function()
-		ExpeditionService.endCinematic(expedition)
-	end))
+	local platformDistance, tunnelDistance = DepartureService.lobbyGeometry()
+	-- Start streaming the line in for each member while the train is still
+	-- in the yard, so it is there when they arrive.
+	DepartureService.waitForDistance(yard, platformDistance + (tunnelDistance - platformDistance) * 0.6, 60)
+	local laneFocus = train.built.root.Position
+	for _, player in playersOf(expedition) do
+		task.spawn(function()
+			pcall(function()
+				player:RequestStreamAroundAsync(laneFocus, 6)
+			end)
+		end)
+	end
+	DepartureService.waitForDistance(yard, tunnelDistance, 45)
+	if expedition.state == "closed" then
+		DepartureService.retire(yard)
+		return
+	end
+
+	------------------------------------------------------------------
+	-- The tunnel: in the dark, the crew crosses from the yard train to the
+	-- expedition train, standing exactly where they were.
+	------------------------------------------------------------------
+	broadcast(expedition, "ScreenFade", { action = "out", seconds = 0.6 })
+	task.wait(0.75)
+	ExpeditionService.crossToLine(expedition, yard)
+	DepartureService.retire(yard)
+	broadcast(expedition, "Cinematic", { action = "stop" })
+	broadcast(expedition, "ScreenFade", { action = "in", seconds = 1.4 })
+	ExpeditionService.arriveOnLine(expedition)
 
 	log.info(string.format("expedition %s begun on lane %d with %d crew", id, lane.index, #members))
 end
 
+--- Moves every crew member from the yard train to the expedition train,
+--- keeping each one's position and facing relative to the train. Anybody who
+--- is somehow not aboard the yard train is put in the cab instead.
+function ExpeditionService.crossToLine(expedition: Expedition, yard: DepartureService.Service)
+	local yardRoot = yard.train.built.root.CFrame
+	local train = expedition.train
+	local lineRoot = train.built.root.CFrame
+	-- Where each crew member stands, relative to the train rather than the
+	-- world: the train is moving, so a world position is stale a moment later.
+	local cabRelative = lineRoot:ToObjectSpace(train.built.cab.driverSeat.CFrame * CFrame.new(0, 1, 4))
+	local relatives: { [Player]: CFrame } = {}
+
+	-- The expedition train takes over the yard train's motion, so nothing
+	-- jolts: it emerges from the tunnel still rolling and coasts to a stand.
+	train.direction = 1
+	train.speed = yard.train.speed
+	train.throttle = 0
+	train.serviceBrake = 0
+	TrainService.publishMotion(train, true)
+	local model = train.built.model
+	local motion = {
+		origin = train.origin,
+		distance = train.distance,
+		velocity = train.speed,
+		sampleTime = workspace:GetServerTimeNow(),
+	}
+
+	for _, player in playersOf(expedition) do
+		local character = player.Character
+		local root = if character then character:FindFirstChild("HumanoidRootPart") else nil
+		local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
+		if not character or not root or not root:IsA("BasePart") or not humanoid then
+			spawnIntoTrain(expedition, player)
+			continue
+		end
+		-- A seated passenger is welded into the yard train's anchored assembly,
+		-- which takes the character out of its own client's control. Leave the
+		-- seat before crossing.
+		if humanoid.SeatPart then
+			local weld = humanoid.SeatPart:FindFirstChild("SeatWeld")
+			if weld then
+				weld:Destroy()
+			end
+			humanoid.Sit = false
+		end
+		local relative = if TrainService.isInside(yard.train, root.Position, 3)
+			then yardRoot:ToObjectSpace(character:GetPivot())
+			else cabRelative
+		relatives[player] = relative
+		-- The client owns its character, so it makes the move itself, tracking
+		-- the moving train until the train has streamed in around it. A move
+		-- written only by the server was lost in testing when the character
+		-- had just left a seat on the yard train.
+		Net.fireClient("CrossToLine", player, {
+			relative = relative,
+			model = model,
+			origin = motion.origin,
+			distance = motion.distance,
+			velocity = motion.velocity,
+			sampleTime = motion.sampleTime,
+		})
+		character:PivotTo(lineRoot * relative)
+	end
+
+	-- Check that everybody is actually aboard, and put anyone who is not
+	-- back in their place on the train from the server.
+	task.delay(2.5, function()
+		for player, relative in relatives do
+			local character = player.Character
+			if character and character.Parent and not TrainService.isInside(train, character:GetPivot().Position, 2) then
+				log.warn(string.format("%s did not cross to the line; placing them from the server", player.Name))
+				character:PivotTo(train.built.root.CFrame * relative)
+			end
+		end
+	end)
+end
+
+--- The crew is on the line. Hand over to the travelling state and point the
+--- crew at the cab.
+function ExpeditionService.arriveOnLine(expedition: Expedition)
+	if expedition.state == "closed" then
+		return
+	end
+	TrainService.setStopDistance(expedition.train, StationRegistry.Stations[1].distance)
+	setState(expedition, "travelling")
+	notify(
+		expedition,
+		"info",
+		"02:17, Up Main",
+		"The yard pilot has handed her over. The cab is at the front: take the driver's seat.",
+		8
+	)
+end
+
 local cinematicSkipVotes: { [string]: { [number]: boolean } } = {}
 
+--- Ends the opening sequence's camera work early (a crew skip vote). The
+--- departure itself carries on: the train is really moving, and the crew
+--- rides the rest of it in first person.
 function ExpeditionService.endCinematic(expedition: Expedition)
 	if expedition.state ~= "cinematic" then
 		return
 	end
 	broadcast(expedition, "Cinematic", { action = "stop" })
-	TrainService.setStopDistance(expedition.train, StationRegistry.Stations[1].distance)
-	expedition.train.direction = 1
-	expedition.train.doorsOpen = false
-	TrainService.applyDoors(expedition.train)
-	setState(expedition, "travelling")
-	notify(expedition, "info", "02:17", "The last train out. Keep her moving.", 6)
 end
 
 --------------------------------------------------------------------------

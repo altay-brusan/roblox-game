@@ -78,6 +78,10 @@ Balance.Train = {
 	coastDeceleration = 1.6,
 	serviceBrakeDeceleration = 7.5,
 	emergencyBrakeDeceleration = 19,
+	-- Train protection: approaching a stop, the train is held to a braking
+	-- curve at this rate so it always draws up at the platform instead of
+	-- stopping dead the instant it reaches it.
+	stationApproachDeceleration = 5.5,
 	-- Emergency braking is punishing on purpose: it costs condition and wakes
 	-- things up, so it is a real decision rather than a free stop.
 	emergencyBrakeConditionCost = 4,

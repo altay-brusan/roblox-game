@@ -58,6 +58,9 @@ local MANIFEST: { [string]: RemoteSpec } = {
 	ExpeditionCommand = { kind = "function", rate = { 10, 2 } },
 	Cinematic = { kind = "event" }, -- server -> client
 	CinematicSkip = { kind = "event", rate = { 4, 1 } },
+	Boarding = { kind = "event" }, -- server -> client, who is still to board the 02:17
+	ScreenFade = { kind = "event" }, -- server -> client, the tunnel crossing
+	CrossToLine = { kind = "event" }, -- server -> client, where to stand on the expedition train
 
 	-- World interaction ----------------------------------------------------
 	Interact = { kind = "event", rate = { 12, 4 } },

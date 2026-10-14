@@ -155,21 +155,20 @@ end
 
 type Beat = { at: number, title: string?, subtitle: string?, fade: number? }
 
--- The text of the sequence. Timings match the camera keyframes in
--- CameraController, so the words land on the right shots.
+-- The text of the sequence. Timings match the shots in CameraController, so
+-- the words land on the right shots. There is no closing fade here: the
+-- train running into the tunnel is the fade, sent by the server as a
+-- ScreenFade when it is actually inside.
 local BEATS: { Beat } = {
 	{ at = 0.0, fade = 0 },
-	{ at = 1.0, title = "LAST SIGNAL", subtitle = "A RIPGAMES production", fade = 1 },
-	{ at = 6.0, title = "", subtitle = "" },
-	{ at = 7.5, subtitle = "02:17. The last evacuation train out of Tolbridge Yard." },
-	{ at = 13.0, subtitle = "" },
-	{ at = 14.5, subtitle = "Regional communications failed eleven days ago." },
-	{ at = 20.0, subtitle = "" },
-	{ at = 21.5, subtitle = "The line runs ninety kilometres north, through the forest." },
-	{ at = 27.0, subtitle = "" },
-	{ at = 29.0, subtitle = "Keep her moving. Stay together." },
-	{ at = 33.0, subtitle = "Do not trust every voice on the radio." },
-	{ at = 37.0, subtitle = "", fade = 0 },
+	{ at = 0.6, title = "LAST SIGNAL", subtitle = "A RIPGAMES production", fade = 1 },
+	{ at = 5.0, title = "", subtitle = "" },
+	{ at = 6.5, subtitle = "02:17. The last evacuation train out of Tolbridge Yard." },
+	{ at = 11.0, subtitle = "" },
+	{ at = 12.0, subtitle = "Regional communications failed eleven days ago." },
+	{ at = 16.0, subtitle = "" },
+	{ at = 17.0, subtitle = "Ninety kilometres of line. Five stops. Do not trust every voice on the radio." },
+	{ at = 22.0, subtitle = "" },
 }
 
 local function applyBeat(beat: Beat)
@@ -239,7 +238,7 @@ local function finish()
 	log.info("cinematic finished; control restored")
 end
 
-local function begin(duration: number, skippableAfter: number, anchor: CFrame?)
+local function begin(duration: number, skippableAfter: number, anchor: CFrame?, model: Model?)
 	if running then
 		return
 	end
@@ -258,13 +257,9 @@ local function begin(duration: number, skippableAfter: number, anchor: CFrame?)
 	end
 	setLetterbox(true)
 
-	-- Reduced motion swaps the moving camera for held frames. The camera
-	-- controller is still driven, just not interpolated between shots.
-	if not Theme.motionReduced() then
-		CameraController.startCinematic(duration, anchor)
-	else
-		CameraController.startCinematic(duration, anchor)
-	end
+	-- Reduced motion swaps the moving camera for held frames; the camera
+	-- controller handles that itself.
+	CameraController.startCinematic(duration, anchor, model)
 
 	AudioController.loop("cinematic_music", "music_departure")
 
@@ -300,15 +295,73 @@ end
 
 --------------------------------------------------------------------------
 
+--------------------------------------------------------------------------
+-- Screen fade
+--------------------------------------------------------------------------
+
+-- A fade that is independent of the cinematic, for the tunnel crossing. It
+-- sits above everything and is used whether or not the sequence was skipped.
+local screenFade: Frame? = nil
+local fadeToken = 0
+
+local function buildScreenFade()
+	local playerGui = player:WaitForChild("PlayerGui")
+	local screen = Instance.new("ScreenGui")
+	screen.Name = "LastSignalFade"
+	screen.IgnoreGuiInset = true
+	screen.ResetOnSpawn = false
+	screen.DisplayOrder = 10000
+	screen.Parent = playerGui
+	local frame = Instance.new("Frame")
+	frame.Name = "Fade"
+	frame.BorderSizePixel = 0
+	frame.BackgroundColor3 = Color3.new(0, 0, 0)
+	frame.BackgroundTransparency = 1
+	frame.Size = UDim2.fromScale(1, 1)
+	frame.Parent = screen
+	screenFade = frame
+end
+
+local function fadeScreen(action: string, seconds: number)
+	local frame = screenFade
+	if not frame then
+		return
+	end
+	fadeToken += 1
+	local token = fadeToken
+	TweenService:Create(frame, TweenInfo.new(seconds, Enum.EasingStyle.Sine), {
+		BackgroundTransparency = if action == "out" then 0 else 1,
+	}):Play()
+	if action == "out" then
+		-- Never left black: if the matching fade-in is lost, clear anyway.
+		task.delay(6, function()
+			if fadeToken == token then
+				fadeScreen("in", 1)
+			end
+		end)
+	end
+end
+
 function CinematicController.start()
 	build()
+	buildScreenFade()
+
+	Net.onClientEvent("ScreenFade", function(payload)
+		if type(payload) ~= "table" then
+			return
+		end
+		local seconds = if type(payload.seconds) == "number" then math.clamp(payload.seconds, 0, 5) else 0.6
+		fadeScreen(if payload.action == "out" then "out" else "in", seconds)
+	end)
 
 	Net.onClientEvent("Cinematic", function(payload)
 		if type(payload) ~= "table" then
 			return
 		end
 		if payload.action == "play" then
-			begin(payload.duration or GameConfig.CinematicSeconds, payload.skippableAfter or 2, payload.trainCFrame)
+			local model = if typeof(payload.trainModel) == "Instance" and payload.trainModel:IsA("Model") then payload.trainModel else nil
+			local anchor = if typeof(payload.trainCFrame) == "CFrame" then payload.trainCFrame else nil
+			begin(payload.duration or GameConfig.CinematicSeconds, payload.skippableAfter or 2, anchor, model)
 		elseif payload.action == "stop" then
 			finish()
 		elseif payload.action == "skipvote" and skipLabel and running then
