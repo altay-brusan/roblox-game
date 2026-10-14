@@ -230,9 +230,10 @@ local DOOR_OPEN_ANGLE = math.rad(105)
 --- Swings every door of a built train open or closed. Doors are articulated
 --- joints (see TrainBuilder), so this moves the leaves and nothing else.
 function TrainService.setDoorsPose(built: TrainBuilder.BuiltTrain, open: boolean, immediate: boolean?)
-	local target = if open then DOOR_OPEN_ANGLE else 0
 	for _, door in built.doors do
 		local hinge = door.hinge
+		local swing = tonumber(hinge:GetAttribute("SwingAngle")) or DOOR_OPEN_ANGLE
+		local target = if open then swing else 0
 		-- A new request supersedes a swing still in progress.
 		local token = (tonumber(hinge:GetAttribute("SwingToken")) or 0) + 1
 		hinge:SetAttribute("SwingToken", token)

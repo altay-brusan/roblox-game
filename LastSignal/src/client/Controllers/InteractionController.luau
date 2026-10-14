@@ -221,6 +221,18 @@ local function actionFor(instance: Instance): (string?, string, string)
 	if instance:HasTag("RadioSet") then
 		return "read", "Play a recording", ""
 	end
+	if instance:HasTag("DriverSeat") then
+		if instance:IsA("Seat") and (instance.Occupant or instance:GetAttribute("SeatLocked") == true) then
+			return nil, "", ""
+		end
+		return "sit", "Take the controls", "Driver's seat"
+	end
+	if instance:HasTag("TrainSeat") then
+		if instance:IsA("Seat") and instance.Occupant then
+			return nil, "", ""
+		end
+		return "sit", "Take a seat", ""
+	end
 	if instance:HasTag("DoorLeaf") then
 		return "door", "Work the door", ""
 	end

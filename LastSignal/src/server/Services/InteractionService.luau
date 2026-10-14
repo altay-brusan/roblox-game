@@ -517,6 +517,7 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		"door",
 		"discover",
 		"lobby",
+		"sit",
 		"cancel",
 	})
 	if not action then
@@ -581,6 +582,41 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		end
 		ProgressionService.addStat(player, "items_collected", added)
 		Net.fireClient("InteractResult", player, { ok = true, action = "pickup", itemId = itemId, quantity = added })
+		return
+	end
+
+	----------------------------------------------------------------------
+	-- Seats. Taken with a prompt rather than by touch, in the yard and on
+	-- the line alike.
+	----------------------------------------------------------------------
+	if action == "sit" then
+		if not target:IsA("Seat") or not (target:HasTag("TrainSeat") or target:HasTag("DriverSeat")) then
+			return
+		end
+		if target:GetAttribute("SeatLocked") == true or target.Occupant then
+			Net.fireClient("InteractResult", player, { ok = false, error = "OCCUPIED" })
+			return
+		end
+		local character = player.Character
+		local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
+		if humanoid and not humanoid.SeatPart then
+			-- Seats stay disabled until somebody chooses to sit: an enabled
+			-- seat grabs anyone who brushes against it, which trapped players
+			-- walking the aisles. Enabled for this sitting, disabled again when
+			-- they get up.
+			local seat = target :: Seat
+			seat.Disabled = false
+			seat:Sit(humanoid)
+			local watch: RBXScriptConnection? = nil
+			watch = seat:GetPropertyChangedSignal("Occupant"):Connect(function()
+				if not seat.Occupant then
+					seat.Disabled = true
+					if watch then
+						watch:Disconnect()
+					end
+				end
+			end)
+		end
 		return
 	end
 
@@ -960,6 +996,8 @@ function InteractionService.start()
 	wire("DroppedItem", "Take", "")
 	wire("RadioSet", "Radio", "")
 	wire("DoorLeaf", "Door", "")
+	wire("TrainSeat", "Sit", "")
+	wire("DriverSeat", "Drive", "")
 
 	-- Lobby fixtures. Without these the crew board is scenery and the only way
 	-- to start an expedition is to guess a keyboard shortcut, which is how the

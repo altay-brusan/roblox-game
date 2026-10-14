@@ -105,9 +105,13 @@ local function stripExpeditionFixtures(model: Model)
 	end
 	for _, descendant in model:GetDescendants() do
 		if descendant:IsA("ProximityPrompt") then
-			descendant:Destroy()
+			-- Passengers can still take a seat on the yard train.
+			local host = descendant.Parent
+			if not (host and host:HasTag("TrainSeat")) then
+				descendant:Destroy()
+			end
 		elseif descendant:IsA("Seat") and descendant:HasTag("DriverSeat") then
-			descendant.Disabled = true
+			descendant:SetAttribute("SeatLocked", true)
 		end
 	end
 	for _, tag in { "SupplyRack", "RadioSet", "TrainFuelPoint", "TrainRepairPoint", "DoorLeaf" } do

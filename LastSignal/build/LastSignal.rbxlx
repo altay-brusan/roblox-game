@@ -11394,9 +11394,13 @@ local function stripExpeditionFixtures(model: Model)
 	end
 	for _, descendant in model:GetDescendants() do
 		if descendant:IsA("ProximityPrompt") then
-			descendant:Destroy()
+			-- Passengers can still take a seat on the yard train.
+			local host = descendant.Parent
+			if not (host and host:HasTag("TrainSeat")) then
+				descendant:Destroy()
+			end
 		elseif descendant:IsA("Seat") and descendant:HasTag("DriverSeat") then
-			descendant.Disabled = true
+			descendant:SetAttribute("SeatLocked", true)
 		end
 	end
 	for _, tag in { "SupplyRack", "RadioSet", "TrainFuelPoint", "TrainRepairPoint", "DoorLeaf" } do
@@ -14936,6 +14940,7 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		"door",
 		"discover",
 		"lobby",
+		"sit",
 		"cancel",
 	})
 	if not action then
@@ -15000,6 +15005,41 @@ local function handleInteract(player: Player, rawTarget: any, rawAction: any)
 		end
 		ProgressionService.addStat(player, "items_collected", added)
 		Net.fireClient("InteractResult", player, { ok = true, action = "pickup", itemId = itemId, quantity = added })
+		return
+	end
+
+	----------------------------------------------------------------------
+	-- Seats. Taken with a prompt rather than by touch, in the yard and on
+	-- the line alike.
+	----------------------------------------------------------------------
+	if action == "sit" then
+		if not target:IsA("Seat") or not (target:HasTag("TrainSeat") or target:HasTag("DriverSeat")) then
+			return
+		end
+		if target:GetAttribute("SeatLocked") == true or target.Occupant then
+			Net.fireClient("InteractResult", player, { ok = false, error = "OCCUPIED" })
+			return
+		end
+		local character = player.Character
+		local humanoid = if character then character:FindFirstChildOfClass("Humanoid") else nil
+		if humanoid and not humanoid.SeatPart then
+			-- Seats stay disabled until somebody chooses to sit: an enabled
+			-- seat grabs anyone who brushes against it, which trapped players
+			-- walking the aisles. Enabled for this sitting, disabled again when
+			-- they get up.
+			local seat = target :: Seat
+			seat.Disabled = false
+			seat:Sit(humanoid)
+			local watch: RBXScriptConnection? = nil
+			watch = seat:GetPropertyChangedSignal("Occupant"):Connect(function()
+				if not seat.Occupant then
+					seat.Disabled = true
+					if watch then
+						watch:Disconnect()
+					end
+				end
+			end)
+		end
 		return
 	end
 
@@ -15379,6 +15419,8 @@ function InteractionService.start()
 	wire("DroppedItem", "Take", "")
 	wire("RadioSet", "Radio", "")
 	wire("DoorLeaf", "Door", "")
+	wire("TrainSeat", "Sit", "")
+	wire("DriverSeat", "Drive", "")
 
 	-- Lobby fixtures. Without these the crew board is scenery and the only way
 	-- to start an expedition is to guess a keyboard shortcut, which is how the
@@ -19776,9 +19818,10 @@ local DOOR_OPEN_ANGLE = math.rad(105)
 --- Swings every door of a built train open or closed. Doors are articulated
 --- joints (see TrainBuilder), so this moves the leaves and nothing else.
 function TrainService.setDoorsPose(built: TrainBuilder.BuiltTrain, open: boolean, immediate: boolean?)
-	local target = if open then DOOR_OPEN_ANGLE else 0
 	for _, door in built.doors do
 		local hinge = door.hinge
+		local swing = tonumber(hinge:GetAttribute("SwingAngle")) or DOOR_OPEN_ANGLE
+		local target = if open then swing else 0
 		-- A new request supersedes a swing still in progress.
 		local token = (tonumber(hinge:GetAttribute("SwingToken")) or 0) + 1
 		hinge:SetAttribute("SwingToken", token)
@@ -26215,7 +26258,10 @@ local function buildCabInterior(
 	seat.Color = interior.seat
 	seat.Material = interior.seatMaterial
 	seat.Anchored = true
-	seat.CanTouch = true
+	-- Seats are taken with a prompt, not by touch: a touch seat grabs anyone
+	-- who brushes it, which trapped players walking past in the aisles.
+	seat.CanTouch = false
+	seat.Disabled = true
 	seat.TopSurface = Enum.SurfaceType.Smooth
 	seat.BottomSurface = Enum.SurfaceType.Smooth
 	seat.Parent = parent
@@ -26245,7 +26291,10 @@ local function buildCabInterior(
 	mate.Color = interior.seat
 	mate.Material = interior.seatMaterial
 	mate.Anchored = true
+	mate.CanTouch = false
+	mate.Disabled = true
 	mate.Parent = parent
+	mate:AddTag("TrainSeat")
 
 	-- Wiper arms on the inside of the windscreen.
 	local wipers: { BasePart } = {}
@@ -26494,6 +26543,10 @@ local function buildLocomotive(
 		local doorCF = originCF * CFrame.new(side * (width * 0.5 - 0.35), bodyBottom + 0.2, hingeZ)
 		local door = BuildKit.door(doorCF * CFrame.Angles(0, math.rad(if side > 0 then 0 else 180), 0), 3.2, 7.0, 0.35, livery.body, Enum.Material.Metal, model)
 		door.Name = "CabDoor"
+		-- Cab doors fold back flat against the outside of the body. Swinging
+		-- inward, the leaf lay right across the way in from the corridor.
+		local cabHinge = door.PrimaryPart :: BasePart
+		cabHinge:SetAttribute("SwingAngle", math.rad(-170))
 		table.insert(doors, { model = door, hinge = door.PrimaryPart :: BasePart, side = if side > 0 then "right" else "left", carriage = 0 })
 		-- Steps up to the cab door from the ballast.
 		for stepIndex = 0, 1 do
@@ -27356,8 +27409,11 @@ local function buildCarriage(
 					seat.Color = interior.seat
 					seat.Material = interior.seatMaterial
 					seat.Anchored = true
+					seat.CanTouch = false
+					seat.Disabled = true
 					seat.TopSurface = Enum.SurfaceType.Smooth
 					seat.Parent = model
+					seat:AddTag("TrainSeat")
 					BuildKit.detail({
 						name = "SeatBack",
 						size = Vector3.new(3.4, 3.2, 0.45),
@@ -31217,6 +31273,12 @@ local function handle(actionName: string, inputState: Enum.UserInputState): Enum
 	if suppressed and not def.worksInMenu then
 		return Enum.ContextActionResult.Pass
 	end
+	-- Skip shares Space with jumping. It only claims the key while a
+	-- cinematic is actually playing; sinking it all the time meant nobody
+	-- could ever jump or get up out of a seat.
+	if def.id == "skip" and not StateController.ui("cinematic") then
+		return Enum.ContextActionResult.Pass
+	end
 
 	if inputState == Enum.UserInputState.Begin then
 		InputController.Action:Fire(def.id, true)
@@ -31689,6 +31751,18 @@ local function actionFor(instance: Instance): (string?, string, string)
 	end
 	if instance:HasTag("RadioSet") then
 		return "read", "Play a recording", ""
+	end
+	if instance:HasTag("DriverSeat") then
+		if instance:IsA("Seat") and (instance.Occupant or instance:GetAttribute("SeatLocked") == true) then
+			return nil, "", ""
+		end
+		return "sit", "Take the controls", "Driver's seat"
+	end
+	if instance:HasTag("TrainSeat") then
+		if instance:IsA("Seat") and instance.Occupant then
+			return nil, "", ""
+		end
+		return "sit", "Take a seat", ""
 	end
 	if instance:HasTag("DoorLeaf") then
 		return "door", "Work the door", ""

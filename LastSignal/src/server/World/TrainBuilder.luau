@@ -810,7 +810,10 @@ local function buildCabInterior(
 	seat.Color = interior.seat
 	seat.Material = interior.seatMaterial
 	seat.Anchored = true
-	seat.CanTouch = true
+	-- Seats are taken with a prompt, not by touch: a touch seat grabs anyone
+	-- who brushes it, which trapped players walking past in the aisles.
+	seat.CanTouch = false
+	seat.Disabled = true
 	seat.TopSurface = Enum.SurfaceType.Smooth
 	seat.BottomSurface = Enum.SurfaceType.Smooth
 	seat.Parent = parent
@@ -840,7 +843,10 @@ local function buildCabInterior(
 	mate.Color = interior.seat
 	mate.Material = interior.seatMaterial
 	mate.Anchored = true
+	mate.CanTouch = false
+	mate.Disabled = true
 	mate.Parent = parent
+	mate:AddTag("TrainSeat")
 
 	-- Wiper arms on the inside of the windscreen.
 	local wipers: { BasePart } = {}
@@ -1089,6 +1095,10 @@ local function buildLocomotive(
 		local doorCF = originCF * CFrame.new(side * (width * 0.5 - 0.35), bodyBottom + 0.2, hingeZ)
 		local door = BuildKit.door(doorCF * CFrame.Angles(0, math.rad(if side > 0 then 0 else 180), 0), 3.2, 7.0, 0.35, livery.body, Enum.Material.Metal, model)
 		door.Name = "CabDoor"
+		-- Cab doors fold back flat against the outside of the body. Swinging
+		-- inward, the leaf lay right across the way in from the corridor.
+		local cabHinge = door.PrimaryPart :: BasePart
+		cabHinge:SetAttribute("SwingAngle", math.rad(-170))
 		table.insert(doors, { model = door, hinge = door.PrimaryPart :: BasePart, side = if side > 0 then "right" else "left", carriage = 0 })
 		-- Steps up to the cab door from the ballast.
 		for stepIndex = 0, 1 do
@@ -1951,8 +1961,11 @@ local function buildCarriage(
 					seat.Color = interior.seat
 					seat.Material = interior.seatMaterial
 					seat.Anchored = true
+					seat.CanTouch = false
+					seat.Disabled = true
 					seat.TopSurface = Enum.SurfaceType.Smooth
 					seat.Parent = model
+					seat:AddTag("TrainSeat")
 					BuildKit.detail({
 						name = "SeatBack",
 						size = Vector3.new(3.4, 3.2, 0.45),
