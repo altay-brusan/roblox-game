@@ -1584,6 +1584,45 @@ local GAMEPASSES: { ProductDef } = {
 		permanent = true,
 		order = 7,
 	},
+
+	-- Premium trains. Each is a different way to ride the line, with a real
+	-- weakness; the story can be finished with the free Warden.
+	{
+		key = "pass_phantom_express",
+		kind = "gamepass",
+		id = 0,
+		name = "Phantom Express",
+		blurb = "Permanent: the Phantom Express and its Phantom Grey livery. Fast (+22%) and economical (-15% fuel), with an observation carriage; lightly built (takes 25% more damage) and short on storage (-2 slots).",
+		suggestedPrice = 299,
+		category = "passes",
+		grants = { trains = { "phantom_express" } },
+		permanent = true,
+		order = 8,
+	},
+	{
+		key = "pass_eclipse_engine",
+		kind = "gamepass",
+		id = 0,
+		name = "Eclipse Engine",
+		blurb = "Permanent: the Eclipse Engine and its Eclipse Black livery. A centre-cab engine with a workshop carriage: tougher, economical, +3 storage; slow to accelerate away from a bad stop.",
+		suggestedPrice = 399,
+		category = "passes",
+		grants = { trains = { "eclipse_engine" } },
+		permanent = true,
+		order = 9,
+	},
+	{
+		key = "pass_wardens_convoy",
+		kind = "gamepass",
+		id = 0,
+		name = "Warden's Convoy",
+		blurb = "Permanent: the Warden's Convoy and its Convoy Olive livery. Armoured locomotive, guard van, passenger carriage and supply wagon: the toughest body and +6 storage; slow (-16%) and thirsty (+30% fuel).",
+		suggestedPrice = 499,
+		category = "passes",
+		grants = { trains = { "wardens_convoy" } },
+		permanent = true,
+		order = 10,
+	},
 }
 
 --------------------------------------------------------------------------
@@ -7374,6 +7413,8 @@ export type TrainDef = {
 	-- The starter must always be enough to finish the chapter. Enforced by a
 	-- check in ExpeditionService, not just by intent.
 	isStarter: boolean,
+	-- Game Pass for a premium train; checked on the server at selection.
+	passKey: string?,
 }
 
 local function train(def: TrainDef): TrainDef
@@ -7537,6 +7578,131 @@ local TRAINS: { [string]: TrainDef } = {
 		creditCost = 6600,
 		isStarter = false,
 	}),
+
+	--------------------------------------------------------------------
+	-- Premium trains (Game Passes). Each is a different way to ride the
+	-- line, with a real weakness; none makes the line safe, and the story
+	-- can be finished with the Warden.
+	--------------------------------------------------------------------
+
+	phantom_express = train({
+		id = "phantom_express",
+		name = "Phantom Express",
+		class = "Night Observation Express",
+		tagline = "Pale, quick, and nobody aboard but you.",
+		description = "A long-nosed express in ghost-grey with an observation carriage of tall windows. Fast and economical, but lightly built and short on storage: a brush with the line costs her more than most.",
+		build = {
+			locoLength = 44,
+			locoWidth = 10,
+			locoHeight = 12,
+			nose = "raked",
+			bogies = 2,
+			axlesPerBogie = 2,
+			wheelRadius = 1.4,
+			cabPosition = "front",
+			exhaustStacks = 0,
+			detailLevel = 3,
+			carriages = {
+				{ kind = "passenger", length = 50, seats = 10, racks = 4, crates = 2, roofHatch = true },
+				{ kind = "supply", length = 40, seats = 2, racks = 3, crates = 6 },
+			},
+		},
+		handling = {
+			maxSpeedMultiplier = 1.22,
+			accelerationMultiplier = 1.15,
+			brakingMultiplier = 1.1,
+			fuelUseMultiplier = 0.85,
+			conditionDriftMultiplier = 1.1,
+			damageResistance = 0.8,
+			inventoryBonusSlots = -2,
+			headlightRangeMultiplier = 1.1,
+		},
+		defaultLivery = "livery_phantom",
+		unlockLevel = 0,
+		creditCost = 0,
+		isStarter = false,
+		passKey = "pass_phantom_express",
+	}),
+
+	eclipse_engine = train({
+		id = "eclipse_engine",
+		name = "Eclipse Engine",
+		class = "Centre-Cab Relay Locomotive",
+		tagline = "Black and gold, and quiet about it.",
+		description = "A centre-cab engine in black and gold with a workshop carriage. Balanced and economical with good storage, but slow to get away: a stop in the wrong place takes longer to leave.",
+		build = {
+			locoLength = 52,
+			locoWidth = 11,
+			locoHeight = 13,
+			nose = "bonnet",
+			bogies = 2,
+			axlesPerBogie = 3,
+			wheelRadius = 1.5,
+			cabPosition = "centre",
+			exhaustStacks = 2,
+			detailLevel = 3,
+			carriages = {
+				{ kind = "passenger", length = 48, seats = 10, racks = 6, crates = 4 },
+				{ kind = "workshop", length = 46, seats = 2, racks = 6, crates = 8, roofHatch = true },
+			},
+		},
+		handling = {
+			maxSpeedMultiplier = 1.08,
+			accelerationMultiplier = 0.8,
+			brakingMultiplier = 1.0,
+			fuelUseMultiplier = 0.9,
+			conditionDriftMultiplier = 0.9,
+			damageResistance = 1.15,
+			inventoryBonusSlots = 3,
+			headlightRangeMultiplier = 1.0,
+		},
+		defaultLivery = "livery_eclipse",
+		unlockLevel = 0,
+		creditCost = 0,
+		isStarter = false,
+		passKey = "pass_eclipse_engine",
+	}),
+
+	wardens_convoy = train({
+		id = "wardens_convoy",
+		name = "Warden's Convoy",
+		class = "Armoured Convoy, Four Vehicles",
+		tagline = "Everything, everyone, and the slowest way home.",
+		description = "An armoured locomotive with a guard van, a passenger carriage and a supply wagon: the most room and the toughest body on the line. It is slow, it is thirsty, and a long train is a long thing to watch.",
+		build = {
+			locoLength = 56,
+			locoWidth = 11,
+			locoHeight = 13,
+			nose = "armoured",
+			bogies = 2,
+			axlesPerBogie = 3,
+			wheelRadius = 1.6,
+			cabPosition = "front",
+			exhaustStacks = 1,
+			detailLevel = 3,
+			carriages = {
+				{ kind = "guard", length = 40, seats = 6, racks = 4, crates = 4 },
+				{ kind = "passenger", length = 50, seats = 12, racks = 6, crates = 4 },
+				{ kind = "supply", length = 50, seats = 0, racks = 8, crates = 14, roofHatch = true },
+			},
+		},
+		handling = {
+			maxSpeedMultiplier = 0.84,
+			accelerationMultiplier = 0.85,
+			brakingMultiplier = 0.9,
+			fuelUseMultiplier = 1.3,
+			conditionDriftMultiplier = 0.85,
+			damageResistance = 1.5,
+			inventoryBonusSlots = 6,
+			headlightRangeMultiplier = 1.15,
+		},
+		defaultLivery = "livery_convoy",
+		unlockLevel = 0,
+		creditCost = 0,
+		isStarter = false,
+		passKey = "pass_wardens_convoy",
+	}),
+
 }
 
 --------------------------------------------------------------------------
@@ -7614,6 +7780,45 @@ local LIVERIES: { [string]: LiveryDef } = {
 		pattern = "chevron",
 		lampColour = C(255, 236, 190),
 		source = "default",
+	}),
+	livery_phantom = livery({
+		id = "livery_phantom",
+		name = "Phantom Grey",
+		description = "Ghost-grey with a pale blue stripe. Comes with the Phantom Express.",
+		body = C(178, 184, 190),
+		roof = C(70, 76, 84),
+		trim = C(120, 170, 220),
+		underframe = C(40, 42, 46),
+		stripe = C(140, 190, 235),
+		lampColour = C(214, 232, 255),
+		source = "robux",
+		productKey = "pass_phantom_express",
+	}),
+	livery_eclipse = livery({
+		id = "livery_eclipse",
+		name = "Eclipse Black",
+		description = "Gloss black lined in gold. Comes with the Eclipse Engine.",
+		body = C(22, 22, 26),
+		roof = C(16, 16, 18),
+		trim = C(196, 158, 82),
+		underframe = C(20, 20, 22),
+		stripe = C(196, 158, 82),
+		lampColour = C(255, 226, 170),
+		source = "robux",
+		productKey = "pass_eclipse_engine",
+	}),
+	livery_convoy = livery({
+		id = "livery_convoy",
+		name = "Convoy Olive",
+		description = "Olive drab with hazard chevrons. Comes with the Warden's Convoy.",
+		body = C(74, 82, 58),
+		roof = C(46, 50, 40),
+		trim = C(200, 168, 60),
+		underframe = C(30, 32, 28),
+		pattern = "chevron",
+		lampColour = C(255, 236, 190),
+		source = "robux",
+		productKey = "pass_wardens_convoy",
 	}),
 
 	-- Earned with credits
@@ -7872,6 +8077,97 @@ return TrainRegistry
         </Item>
         <Item class="ModuleScript" referent="35">
           <Properties>
+            <string name="Name">UpgradeRegistry</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	UpgradeRegistry
+	---------------
+	Workshop upgrades: what salvage from the line is for.
+
+	Salvage items still carried when a run ends (fuses, relays, batteries,
+	valves, radio parts) become workshop parts, one each, up to six a run.
+	Parts plus RIP Coin buy upgrades at the workshop bench. Upgrades and parts
+	are permanent; everything else in the inventory is for one run only.
+
+	Train upgrades belong to the crew member who leads the run and apply to
+	whichever train they take. None is sold for Robux.
+]]
+
+local TableUtil = require(script.Parent.Parent.Core.TableUtil)
+
+export type Upgrade = {
+	id: string,
+	name: string,
+	description: string,
+	parts: number,
+	coin: number,
+	-- Multipliers on the train's handling (TrainRegistry), when applicable.
+	damageResistance: number?,
+	fuelUseMultiplier: number?,
+	-- Personal effects.
+	inventorySlots: number?,
+	analyzerNoise: number?,
+}
+
+local UPGRADES: { Upgrade } = {
+	{
+		id = "reinforced_body",
+		name = "Reinforced bodywork",
+		description = "Plated panels on the locomotive and carriages: the train takes 20% less damage.",
+		parts = 4,
+		coin = 120,
+		damageResistance = 1.2,
+	},
+	{
+		id = "fuel_economiser",
+		name = "Fuel economiser",
+		description = "A rebuilt injector pump: the train burns 12% less fuel.",
+		parts = 4,
+		coin = 120,
+		fuelUseMultiplier = 0.88,
+	},
+	{
+		id = "extra_racks",
+		name = "Extra racks",
+		description = "A rack you fit to whatever train you ride: two more inventory slots, every run.",
+		parts = 3,
+		coin = 80,
+		inventorySlots = 2,
+	},
+	{
+		id = "signal_antenna",
+		name = "Signal antenna",
+		description = "A roof antenna for the analyzer: bearings are four degrees sharper.",
+		parts = 5,
+		coin = 150,
+		analyzerNoise = 4,
+	},
+}
+
+-- Items that become parts when carried home.
+local SALVAGE = { "fusebox_fuse", "relay", "battery", "hydraulic_valve", "radio_part" }
+
+local UpgradeRegistry = {}
+
+UpgradeRegistry.All = TableUtil.deepFreeze(UPGRADES) :: { Upgrade }
+UpgradeRegistry.Salvage = TableUtil.deepFreeze(SALVAGE) :: { string }
+UpgradeRegistry.maxPartsPerRun = 6
+
+function UpgradeRegistry.get(id: string): Upgrade?
+	for _, u in UPGRADES do
+		if u.id == id then
+			return u
+		end
+	end
+	return nil
+end
+
+return UpgradeRegistry
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="36">
+          <Properties>
             <string name="Name">WeaponModels</string>
             <string name="Source"><![CDATA[--!strict
 --[[
@@ -8117,7 +8413,7 @@ return WeaponModels
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="36">
+        <Item class="ModuleScript" referent="37">
           <Properties>
             <string name="Name">WeaponRegistry</string>
             <string name="Source"><![CDATA[--!strict
@@ -8763,11 +9059,11 @@ return WeaponRegistry
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="37">
+  <Item class="ServerScriptService" referent="38">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Script" referent="38">
+    <Item class="Script" referent="39">
       <Properties>
         <string name="Name">LastSignalServer</string>
         <token name="RunContext">0</token>
@@ -9026,16 +9322,16 @@ if RunService:IsStudio() then
 end
 ]]></string>
       </Properties>
-      <Item class="Folder" referent="39">
+      <Item class="Folder" referent="40">
         <Properties>
           <string name="Name">Gameplay</string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="40">
+      <Item class="Folder" referent="41">
         <Properties>
           <string name="Name">Journey</string>
         </Properties>
-        <Item class="ModuleScript" referent="41">
+        <Item class="ModuleScript" referent="42">
           <Properties>
             <string name="Name">JourneyEvents</string>
             <string name="Source"><![CDATA[--!strict
@@ -9562,7 +9858,7 @@ return Events
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="42">
+        <Item class="ModuleScript" referent="43">
           <Properties>
             <string name="Name">SignalRegistry</string>
             <string name="Source"><![CDATA[--!strict
@@ -9993,11 +10289,11 @@ return SignalRegistry
           </Properties>
         </Item>
       </Item>
-      <Item class="Folder" referent="43">
+      <Item class="Folder" referent="44">
         <Properties>
           <string name="Name">Services</string>
         </Properties>
-        <Item class="ModuleScript" referent="44">
+        <Item class="ModuleScript" referent="45">
           <Properties>
             <string name="Name">AdminService</string>
             <string name="Source"><![CDATA[--!strict
@@ -10658,7 +10954,7 @@ return AdminService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="45">
+        <Item class="ModuleScript" referent="46">
           <Properties>
             <string name="Name">AnalyticsService</string>
             <string name="Source"><![CDATA[--!strict
@@ -10976,7 +11272,7 @@ return AnalyticsService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="46">
+        <Item class="ModuleScript" referent="47">
           <Properties>
             <string name="Name">AppearanceService</string>
             <string name="Source"><![CDATA[--!strict
@@ -11208,7 +11504,7 @@ return AppearanceService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="47">
+        <Item class="ModuleScript" referent="48">
           <Properties>
             <string name="Name">CombatService</string>
             <string name="Source"><![CDATA[--!strict
@@ -11938,7 +12234,7 @@ return CombatService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="48">
+        <Item class="ModuleScript" referent="49">
           <Properties>
             <string name="Name">CreatureService</string>
             <string name="Source"><![CDATA[--!strict
@@ -12676,7 +12972,7 @@ return CreatureService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="49">
+        <Item class="ModuleScript" referent="50">
           <Properties>
             <string name="Name">CrewService</string>
             <string name="Source"><![CDATA[--!strict
@@ -13461,7 +13757,7 @@ return CrewService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="50">
+        <Item class="ModuleScript" referent="51">
           <Properties>
             <string name="Name">DataService</string>
             <string name="Source"><![CDATA[--!strict
@@ -14031,7 +14327,7 @@ return DataService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="51">
+        <Item class="ModuleScript" referent="52">
           <Properties>
             <string name="Name">DepartureService</string>
             <string name="Source"><![CDATA[--!strict
@@ -14290,13 +14586,17 @@ end
 --- Reserves the service at Platform 1 for a crew, waiting for one if it is
 --- out on a run. The crew's chosen train and livery are honoured when the
 --- waiting train is empty; with passengers already aboard, it is kept.
+--- The crew's own members do not count as passengers: the lobby spawn can
+--- sit inside a long train's footprint, and a crew must always get the
+--- train it chose. They are stepped onto the platform before the rebuild.
 --- Returns nil if no train becomes available in time.
 function DepartureService.reserve(
 	crewId: string,
 	trainId: string,
 	liveryId: string?,
 	interiorId: string?,
-	onWaiting: (string) -> ()
+	onWaiting: (string) -> (),
+	crewMembers: { Player }?
 ): Service?
 	local deadline = os.clock() + DepartureService.ReserveSeconds
 	local told = false
@@ -14309,13 +14609,24 @@ function DepartureService.reserve(
 			local wantInterior = interiorId or "interior_standard"
 			if service.trainId ~= trainId or service.liveryId ~= wantLivery or service.interiorId ~= wantInterior then
 				local occupied = false
+				local ownAboard = {}
 				for _, player in Players:GetPlayers() do
 					if DepartureService.isAboard(service, player) then
-						occupied = true
-						break
+						if crewMembers and table.find(crewMembers, player) then
+							table.insert(ownAboard, player)
+						else
+							occupied = true
+							break
+						end
 					end
 				end
 				if not occupied then
+					local built = lobby()
+					for _, player in ownAboard do
+						if built and player.Character then
+							player.Character:PivotTo(built.platformCFrame * CFrame.new(math.random(-3, 3), 0, math.random(-8, 8)))
+						end
+					end
 					TrainService.despawn(service.key)
 					local rebuilt = spawnService(trainId, wantLivery, wantInterior, true)
 					if rebuilt then
@@ -14491,7 +14802,7 @@ return DepartureService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="52">
+        <Item class="ModuleScript" referent="53">
           <Properties>
             <string name="Name">EntityService</string>
             <string name="Source"><![CDATA[--!strict
@@ -15246,7 +15557,7 @@ return EntityService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="53">
+        <Item class="ModuleScript" referent="54">
           <Properties>
             <string name="Name">EventService</string>
             <string name="Source"><![CDATA[--!strict
@@ -15881,7 +16192,7 @@ return EventService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="54">
+        <Item class="ModuleScript" referent="55">
           <Properties>
             <string name="Name">ExpeditionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -15938,6 +16249,7 @@ local StationRegistry = require(Shared.Registry.StationRegistry)
 local CrewService = require(script.Parent.CrewService)
 local DepartureService = require(script.Parent.DepartureService)
 local Prologue = require(script.Parent.Parent.World.Prologue)
+local UpgradeRegistry = require(Shared.Registry.UpgradeRegistry)
 local DataService = require(script.Parent.DataService)
 local InventoryService = require(script.Parent.InventoryService)
 local ProgressionService = require(script.Parent.ProgressionService)
@@ -16786,7 +17098,7 @@ function ExpeditionService.begin(crew: CrewService.Crew, members: { Player })
 		for _, player in members do
 			Net.fireClient("Notify", player, { kind = "info", title = "Platform 1", body = message, duration = 8 })
 		end
-	end)
+	end, members)
 	if service then
 		-- The 02:17 is an ordinary service until the rear carriage: people
 		-- in the seats, visible from the platform and on the way aboard.
@@ -16816,6 +17128,27 @@ function ExpeditionService.begin(crew: CrewService.Crew, members: { Player })
 	local train = TrainService.spawn(crew.id, yard.trainId, yard.liveryId, yard.interiorId, trainOrigin, lane.trainContainer, {
 		doorsOpen = false,
 	})
+	-- The leader's workshop upgrades, fitted to this train for this run.
+	local upgradeProfile = if members[1] then DataService.getProfile(members[1]) else nil
+	if upgradeProfile then
+		local fitted: any = nil
+		for _, upgrade in UpgradeRegistry.All do
+			if upgradeProfile.upgrades[upgrade.id] and (upgrade.damageResistance or upgrade.fuelUseMultiplier) then
+				fitted = fitted or table.clone(train.def.handling)
+				if upgrade.damageResistance then
+					fitted.damageResistance *= upgrade.damageResistance
+				end
+				if upgrade.fuelUseMultiplier then
+					fitted.fuelUseMultiplier *= upgrade.fuelUseMultiplier
+				end
+			end
+		end
+		if fitted then
+			local def = table.clone(train.def)
+			def.handling = fitted
+			train.def = def
+		end
+	end
 
 	local expedition: Expedition = {
 		id = id,
@@ -17167,6 +17500,18 @@ function ExpeditionService.finish(expedition: Expedition, success: boolean)
 			else math.floor(Balance.Economy.creditsPerExpeditionComplete * Balance.Economy.creditsFailurePenaltyFraction)
 		local baseXp = if success then Balance.Economy.xpPerExpeditionComplete else math.floor(Balance.Economy.xpPerExpeditionComplete * 0.4)
 
+		-- Salvage carried home becomes workshop parts (UpgradeRegistry).
+		local salvaged = 0
+		for _, itemId in UpgradeRegistry.Salvage do
+			salvaged += InventoryService.countOf(player, itemId)
+		end
+		salvaged = math.min(salvaged, UpgradeRegistry.maxPartsPerRun)
+		if salvaged > 0 then
+			DataService.update(player, function(p)
+				p.parts += salvaged
+			end)
+		end
+
 		local result = ProgressionService.award(player, {
 			credits = math.floor(baseCredits * difficulty.creditMultiplier),
 			xp = math.floor(baseXp * difficulty.xpMultiplier),
@@ -17197,6 +17542,7 @@ function ExpeditionService.finish(expedition: Expedition, success: boolean)
 			level = result.newLevel,
 			levelsGained = result.levelsGained,
 			difficulty = expedition.difficulty,
+			partsSalvaged = salvaged,
 			journey = if ExpeditionService.resultsExtra then ExpeditionService.resultsExtra(expedition, player, success) else nil,
 			signals = if ExpeditionService.resultsSignals then ExpeditionService.resultsSignals(expedition) else nil,
 		})
@@ -17517,7 +17863,7 @@ return ExpeditionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="55">
+        <Item class="ModuleScript" referent="56">
           <Properties>
             <string name="Name">HorrorDirector</string>
             <string name="Source"><![CDATA[--!strict
@@ -18266,7 +18612,7 @@ return HorrorDirector
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="56">
+        <Item class="ModuleScript" referent="57">
           <Properties>
             <string name="Name">InteractionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -19385,7 +19731,7 @@ return InteractionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="57">
+        <Item class="ModuleScript" referent="58">
           <Properties>
             <string name="Name">InventoryService</string>
             <string name="Source"><![CDATA[--!strict
@@ -19480,6 +19826,10 @@ function InventoryService.limitsFor(player: Player, trainId: string?, crewBonusS
 		if trainDef then
 			slots += trainDef.handling.inventoryBonusSlots
 		end
+	end
+	-- Workshop: extra racks go with the player onto any train.
+	if profile and profile.upgrades.extra_racks then
+		slots += 2
 	end
 
 	slots += crewBonusSlots or 0
@@ -19971,7 +20321,7 @@ return InventoryService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="58">
+        <Item class="ModuleScript" referent="59">
           <Properties>
             <string name="Name">JourneyService</string>
             <string name="Source"><![CDATA[--!strict
@@ -20920,7 +21270,7 @@ return JourneyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="59">
+        <Item class="ModuleScript" referent="60">
           <Properties>
             <string name="Name">LeaderboardService</string>
             <string name="Source"><![CDATA[--!strict
@@ -21217,7 +21567,7 @@ return LeaderboardService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="60">
+        <Item class="ModuleScript" referent="61">
           <Properties>
             <string name="Name">LoadoutService</string>
             <string name="Source"><![CDATA[--!strict
@@ -21307,7 +21657,10 @@ function LoadoutService.set(player: Player, slot: string, id: string): (boolean,
 		return false, "NOT_LOADED"
 	end
 	-- An empty patch is a valid choice: no patch.
-	if not (slot == "patch" and id == "") then
+	-- Studio test hook: a server-set "TestAllTrains" attribute lets every train
+	-- be selected, to prove each can be ridden. Inert outside Studio.
+	local testTrains = slot == "train" and game:GetService("RunService"):IsStudio() and player:GetAttribute("TestAllTrains") == true and TrainRegistry.get(id) ~= nil
+	if not testTrains and not (slot == "patch" and id == "") then
 		local ok, reason = allowed(profile, slot, id)
 		if not ok then
 			return false, reason
@@ -21345,7 +21698,7 @@ return LoadoutService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="61">
+        <Item class="ModuleScript" referent="62">
           <Properties>
             <string name="Name">ProfileSchema</string>
             <string name="Source"><![CDATA[--!strict
@@ -21391,6 +21744,10 @@ export type Profile = {
 	interiors: { [string]: boolean },
 	cosmetics: { [string]: boolean },
 	weapons: { [string]: boolean },
+
+	-- Workshop (UpgradeRegistry): parts salvaged, upgrades bought.
+	parts: number,
+	upgrades: { [string]: boolean },
 
 	-- Night runs (JourneyService): earned only by playing.
 	journeys: {
@@ -21592,6 +21949,8 @@ function ProfileSchema.template(): Profile
 		interiors = { interior_standard = true },
 		cosmetics = CosmeticRegistry.defaultOwned(),
 		weapons = { wrench = true, crowbar = true, revolver = true },
+		parts = 0,
+		upgrades = {},
 		journeys = {
 			completed = 0,
 			failed = 0,
@@ -21796,6 +22155,8 @@ function ProfileSchema.toClient(profile: Profile): { [string]: any }
 		cosmetics = profile.cosmetics,
 		weapons = profile.weapons,
 		journeys = profile.journeys,
+		parts = profile.parts,
+		upgrades = profile.upgrades,
 		loadout = profile.loadout,
 		settings = profile.settings,
 		stats = profile.stats,
@@ -21815,7 +22176,7 @@ return ProfileSchema
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="62">
+        <Item class="ModuleScript" referent="63">
           <Properties>
             <string name="Name">ProgressionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -22345,7 +22706,7 @@ return ProgressionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="63">
+        <Item class="ModuleScript" referent="64">
           <Properties>
             <string name="Name">PurchaseService</string>
             <string name="Source"><![CDATA[--!strict
@@ -22506,6 +22867,15 @@ local function applyGrants(player: Player, def: Monetization.ProductDef): { [str
 			if ProgressionService.grantUnlock(player, "weapon", id) then
 				summary.weapons = summary.weapons or {}
 				table.insert(summary.weapons, id)
+			end
+		end
+	end
+
+	-- Trains granted by a pass.
+	if type(grants.trains) == "table" then
+		for _, id in grants.trains do
+			if ProgressionService.grantUnlock(player, "train", id) then
+				table.insert(summary.cosmetics, id)
 			end
 		end
 	end
@@ -22852,7 +23222,7 @@ return PurchaseService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="64">
+        <Item class="ModuleScript" referent="65">
           <Properties>
             <string name="Name">QuestService</string>
             <string name="Source"><![CDATA[--!strict
@@ -23233,7 +23603,7 @@ return QuestService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="65">
+        <Item class="ModuleScript" referent="66">
           <Properties>
             <string name="Name">RewardService</string>
             <string name="Source"><![CDATA[--!strict
@@ -23539,7 +23909,7 @@ return RewardService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="66">
+        <Item class="ModuleScript" referent="67">
           <Properties>
             <string name="Name">ShopService</string>
             <string name="Source"><![CDATA[--!strict
@@ -23562,6 +23932,7 @@ return RewardService
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage.LastSignal
 
 local Guard = require(Shared.Core.Guard)
@@ -23860,6 +24231,7 @@ end
 
 --------------------------------------------------------------------------
 
+local UpgradeRegistry = require(Shared.Registry.UpgradeRegistry)
 local lastPassRefresh: { [number]: number } = {}
 
 --------------------------------------------------------------------------
@@ -23912,7 +24284,7 @@ end
 
 function ShopService.start()
 	Net.onServerInvoke("ShopCommand", function(player, rawCommand, rawArg)
-		local command = Guard.enum(rawCommand, { "catalogue", "buy_credits", "prompt_robux", "refresh_passes" })
+		local command = Guard.enum(rawCommand, { "catalogue", "buy_credits", "prompt_robux", "refresh_passes", "buy_upgrade" })
 		if not command then
 			return { ok = false, error = "BAD_COMMAND" }
 		end
@@ -23937,6 +24309,39 @@ function ShopService.start()
 				broker(player, "short")
 			end
 			return { ok = ok, error = err, catalogue = ShopService.catalogue(player) }
+		end
+
+		if command == "buy_upgrade" then
+			local upgrade = UpgradeRegistry.get(tostring(rawArg))
+			local profile = DataService.getProfile(player)
+			if not upgrade or not profile then
+				return { ok = false, error = "BAD_UPGRADE" }
+			end
+			-- Studio test hook: a server-set "TestParts" attribute adds that many
+			-- parts once, to test the bench without a full run. Inert outside Studio.
+			local testParts = player:GetAttribute("TestParts")
+			if RunService:IsStudio() and type(testParts) == "number" then
+				player:SetAttribute("TestParts", nil)
+				DataService.update(player, function(p)
+					p.parts += testParts
+				end)
+			end
+			if profile.upgrades[upgrade.id] then
+				return { ok = false, error = "OWNED" }
+			end
+			if profile.parts < upgrade.parts then
+				return { ok = false, error = "NEED_PARTS" }
+			end
+			if not ProgressionService.spendCredits(player, upgrade.coin, "upgrade:" .. upgrade.id) then
+				return { ok = false, error = "INSUFFICIENT_CREDITS" }
+			end
+			DataService.update(player, function(p)
+				p.parts -= upgrade.parts
+				p.upgrades[upgrade.id] = true
+			end)
+			ProgressionService.pushToClient(player)
+			broker(player, "bought")
+			return { ok = true }
 		end
 
 		if command == "refresh_passes" then
@@ -23996,7 +24401,7 @@ return ShopService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="67">
+        <Item class="ModuleScript" referent="68">
           <Properties>
             <string name="Name">SignalService</string>
             <string name="Source"><![CDATA[--!strict
@@ -24508,6 +24913,10 @@ local function command(player: Player, rawCommand: any, rawCall: any, rawArg: an
 			return { ok = false, error = "MOVE_FIRST" }
 		end
 		local noise = FIDELITY_NOISE[fidelityOf(player)] + def.interference * INTERFERENCE_NOISE
+		local antenna = DataService.getProfile(player)
+		if antenna and antenna.upgrades.signal_antenna then
+			noise = math.max(2, noise - 4)
+		end
 		local trueBearing = bearingTo(root.Position, call.sourcePosition)
 		local bearing = (trueBearing + (math.random() * 2 - 1) * noise) % 360
 		local distance = (root.Position - call.sourcePosition).Magnitude
@@ -24724,7 +25133,7 @@ return SignalService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="68">
+        <Item class="ModuleScript" referent="69">
           <Properties>
             <string name="Name">SignatureMoments</string>
             <string name="Source"><![CDATA[--!strict
@@ -25075,7 +25484,7 @@ return SignatureMoments
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="69">
+        <Item class="ModuleScript" referent="70">
           <Properties>
             <string name="Name">SurvivalService</string>
             <string name="Source"><![CDATA[--!strict
@@ -25983,7 +26392,7 @@ return SurvivalService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="70">
+        <Item class="ModuleScript" referent="71">
           <Properties>
             <string name="Name">TrainService</string>
             <string name="Source"><![CDATA[--!strict
@@ -26852,7 +27261,7 @@ return TrainService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="71">
+        <Item class="ModuleScript" referent="72">
           <Properties>
             <string name="Name">WorldService</string>
             <string name="Source"><![CDATA[--!strict
@@ -27426,11 +27835,11 @@ return WorldService
           </Properties>
         </Item>
       </Item>
-      <Item class="Folder" referent="72">
+      <Item class="Folder" referent="73">
         <Properties>
           <string name="Name">World</string>
         </Properties>
-        <Item class="ModuleScript" referent="73">
+        <Item class="ModuleScript" referent="74">
           <Properties>
             <string name="Name">BuildKit</string>
             <string name="Source"><![CDATA[--!strict
@@ -28618,7 +29027,7 @@ return BuildKit
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="74">
+        <Item class="ModuleScript" referent="75">
           <Properties>
             <string name="Name">ForestBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -29172,7 +29581,7 @@ return ForestBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="75">
+        <Item class="ModuleScript" referent="76">
           <Properties>
             <string name="Name">LobbyBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -30399,7 +30808,7 @@ return LobbyBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="76">
+        <Item class="ModuleScript" referent="77">
           <Properties>
             <string name="Name">Prologue</string>
             <string name="Source"><![CDATA[--!strict
@@ -30574,7 +30983,7 @@ return Prologue
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="77">
+        <Item class="ModuleScript" referent="78">
           <Properties>
             <string name="Name">StationBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -32262,7 +32671,7 @@ return StationBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="78">
+        <Item class="ModuleScript" referent="79">
           <Properties>
             <string name="Name">TrainBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -34576,12 +34985,12 @@ return TrainBuilder
       </Item>
     </Item>
   </Item>
-  <Item class="ServerStorage" referent="79">
+  <Item class="ServerStorage" referent="80">
     <Properties>
       <string name="Name">ServerStorage</string>
     </Properties>
   </Item>
-  <Item class="SoundService" referent="80">
+  <Item class="SoundService" referent="81">
     <Properties>
       <string name="Name">SoundService</string>
       <float name="DistanceFactor">8</float>
@@ -34590,14 +34999,14 @@ return TrainBuilder
       <float name="RolloffScale">1.25</float>
     </Properties>
   </Item>
-  <Item class="StarterGui" referent="81">
+  <Item class="StarterGui" referent="82">
     <Properties>
       <string name="Name">StarterGui</string>
       <bool name="ResetPlayerGuiOnSpawn">false</bool>
       <token name="ScreenOrientation">4</token>
     </Properties>
   </Item>
-  <Item class="StarterPlayer" referent="82">
+  <Item class="StarterPlayer" referent="83">
     <Properties>
       <string name="Name">StarterPlayer</string>
       <bool name="AutoJumpEnabled">false</bool>
@@ -34609,16 +35018,16 @@ return TrainBuilder
       <bool name="EnableMouseLockOption">false</bool>
       <bool name="LoadCharacterAppearance">true</bool>
     </Properties>
-    <Item class="StarterCharacterScripts" referent="83">
+    <Item class="StarterCharacterScripts" referent="84">
       <Properties>
         <string name="Name">StarterCharacterScripts</string>
       </Properties>
     </Item>
-    <Item class="StarterPlayerScripts" referent="84">
+    <Item class="StarterPlayerScripts" referent="85">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="LocalScript" referent="85">
+      <Item class="LocalScript" referent="86">
         <Properties>
           <string name="Name">LastSignalClient</string>
           <string name="Source"><![CDATA[--!strict
@@ -34794,11 +35203,11 @@ else
 end
 ]]></string>
         </Properties>
-        <Item class="Folder" referent="86">
+        <Item class="Folder" referent="87">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="87">
+          <Item class="ModuleScript" referent="88">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--!strict
@@ -35455,7 +35864,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="88">
+          <Item class="ModuleScript" referent="89">
             <Properties>
               <string name="Name">CabController</string>
               <string name="Source"><![CDATA[--!strict
@@ -36012,7 +36421,7 @@ return CabController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="89">
+          <Item class="ModuleScript" referent="90">
             <Properties>
               <string name="Name">CameraController</string>
               <string name="Source"><![CDATA[--!strict
@@ -36559,7 +36968,7 @@ return CameraController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="90">
+          <Item class="ModuleScript" referent="91">
             <Properties>
               <string name="Name">CinematicController</string>
               <string name="Source"><![CDATA[--!strict
@@ -37022,7 +37431,7 @@ return CinematicController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="91">
+          <Item class="ModuleScript" referent="92">
             <Properties>
               <string name="Name">HUDController</string>
               <string name="Source"><![CDATA[--!strict
@@ -38100,7 +38509,7 @@ return HUDController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="92">
+          <Item class="ModuleScript" referent="93">
             <Properties>
               <string name="Name">HorrorEffectsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -38470,7 +38879,7 @@ return HorrorEffectsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="93">
+          <Item class="ModuleScript" referent="94">
             <Properties>
               <string name="Name">InputController</string>
               <string name="Source"><![CDATA[--!strict
@@ -38843,7 +39252,7 @@ return InputController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="94">
+          <Item class="ModuleScript" referent="95">
             <Properties>
               <string name="Name">InteractionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -39446,7 +39855,7 @@ return InteractionController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="95">
+          <Item class="ModuleScript" referent="96">
             <Properties>
               <string name="Name">JourneyController</string>
               <string name="Source"><![CDATA[--!strict
@@ -39531,7 +39940,7 @@ return JourneyController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="96">
+          <Item class="ModuleScript" referent="97">
             <Properties>
               <string name="Name">LampController</string>
               <string name="Source"><![CDATA[--!strict
@@ -39570,7 +39979,7 @@ return LampController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="97">
+          <Item class="ModuleScript" referent="98">
             <Properties>
               <string name="Name">MenuController</string>
               <string name="Source"><![CDATA[--!strict
@@ -39615,6 +40024,7 @@ local CosmeticRegistry = require(Shared.Registry.CosmeticRegistry)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local Widgets = require(script.Parent.Parent.UI.Widgets)
 local ArmoryPanel = require(script.Parent.Parent.UI.ArmoryPanel)
+local UpgradeRegistry = require(Shared.Registry.UpgradeRegistry)
 local JourneyUI = require(script.Parent.Parent.UI.JourneyUI)
 local CameraController = require(script.Parent.CameraController)
 local InputController = require(script.Parent.InputController)
@@ -40144,11 +40554,15 @@ builders.loadout = function(frame: Frame)
 	section("Train")
 	for _, def in TrainRegistry.allTrains() do
 		local owned = StateController.owns("train", def.id)
+		local where = ""
+		if not owned then
+			where = if def.passKey then " Robux pass, at the Phantom Exchange." else string.format(" %d RIP Coin at the Phantom Exchange (level %d).", def.creditCost, def.unlockLevel)
+		end
 		choiceRow(
 			def.name,
 			owned,
 			profile.loadout.train == def.id,
-			string.format("%s. %s", def.class, def.tagline),
+			string.format("%s. %s%s", def.class, def.tagline, where),
 			function()
 				Net.invokeServer("CrewCommand", "set_train", def.id)
 				Net.fireServer("SetSetting", "loadout_train", def.id)
@@ -40168,6 +40582,31 @@ builders.loadout = function(frame: Frame)
 				task.delay(0.2, rebuild)
 			end
 		end)
+	end
+
+	section("Workshop")
+	Widgets.caption(
+		scroll,
+		string.format("Parts: %d. Salvage you still carry when a run ends (fuses, relays, batteries, valves, radio parts) becomes parts. Upgrades are permanent and fit any train you lead.", profile.parts or 0),
+		nextOrder()
+	)
+	for _, upgrade in UpgradeRegistry.All do
+		local have = profile.upgrades and profile.upgrades[upgrade.id] == true
+		choiceRow(
+			upgrade.name,
+			true,
+			have,
+			if have then upgrade.description .. " Fitted." else string.format("%s  %d parts + %d RIP Coin.", upgrade.description, upgrade.parts, upgrade.coin),
+			function()
+				if have then
+					return
+				end
+				Net.invokeServer("ShopCommand", "buy_upgrade", upgrade.id)
+				if rebuild then
+					task.delay(0.3, rebuild)
+				end
+			end
+		)
 	end
 
 	section("Interior")
@@ -41027,6 +41466,9 @@ builders.results = function(frame: Frame)
 	Widgets.statRow(scroll, "False transmissions followed", tostring(results.falseFollowed or 0), 10)
 	Widgets.divider(scroll, 11)
 	Widgets.statRow(scroll, "RIP Coin earned", Format.groupedNumber(results.credits or 0), 12)
+	if (results.partsSalvaged or 0) > 0 then
+		Widgets.statRow(scroll, "Parts salvaged", tostring(results.partsSalvaged), 13)
+	end
 	Widgets.statRow(scroll, "XP earned", Format.groupedNumber(results.xp or 0), 13)
 	if (results.levelsGained or 0) > 0 then
 		Widgets.statRow(scroll, "Levels gained", string.format("%d  (now %d)", results.levelsGained, results.level), 14)
@@ -41314,7 +41756,7 @@ return MenuController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="98">
+          <Item class="ModuleScript" referent="99">
             <Properties>
               <string name="Name">SignalController</string>
               <string name="Source"><![CDATA[--!strict
@@ -41727,7 +42169,7 @@ return SignalController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="99">
+          <Item class="ModuleScript" referent="100">
             <Properties>
               <string name="Name">StateController</string>
               <string name="Source"><![CDATA[--!strict
@@ -41982,7 +42424,7 @@ return StateController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="100">
+          <Item class="ModuleScript" referent="101">
             <Properties>
               <string name="Name">TrainRideController</string>
               <string name="Source"><![CDATA[--!strict
@@ -42374,7 +42816,7 @@ return TrainRideController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="101">
+          <Item class="ModuleScript" referent="102">
             <Properties>
               <string name="Name">WeaponController</string>
               <string name="Source"><![CDATA[--!strict
@@ -43134,11 +43576,11 @@ return WeaponController
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="102">
+        <Item class="Folder" referent="103">
           <Properties>
             <string name="Name">UI</string>
           </Properties>
-          <Item class="ModuleScript" referent="103">
+          <Item class="ModuleScript" referent="104">
             <Properties>
               <string name="Name">ArmoryPanel</string>
               <string name="Source"><![CDATA[--!strict
@@ -43519,7 +43961,7 @@ return ArmoryPanel
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="104">
+          <Item class="ModuleScript" referent="105">
             <Properties>
               <string name="Name">JourneyUI</string>
               <string name="Source"><![CDATA[--!strict
@@ -43697,7 +44139,7 @@ return JourneyUI
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="105">
+          <Item class="ModuleScript" referent="106">
             <Properties>
               <string name="Name">Theme</string>
               <string name="Source"><![CDATA[--!strict
@@ -43971,7 +44413,7 @@ return Theme
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="106">
+          <Item class="ModuleScript" referent="107">
             <Properties>
               <string name="Name">Widgets</string>
               <string name="Source"><![CDATA[--!strict
@@ -44685,13 +45127,13 @@ return Widgets
       </Item>
     </Item>
   </Item>
-  <Item class="TextChatService" referent="107">
+  <Item class="TextChatService" referent="108">
     <Properties>
       <string name="Name">TextChatService</string>
       <token name="ChatVersion">1</token>
     </Properties>
   </Item>
-  <Item class="Workspace" referent="108">
+  <Item class="Workspace" referent="109">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>
@@ -44703,7 +45145,7 @@ return Widgets
       <int name="StreamingMinRadius">192</int>
       <int name="StreamingTargetRadius">640</int>
     </Properties>
-    <Item class="Terrain" referent="109">
+    <Item class="Terrain" referent="110">
       <Properties>
         <string name="Name">Terrain</string>
       </Properties>

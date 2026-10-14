@@ -52,6 +52,7 @@ local StationRegistry = require(Shared.Registry.StationRegistry)
 local CrewService = require(script.Parent.CrewService)
 local DepartureService = require(script.Parent.DepartureService)
 local Prologue = require(script.Parent.Parent.World.Prologue)
+local UpgradeRegistry = require(Shared.Registry.UpgradeRegistry)
 local DataService = require(script.Parent.DataService)
 local InventoryService = require(script.Parent.InventoryService)
 local ProgressionService = require(script.Parent.ProgressionService)
@@ -900,7 +901,7 @@ function ExpeditionService.begin(crew: CrewService.Crew, members: { Player })
 		for _, player in members do
 			Net.fireClient("Notify", player, { kind = "info", title = "Platform 1", body = message, duration = 8 })
 		end
-	end)
+	end, members)
 	if service then
 		-- The 02:17 is an ordinary service until the rear carriage: people
 		-- in the seats, visible from the platform and on the way aboard.
@@ -930,6 +931,27 @@ function ExpeditionService.begin(crew: CrewService.Crew, members: { Player })
 	local train = TrainService.spawn(crew.id, yard.trainId, yard.liveryId, yard.interiorId, trainOrigin, lane.trainContainer, {
 		doorsOpen = false,
 	})
+	-- The leader's workshop upgrades, fitted to this train for this run.
+	local upgradeProfile = if members[1] then DataService.getProfile(members[1]) else nil
+	if upgradeProfile then
+		local fitted: any = nil
+		for _, upgrade in UpgradeRegistry.All do
+			if upgradeProfile.upgrades[upgrade.id] and (upgrade.damageResistance or upgrade.fuelUseMultiplier) then
+				fitted = fitted or table.clone(train.def.handling)
+				if upgrade.damageResistance then
+					fitted.damageResistance *= upgrade.damageResistance
+				end
+				if upgrade.fuelUseMultiplier then
+					fitted.fuelUseMultiplier *= upgrade.fuelUseMultiplier
+				end
+			end
+		end
+		if fitted then
+			local def = table.clone(train.def)
+			def.handling = fitted
+			train.def = def
+		end
+	end
 
 	local expedition: Expedition = {
 		id = id,
@@ -1281,6 +1303,18 @@ function ExpeditionService.finish(expedition: Expedition, success: boolean)
 			else math.floor(Balance.Economy.creditsPerExpeditionComplete * Balance.Economy.creditsFailurePenaltyFraction)
 		local baseXp = if success then Balance.Economy.xpPerExpeditionComplete else math.floor(Balance.Economy.xpPerExpeditionComplete * 0.4)
 
+		-- Salvage carried home becomes workshop parts (UpgradeRegistry).
+		local salvaged = 0
+		for _, itemId in UpgradeRegistry.Salvage do
+			salvaged += InventoryService.countOf(player, itemId)
+		end
+		salvaged = math.min(salvaged, UpgradeRegistry.maxPartsPerRun)
+		if salvaged > 0 then
+			DataService.update(player, function(p)
+				p.parts += salvaged
+			end)
+		end
+
 		local result = ProgressionService.award(player, {
 			credits = math.floor(baseCredits * difficulty.creditMultiplier),
 			xp = math.floor(baseXp * difficulty.xpMultiplier),
@@ -1311,6 +1345,7 @@ function ExpeditionService.finish(expedition: Expedition, success: boolean)
 			level = result.newLevel,
 			levelsGained = result.levelsGained,
 			difficulty = expedition.difficulty,
+			partsSalvaged = salvaged,
 			journey = if ExpeditionService.resultsExtra then ExpeditionService.resultsExtra(expedition, player, success) else nil,
 			signals = if ExpeditionService.resultsSignals then ExpeditionService.resultsSignals(expedition) else nil,
 		})

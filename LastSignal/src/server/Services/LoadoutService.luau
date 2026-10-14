@@ -85,7 +85,10 @@ function LoadoutService.set(player: Player, slot: string, id: string): (boolean,
 		return false, "NOT_LOADED"
 	end
 	-- An empty patch is a valid choice: no patch.
-	if not (slot == "patch" and id == "") then
+	-- Studio test hook: a server-set "TestAllTrains" attribute lets every train
+	-- be selected, to prove each can be ridden. Inert outside Studio.
+	local testTrains = slot == "train" and game:GetService("RunService"):IsStudio() and player:GetAttribute("TestAllTrains") == true and TrainRegistry.get(id) ~= nil
+	if not testTrains and not (slot == "patch" and id == "") then
 		local ok, reason = allowed(profile, slot, id)
 		if not ok then
 			return false, reason

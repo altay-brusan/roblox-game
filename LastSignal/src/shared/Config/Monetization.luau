@@ -163,6 +163,45 @@ local GAMEPASSES: { ProductDef } = {
 		permanent = true,
 		order = 7,
 	},
+
+	-- Premium trains. Each is a different way to ride the line, with a real
+	-- weakness; the story can be finished with the free Warden.
+	{
+		key = "pass_phantom_express",
+		kind = "gamepass",
+		id = 0,
+		name = "Phantom Express",
+		blurb = "Permanent: the Phantom Express and its Phantom Grey livery. Fast (+22%) and economical (-15% fuel), with an observation carriage; lightly built (takes 25% more damage) and short on storage (-2 slots).",
+		suggestedPrice = 299,
+		category = "passes",
+		grants = { trains = { "phantom_express" } },
+		permanent = true,
+		order = 8,
+	},
+	{
+		key = "pass_eclipse_engine",
+		kind = "gamepass",
+		id = 0,
+		name = "Eclipse Engine",
+		blurb = "Permanent: the Eclipse Engine and its Eclipse Black livery. A centre-cab engine with a workshop carriage: tougher, economical, +3 storage; slow to accelerate away from a bad stop.",
+		suggestedPrice = 399,
+		category = "passes",
+		grants = { trains = { "eclipse_engine" } },
+		permanent = true,
+		order = 9,
+	},
+	{
+		key = "pass_wardens_convoy",
+		kind = "gamepass",
+		id = 0,
+		name = "Warden's Convoy",
+		blurb = "Permanent: the Warden's Convoy and its Convoy Olive livery. Armoured locomotive, guard van, passenger carriage and supply wagon: the toughest body and +6 storage; slow (-16%) and thirsty (+30% fuel).",
+		suggestedPrice = 499,
+		category = "passes",
+		grants = { trains = { "wardens_convoy" } },
+		permanent = true,
+		order = 10,
+	},
 }
 
 --------------------------------------------------------------------------

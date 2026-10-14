@@ -40,6 +40,7 @@ local CosmeticRegistry = require(Shared.Registry.CosmeticRegistry)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local Widgets = require(script.Parent.Parent.UI.Widgets)
 local ArmoryPanel = require(script.Parent.Parent.UI.ArmoryPanel)
+local UpgradeRegistry = require(Shared.Registry.UpgradeRegistry)
 local JourneyUI = require(script.Parent.Parent.UI.JourneyUI)
 local CameraController = require(script.Parent.CameraController)
 local InputController = require(script.Parent.InputController)
@@ -569,11 +570,15 @@ builders.loadout = function(frame: Frame)
 	section("Train")
 	for _, def in TrainRegistry.allTrains() do
 		local owned = StateController.owns("train", def.id)
+		local where = ""
+		if not owned then
+			where = if def.passKey then " Robux pass, at the Phantom Exchange." else string.format(" %d RIP Coin at the Phantom Exchange (level %d).", def.creditCost, def.unlockLevel)
+		end
 		choiceRow(
 			def.name,
 			owned,
 			profile.loadout.train == def.id,
-			string.format("%s. %s", def.class, def.tagline),
+			string.format("%s. %s%s", def.class, def.tagline, where),
 			function()
 				Net.invokeServer("CrewCommand", "set_train", def.id)
 				Net.fireServer("SetSetting", "loadout_train", def.id)
@@ -593,6 +598,31 @@ builders.loadout = function(frame: Frame)
 				task.delay(0.2, rebuild)
 			end
 		end)
+	end
+
+	section("Workshop")
+	Widgets.caption(
+		scroll,
+		string.format("Parts: %d. Salvage you still carry when a run ends (fuses, relays, batteries, valves, radio parts) becomes parts. Upgrades are permanent and fit any train you lead.", profile.parts or 0),
+		nextOrder()
+	)
+	for _, upgrade in UpgradeRegistry.All do
+		local have = profile.upgrades and profile.upgrades[upgrade.id] == true
+		choiceRow(
+			upgrade.name,
+			true,
+			have,
+			if have then upgrade.description .. " Fitted." else string.format("%s  %d parts + %d RIP Coin.", upgrade.description, upgrade.parts, upgrade.coin),
+			function()
+				if have then
+					return
+				end
+				Net.invokeServer("ShopCommand", "buy_upgrade", upgrade.id)
+				if rebuild then
+					task.delay(0.3, rebuild)
+				end
+			end
+		)
 	end
 
 	section("Interior")
@@ -1452,6 +1482,9 @@ builders.results = function(frame: Frame)
 	Widgets.statRow(scroll, "False transmissions followed", tostring(results.falseFollowed or 0), 10)
 	Widgets.divider(scroll, 11)
 	Widgets.statRow(scroll, "RIP Coin earned", Format.groupedNumber(results.credits or 0), 12)
+	if (results.partsSalvaged or 0) > 0 then
+		Widgets.statRow(scroll, "Parts salvaged", tostring(results.partsSalvaged), 13)
+	end
 	Widgets.statRow(scroll, "XP earned", Format.groupedNumber(results.xp or 0), 13)
 	if (results.levelsGained or 0) > 0 then
 		Widgets.statRow(scroll, "Levels gained", string.format("%d  (now %d)", results.levelsGained, results.level), 14)

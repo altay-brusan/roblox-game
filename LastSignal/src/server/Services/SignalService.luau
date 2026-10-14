@@ -507,6 +507,10 @@ local function command(player: Player, rawCommand: any, rawCall: any, rawArg: an
 			return { ok = false, error = "MOVE_FIRST" }
 		end
 		local noise = FIDELITY_NOISE[fidelityOf(player)] + def.interference * INTERFERENCE_NOISE
+		local antenna = DataService.getProfile(player)
+		if antenna and antenna.upgrades.signal_antenna then
+			noise = math.max(2, noise - 4)
+		end
 		local trueBearing = bearingTo(root.Position, call.sourcePosition)
 		local bearing = (trueBearing + (math.random() * 2 - 1) * noise) % 360
 		local distance = (root.Position - call.sourcePosition).Magnitude

@@ -42,6 +42,10 @@ export type Profile = {
 	cosmetics: { [string]: boolean },
 	weapons: { [string]: boolean },
 
+	-- Workshop (UpgradeRegistry): parts salvaged, upgrades bought.
+	parts: number,
+	upgrades: { [string]: boolean },
+
 	-- Night runs (JourneyService): earned only by playing.
 	journeys: {
 		completed: number,
@@ -242,6 +246,8 @@ function ProfileSchema.template(): Profile
 		interiors = { interior_standard = true },
 		cosmetics = CosmeticRegistry.defaultOwned(),
 		weapons = { wrench = true, crowbar = true, revolver = true },
+		parts = 0,
+		upgrades = {},
 		journeys = {
 			completed = 0,
 			failed = 0,
@@ -446,6 +452,8 @@ function ProfileSchema.toClient(profile: Profile): { [string]: any }
 		cosmetics = profile.cosmetics,
 		weapons = profile.weapons,
 		journeys = profile.journeys,
+		parts = profile.parts,
+		upgrades = profile.upgrades,
 		loadout = profile.loadout,
 		settings = profile.settings,
 		stats = profile.stats,

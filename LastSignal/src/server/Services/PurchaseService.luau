@@ -160,6 +160,15 @@ local function applyGrants(player: Player, def: Monetization.ProductDef): { [str
 		end
 	end
 
+	-- Trains granted by a pass.
+	if type(grants.trains) == "table" then
+		for _, id in grants.trains do
+			if ProgressionService.grantUnlock(player, "train", id) then
+				table.insert(summary.cosmetics, id)
+			end
+		end
+	end
+
 	-- Liveries and interiors named by the product key.
 	local TrainRegistry = require(Shared.Registry.TrainRegistry)
 	for id, livery in TrainRegistry.Liveries do

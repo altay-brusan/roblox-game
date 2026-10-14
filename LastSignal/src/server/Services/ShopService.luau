@@ -18,6 +18,7 @@
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage.LastSignal
 
 local Guard = require(Shared.Core.Guard)
@@ -316,6 +317,7 @@ end
 
 --------------------------------------------------------------------------
 
+local UpgradeRegistry = require(Shared.Registry.UpgradeRegistry)
 local lastPassRefresh: { [number]: number } = {}
 
 --------------------------------------------------------------------------
@@ -368,7 +370,7 @@ end
 
 function ShopService.start()
 	Net.onServerInvoke("ShopCommand", function(player, rawCommand, rawArg)
-		local command = Guard.enum(rawCommand, { "catalogue", "buy_credits", "prompt_robux", "refresh_passes" })
+		local command = Guard.enum(rawCommand, { "catalogue", "buy_credits", "prompt_robux", "refresh_passes", "buy_upgrade" })
 		if not command then
 			return { ok = false, error = "BAD_COMMAND" }
 		end
@@ -393,6 +395,39 @@ function ShopService.start()
 				broker(player, "short")
 			end
 			return { ok = ok, error = err, catalogue = ShopService.catalogue(player) }
+		end
+
+		if command == "buy_upgrade" then
+			local upgrade = UpgradeRegistry.get(tostring(rawArg))
+			local profile = DataService.getProfile(player)
+			if not upgrade or not profile then
+				return { ok = false, error = "BAD_UPGRADE" }
+			end
+			-- Studio test hook: a server-set "TestParts" attribute adds that many
+			-- parts once, to test the bench without a full run. Inert outside Studio.
+			local testParts = player:GetAttribute("TestParts")
+			if RunService:IsStudio() and type(testParts) == "number" then
+				player:SetAttribute("TestParts", nil)
+				DataService.update(player, function(p)
+					p.parts += testParts
+				end)
+			end
+			if profile.upgrades[upgrade.id] then
+				return { ok = false, error = "OWNED" }
+			end
+			if profile.parts < upgrade.parts then
+				return { ok = false, error = "NEED_PARTS" }
+			end
+			if not ProgressionService.spendCredits(player, upgrade.coin, "upgrade:" .. upgrade.id) then
+				return { ok = false, error = "INSUFFICIENT_CREDITS" }
+			end
+			DataService.update(player, function(p)
+				p.parts -= upgrade.parts
+				p.upgrades[upgrade.id] = true
+			end)
+			ProgressionService.pushToClient(player)
+			broker(player, "bought")
+			return { ok = true }
 		end
 
 		if command == "refresh_passes" then
