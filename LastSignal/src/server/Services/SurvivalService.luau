@@ -329,6 +329,22 @@ function SurvivalService.die(player: Player)
 	SurvivalService.Died:Fire(player)
 	SurvivalService.push(player)
 
+	-- The whole crew dead is a failure, not a permanent spectator screen with
+	-- nobody left to watch: the expedition offers a retry.
+	if expedition then
+		local anyoneAlive = false
+		for _, member in ExpeditionService.playersOf(expedition) do
+			local memberState = vitals[member.UserId]
+			if memberState and memberState.state ~= "dead" then
+				anyoneAlive = true
+				break
+			end
+		end
+		if not anyoneAlive then
+			ExpeditionService.crewWiped(expedition)
+		end
+	end
+
 	-- Straight into spectator rather than a black screen.
 	SurvivalService.startSpectating(player)
 
@@ -618,7 +634,60 @@ end
 
 --------------------------------------------------------------------------
 
+--- Watches a character for an actual death: a reset, a fall from the bridge,
+--- a drop out of the world. Characters do not respawn on their own in this
+--- game, so without this a player who died any way other than bleeding out
+--- was left dead with no way back.
+local function watchCharacter(player: Player, character: Model)
+	local humanoid = character:WaitForChild("Humanoid", 10)
+	if not humanoid or not humanoid:IsA("Humanoid") then
+		return
+	end
+	humanoid.Died:Connect(function()
+		local expedition = ExpeditionService.forPlayer(player)
+		local phase = if expedition then expedition.state else nil
+		if phase == "travelling" or phase == "onstation" or phase == "climax" then
+			-- On the line this is a death like any other: spectate, and a
+			-- crew wipe offers a retry.
+			SurvivalService.die(player)
+			return
+		end
+		task.delay(Players.RespawnTime, function()
+			if not player.Parent or player.Character ~= character then
+				return
+			end
+			player:LoadCharacter()
+			-- Dying during the departure still leaves you on the crew's train.
+			local current = ExpeditionService.forPlayer(player)
+			if current and current.state == "cinematic" then
+				ExpeditionService.spawnIntoTrain(current, player)
+			end
+		end)
+	end)
+end
+
 function SurvivalService.start()
+	local function track(player: Player)
+		if player.Character then
+			task.spawn(watchCharacter, player, player.Character)
+		end
+		player.CharacterAdded:Connect(function(character)
+			watchCharacter(player, character)
+			-- A fresh character outside an expedition is alive and well. The
+			-- client otherwise kept the last vitals it was sent, so a player
+			-- who left a failed run as "dead" stayed in the spectator camera
+			-- in the yard.
+			local expedition = ExpeditionService.forPlayer(player)
+			if not expedition or expedition.state == "preparing" or expedition.state == "boarding" then
+				SurvivalService.begin(player)
+			end
+		end)
+	end
+	for _, player in Players:GetPlayers() do
+		track(player)
+	end
+	Players.PlayerAdded:Connect(track)
+
 	-- Item effects are consumed here rather than in InventoryService, so the
 	-- inventory does not need to know what a bandage does.
 	InventoryService.ItemUsed:Connect(function(player, _itemId, def)
@@ -765,6 +834,13 @@ function SurvivalService.start()
 				SurvivalService.begin(player)
 				SurvivalService.grantImmunity(player, GameConfig.CinematicSeconds + 6)
 			end
+		end
+	end)
+
+	ExpeditionService.Retried:Connect(function(expedition)
+		for _, player in ExpeditionService.playersOf(expedition) do
+			SurvivalService.begin(player)
+			SurvivalService.grantImmunity(player, 12)
 		end
 	end)
 

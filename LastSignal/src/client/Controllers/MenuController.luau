@@ -104,6 +104,7 @@ local PANEL_TITLES: { [string]: string } = {
 	settings = "Settings",
 	admin = "Control",
 	results = "Expedition Report",
+	failed = "The Line Went Quiet",
 	event = "Event",
 }
 
@@ -1439,6 +1440,65 @@ builders.results = function(frame: Frame)
 end
 
 --------------------------------------------------------------------------
+-- Panel: failure
+--------------------------------------------------------------------------
+
+-- The whole crew is down. The run is not over: retry from the last station,
+-- or go back to the yard. With no choice made the server retries by itself,
+-- which the countdown makes plain.
+local lastFailure: { [string]: any }? = nil
+
+builders.failed = function(frame: Frame)
+	local failure: { [string]: any } = lastFailure or {}
+	local scroll = Widgets.scroll(frame, 1)
+	Widgets.label({
+		text = "Everyone is down",
+		size = "display",
+		font = Theme.Font.display,
+		colour = Theme.colour("signalRed"),
+		parent = scroll,
+		layoutOrder = 1,
+	})
+	Widgets.caption(
+		scroll,
+		string.format(
+			"Nobody is left standing. You can go back to %s with the train as you left it, or return to the yard.",
+			tostring(failure.stationName or "the last station")
+		),
+		2
+	)
+	local countdown = Widgets.caption(scroll, "", 3)
+	local seconds = tonumber(failure.autoRetrySeconds) or 30
+	local openedAt = os.clock()
+	task.spawn(function()
+		while countdown.Parent do
+			local remaining = math.max(0, math.ceil(seconds - (os.clock() - openedAt)))
+			countdown.Text = string.format("Retrying on its own in %d seconds.", remaining)
+			task.wait(0.25)
+		end
+	end)
+	Widgets.button({
+		text = "Retry from " .. tostring(failure.stationName or "the last station"),
+		primary = true,
+		parent = scroll,
+		layoutOrder = 10,
+		onClick = function()
+			Net.invokeServer("ExpeditionCommand", "retry")
+			MenuController.close()
+		end,
+	})
+	Widgets.button({
+		text = "Return to the yard",
+		parent = scroll,
+		layoutOrder = 11,
+		onClick = function()
+			Net.invokeServer("ExpeditionCommand", "abandon")
+			MenuController.close()
+		end,
+	})
+end
+
+--------------------------------------------------------------------------
 -- Panel: admin
 --------------------------------------------------------------------------
 
@@ -1602,6 +1662,23 @@ function MenuController.start()
 		if type(payload) == "table" and payload.state == "results" then
 			lastResults = payload
 			MenuController.open("results")
+		elseif type(payload) == "table" and payload.state == "failed" then
+			-- The failed state arrives more than once (the failure itself and
+			-- the routine state push); open() toggles, so only open it once.
+			local detailed = payload.autoRetrySeconds ~= nil
+			if detailed then
+				lastFailure = payload
+			end
+			if currentPanel ~= "failed" then
+				MenuController.open("failed")
+			elseif detailed and rebuild then
+				-- The detailed message names the station; redraw with it.
+				rebuild()
+			end
+		elseif type(payload) == "table" and lastFailure and payload.state ~= "failed" and currentPanel == "failed" then
+			-- The server retried by itself, or a crewmate chose.
+			lastFailure = nil
+			MenuController.close()
 		end
 	end)
 

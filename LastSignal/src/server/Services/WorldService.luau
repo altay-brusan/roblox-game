@@ -211,6 +211,34 @@ end
 -- Lane state reset
 --------------------------------------------------------------------------
 
+--- Returns one station to how the crew found it: loot searchable again,
+--- lights off, doors closed, fixtures idle. Used by a retry.
+function WorldService.resetStation(lane: Lane, index: number)
+	local station = lane.stations[index]
+	if not station then
+		return
+	end
+	for _, node in station.lootNodes do
+		node.part:SetAttribute("Searched", false)
+	end
+	for _, light in station.lights do
+		light.Enabled = false
+	end
+	for _, door in station.doors do
+		local baseCF = door:GetAttribute("ClosedCFrame")
+		if typeof(baseCF) == "CFrame" then
+			door:PivotTo(baseCF)
+		end
+	end
+	for _, fixture in station.fixtures do
+		fixture:SetAttribute("State", "idle")
+		fixture:SetAttribute("Progress", 0)
+		fixture:SetAttribute("Powered", false)
+		fixture:SetAttribute("HeldBy", 0)
+		fixture:SetAttribute("Position", 1)
+	end
+end
+
 --- Returns a lane to its starting condition without rebuilding geometry.
 function WorldService.resetLane(lane: Lane)
 	-- Clear anything spawned during the last run.

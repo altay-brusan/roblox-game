@@ -620,6 +620,18 @@ function HorrorDirector.start()
 		states[expedition.id] = nil
 	end)
 
+	-- After a retry the pressure starts low and the crew gets a quiet minute
+	-- to regroup before anything is scheduled.
+	ExpeditionService.Retried:Connect(function(expedition)
+		local state = states[expedition.id]
+		local station = StationRegistry.byIndex(expedition.stationIndex)
+		if state then
+			state.threat = if station then station.threat.baseline else Balance.Threat.baseline
+			state.calmUntil = os.clock() + 60
+			state.creaturesSpawned = false
+		end
+	end)
+
 	ExpeditionService.StationReached:Connect(function(expedition, index)
 		local state = states[expedition.id]
 		local station = StationRegistry.byIndex(index)

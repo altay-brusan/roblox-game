@@ -9921,6 +9921,10 @@ function CreatureService.start()
 	ExpeditionService.Ended:Connect(function(expedition)
 		CreatureService.despawnFor(expedition.id)
 	end)
+	-- A retry starts the station over with nothing already hunting the crew.
+	ExpeditionService.Retried:Connect(function(expedition)
+		CreatureService.despawnFor(expedition.id)
+	end)
 
 	log.info("started")
 end
@@ -12457,6 +12461,14 @@ export type ObjectiveProgress = {
 	startedAt: number?,
 }
 
+export type Checkpoint = {
+	stationIndex: number,
+	distance: number,
+	fuel: number,
+	condition: number,
+	inventories: { [number]: { { id: string, quantity: number } } },
+}
+
 export type Expedition = {
 	id: string,
 	crewId: string,
@@ -12490,6 +12502,11 @@ export type Expedition = {
 	-- between runs and cannot be memorised.
 	leverCode: { number },
 
+	-- What a retry restores; see takeCheckpoint.
+	checkpoint: Checkpoint?,
+	retries: number,
+	failedAt: number?,
+
 	maid: Maid.Maid,
 	members: { number }, -- user ids
 }
@@ -12503,6 +12520,9 @@ ExpeditionService.ObjectiveCompleted = Signal.new() :: Signal.Signal<Expedition,
 ExpeditionService.StationReached = Signal.new() :: Signal.Signal<Expedition, number>
 ExpeditionService.Ended = Signal.new() :: Signal.Signal<Expedition, boolean>
 ExpeditionService.ThreatEvent = Signal.new() :: Signal.Signal<Expedition, string, number>
+-- Fired after a retry has reset the expedition to its checkpoint, for the
+-- services that own vitals, creatures and threat.
+ExpeditionService.Retried = Signal.new() :: Signal.Signal<Expedition>
 
 --------------------------------------------------------------------------
 -- Helpers
@@ -12938,10 +12958,140 @@ local function arriveAtStation(expedition: Expedition, index: number)
 	-- Power off, doors closed, lights dark: every station starts cold.
 	setState(expedition, if station.index >= StationRegistry.count() then "climax" else "onstation")
 
+	ExpeditionService.takeCheckpoint(expedition)
 	ExpeditionService.StationReached:Fire(expedition, index)
 	ExpeditionService.fireRadio(expedition, "station_approach", { station = station.id })
 	notify(expedition, "info", station.name, station.subtitle, 7)
 	ExpeditionService.push(expedition)
+end
+
+--------------------------------------------------------------------------
+-- Checkpoints, failure and retry
+--------------------------------------------------------------------------
+
+-- How long the failure screen waits for a choice before retrying on its own.
+local AUTO_RETRY_SECONDS = 30
+
+--- Records what a retry restores: where the train stood, its fuel and
+--- condition, and what everybody carried. Taken on reaching the line and on
+--- arriving at each station, so a failure costs one station, never the run.
+local function takeCheckpoint(expedition: Expedition)
+	local inventories: { [number]: { { id: string, quantity: number } } } = {}
+	for _, player in playersOf(expedition) do
+		local inventory = InventoryService.get(player)
+		if inventory then
+			local copy = {}
+			for _, stack in inventory.stacks do
+				table.insert(copy, { id = stack.id, quantity = stack.quantity })
+			end
+			inventories[player.UserId] = copy
+		end
+	end
+	expedition.checkpoint = {
+		stationIndex = expedition.stationIndex,
+		distance = expedition.train.distance,
+		fuel = expedition.train.fuel,
+		condition = expedition.train.condition,
+		inventories = inventories,
+	}
+end
+
+ExpeditionService.takeCheckpoint = takeCheckpoint
+
+local function checkpointName(expedition: Expedition): string
+	local checkpoint = expedition.checkpoint
+	local station = if checkpoint then StationRegistry.byIndex(checkpoint.stationIndex) else nil
+	return if station then station.name else "the start of the line"
+end
+
+--- The whole crew is dead. The run stops, and the crew chooses between
+--- retrying from the last checkpoint and going back to the yard. Nothing
+--- waits forever: with no choice made, it retries on its own.
+function ExpeditionService.crewWiped(expedition: Expedition)
+	if expedition.state == "failed" or expedition.state == "ending" or expedition.state == "closed" then
+		return
+	end
+	setState(expedition, "failed")
+	expedition.failedAt = os.clock()
+	TrainService.setPilot(expedition.train, nil)
+	expedition.train.throttle = 0
+	expedition.train.serviceBrake = 1
+	broadcast(expedition, "ExpeditionState", {
+		state = "failed",
+		id = expedition.id,
+		stationName = checkpointName(expedition),
+		autoRetrySeconds = AUTO_RETRY_SECONDS,
+	})
+	ExpeditionService.fireRadio(expedition, "expedition_failure")
+	log.info(string.format("expedition %s failed; crew wiped", expedition.id))
+
+	local failedAt = expedition.failedAt
+	expedition.maid:Give(task.delay(AUTO_RETRY_SECONDS, function()
+		if expedition.state == "failed" and expedition.failedAt == failedAt then
+			ExpeditionService.retry(expedition)
+		end
+	end))
+end
+
+--- Puts the crew back at the last checkpoint: the station's objectives and
+--- fixtures reset, the train where it stood with the fuel and condition it
+--- had, everybody alive and carrying what they carried, threats cleared.
+function ExpeditionService.retry(expedition: Expedition)
+	if expedition.state ~= "failed" then
+		return
+	end
+	local checkpoint = expedition.checkpoint
+	if not checkpoint then
+		ExpeditionService.finish(expedition, false)
+		return
+	end
+	expedition.retries += 1
+
+	-- The station itself.
+	local index = checkpoint.stationIndex
+	expedition.stationIndex = index
+	if index > 0 then
+		WorldService.resetStation(expedition.lane, index)
+		local station = StationRegistry.byIndex(index)
+		if station then
+			initialiseObjectives(expedition, station)
+		end
+	end
+	expedition.lane.dropContainer:ClearAllChildren()
+
+	-- The train.
+	local train = expedition.train
+	TrainService.place(train, checkpoint.distance)
+	train.fuel = checkpoint.fuel
+	train.condition = checkpoint.condition
+	train.engineRunning = true
+	train.overheating = false
+	train.throttle = 0
+	train.serviceBrake = 1
+	train.direction = 1
+	TrainService.applyLights(train)
+	local nextStation = StationRegistry.byIndex(if index > 0 then index else 1)
+	TrainService.setStopDistance(train, if index > 0 then checkpoint.distance else (nextStation and nextStation.distance))
+
+	-- The crew: inventories restored, characters respawned aboard. Vitals,
+	-- creatures and threat are reset by the services listening to Retried.
+	for _, player in playersOf(expedition) do
+		local stacks = checkpoint.inventories[player.UserId]
+		if stacks then
+			InventoryService.restore(player, stacks)
+		end
+		player:LoadCharacter()
+		ExpeditionService.spawnIntoTrain(expedition, player)
+	end
+
+	ExpeditionService.Retried:Fire(expedition)
+	local stationDef = StationRegistry.byIndex(index)
+	setState(
+		expedition,
+		if index == 0 then "travelling" elseif stationDef and stationDef.index >= StationRegistry.count() then "climax" else "onstation"
+	)
+	notify(expedition, "info", "Back at " .. checkpointName(expedition), "The train is as you left it. Try another way.", 7)
+	log.info(string.format("expedition %s retried from station %d (retry %d)", expedition.id, index, expedition.retries))
 end
 
 --------------------------------------------------------------------------
@@ -13149,6 +13299,9 @@ function ExpeditionService.begin(crew: CrewService.Crew, members: { Player })
 		firedBeats = {},
 		silentAtStation = true,
 		leverCode = { math.random(1, 3), math.random(1, 3), math.random(1, 3), math.random(1, 3) },
+		checkpoint = nil,
+		retries = 0,
+		failedAt = nil,
 		maid = Maid.new(),
 		members = memberIds,
 	}
@@ -13349,6 +13502,7 @@ function ExpeditionService.arriveOnLine(expedition: Expedition)
 	end
 	TrainService.setStopDistance(expedition.train, StationRegistry.Stations[1].distance)
 	setState(expedition, "travelling")
+	ExpeditionService.takeCheckpoint(expedition)
 	notify(
 		expedition,
 		"info",
@@ -13668,7 +13822,7 @@ function ExpeditionService.start()
 	end)
 
 	Net.onServerInvoke("ExpeditionCommand", function(player, rawCommand)
-		local command = Guard.enum(rawCommand, { "state", "abandon" })
+		local command = Guard.enum(rawCommand, { "state", "abandon", "retry" })
 		if not command then
 			return { ok = false, error = "BAD_COMMAND" }
 		end
@@ -13679,6 +13833,13 @@ function ExpeditionService.start()
 		if command == "state" then
 			return { ok = true, expedition = describe(expedition) }
 		end
+		if command == "retry" then
+			if expedition.state ~= "failed" then
+				return { ok = false, error = "NOT_FAILED" }
+			end
+			ExpeditionService.retry(expedition)
+			return { ok = true }
+		end
 		-- Abandoning is per-player: it returns you to the lobby without ending
 		-- the run for everybody else.
 		playerExpedition[player.UserId] = nil
@@ -13687,8 +13848,14 @@ function ExpeditionService.start()
 		if index then
 			table.remove(expedition.members, index)
 		end
+		ShopService.setBlockedState(player, nil)
 		local lobby = WorldService.getLobby()
-		if lobby and player.Character then
+		local humanoid = if player.Character then player.Character:FindFirstChildOfClass("Humanoid") else nil
+		if not humanoid or humanoid.Health <= 0 then
+			-- A dead player respawns, and the spawn handler puts anybody not on
+			-- an expedition in the yard.
+			player:LoadCharacter()
+		elseif lobby and player.Character then
 			player.Character:PivotTo(lobby.spawnCFrames[1])
 		end
 		Net.fireClient("ExpeditionState", player, { state = "lobby" })
@@ -14374,6 +14541,18 @@ function HorrorDirector.start()
 
 	ExpeditionService.Ended:Connect(function(expedition)
 		states[expedition.id] = nil
+	end)
+
+	-- After a retry the pressure starts low and the crew gets a quiet minute
+	-- to regroup before anything is scheduled.
+	ExpeditionService.Retried:Connect(function(expedition)
+		local state = states[expedition.id]
+		local station = StationRegistry.byIndex(expedition.stationIndex)
+		if state then
+			state.threat = if station then station.threat.baseline else Balance.Threat.baseline
+			state.calmUntil = os.clock() + 60
+			state.creaturesSpawned = false
+		end
 	end)
 
 	ExpeditionService.StationReached:Connect(function(expedition, index)
@@ -15782,6 +15961,20 @@ function InventoryService.add(player: Player, itemId: string, quantity: number, 
 		InventoryService.ItemCollected:Fire(player, itemId, added)
 	end
 	return added
+end
+
+--- Replaces a player's carried items with a saved list, as a retry does.
+function InventoryService.restore(player: Player, stacks: { { id: string, quantity: number } })
+	local inventory = inventories[player.UserId]
+	if not inventory then
+		return
+	end
+	inventory.stacks = {}
+	for _, stack in stacks do
+		table.insert(inventory.stacks, { id = stack.id, quantity = stack.quantity })
+	end
+	InventoryService.push(player)
+	InventoryService.Changed:Fire(player, inventory)
 end
 
 --- Removes items. Returns how many were removed.
@@ -19202,6 +19395,22 @@ function SurvivalService.die(player: Player)
 	SurvivalService.Died:Fire(player)
 	SurvivalService.push(player)
 
+	-- The whole crew dead is a failure, not a permanent spectator screen with
+	-- nobody left to watch: the expedition offers a retry.
+	if expedition then
+		local anyoneAlive = false
+		for _, member in ExpeditionService.playersOf(expedition) do
+			local memberState = vitals[member.UserId]
+			if memberState and memberState.state ~= "dead" then
+				anyoneAlive = true
+				break
+			end
+		end
+		if not anyoneAlive then
+			ExpeditionService.crewWiped(expedition)
+		end
+	end
+
 	-- Straight into spectator rather than a black screen.
 	SurvivalService.startSpectating(player)
 
@@ -19491,7 +19700,60 @@ end
 
 --------------------------------------------------------------------------
 
+--- Watches a character for an actual death: a reset, a fall from the bridge,
+--- a drop out of the world. Characters do not respawn on their own in this
+--- game, so without this a player who died any way other than bleeding out
+--- was left dead with no way back.
+local function watchCharacter(player: Player, character: Model)
+	local humanoid = character:WaitForChild("Humanoid", 10)
+	if not humanoid or not humanoid:IsA("Humanoid") then
+		return
+	end
+	humanoid.Died:Connect(function()
+		local expedition = ExpeditionService.forPlayer(player)
+		local phase = if expedition then expedition.state else nil
+		if phase == "travelling" or phase == "onstation" or phase == "climax" then
+			-- On the line this is a death like any other: spectate, and a
+			-- crew wipe offers a retry.
+			SurvivalService.die(player)
+			return
+		end
+		task.delay(Players.RespawnTime, function()
+			if not player.Parent or player.Character ~= character then
+				return
+			end
+			player:LoadCharacter()
+			-- Dying during the departure still leaves you on the crew's train.
+			local current = ExpeditionService.forPlayer(player)
+			if current and current.state == "cinematic" then
+				ExpeditionService.spawnIntoTrain(current, player)
+			end
+		end)
+	end)
+end
+
 function SurvivalService.start()
+	local function track(player: Player)
+		if player.Character then
+			task.spawn(watchCharacter, player, player.Character)
+		end
+		player.CharacterAdded:Connect(function(character)
+			watchCharacter(player, character)
+			-- A fresh character outside an expedition is alive and well. The
+			-- client otherwise kept the last vitals it was sent, so a player
+			-- who left a failed run as "dead" stayed in the spectator camera
+			-- in the yard.
+			local expedition = ExpeditionService.forPlayer(player)
+			if not expedition or expedition.state == "preparing" or expedition.state == "boarding" then
+				SurvivalService.begin(player)
+			end
+		end)
+	end
+	for _, player in Players:GetPlayers() do
+		track(player)
+	end
+	Players.PlayerAdded:Connect(track)
+
 	-- Item effects are consumed here rather than in InventoryService, so the
 	-- inventory does not need to know what a bandage does.
 	InventoryService.ItemUsed:Connect(function(player, _itemId, def)
@@ -19638,6 +19900,13 @@ function SurvivalService.start()
 				SurvivalService.begin(player)
 				SurvivalService.grantImmunity(player, GameConfig.CinematicSeconds + 6)
 			end
+		end
+	end)
+
+	ExpeditionService.Retried:Connect(function(expedition)
+		for _, player in ExpeditionService.playersOf(expedition) do
+			SurvivalService.begin(player)
+			SurvivalService.grantImmunity(player, 12)
 		end
 	end)
 
@@ -20762,6 +21031,34 @@ end
 --------------------------------------------------------------------------
 -- Lane state reset
 --------------------------------------------------------------------------
+
+--- Returns one station to how the crew found it: loot searchable again,
+--- lights off, doors closed, fixtures idle. Used by a retry.
+function WorldService.resetStation(lane: Lane, index: number)
+	local station = lane.stations[index]
+	if not station then
+		return
+	end
+	for _, node in station.lootNodes do
+		node.part:SetAttribute("Searched", false)
+	end
+	for _, light in station.lights do
+		light.Enabled = false
+	end
+	for _, door in station.doors do
+		local baseCF = door:GetAttribute("ClosedCFrame")
+		if typeof(baseCF) == "CFrame" then
+			door:PivotTo(baseCF)
+		end
+	end
+	for _, fixture in station.fixtures do
+		fixture:SetAttribute("State", "idle")
+		fixture:SetAttribute("Progress", 0)
+		fixture:SetAttribute("Powered", false)
+		fixture:SetAttribute("HeldBy", 0)
+		fixture:SetAttribute("Position", 1)
+	end
+end
 
 --- Returns a lane to its starting condition without rebuilding geometry.
 function WorldService.resetLane(lane: Lane)
@@ -32326,6 +32623,7 @@ local PANEL_TITLES: { [string]: string } = {
 	settings = "Settings",
 	admin = "Control",
 	results = "Expedition Report",
+	failed = "The Line Went Quiet",
 	event = "Event",
 }
 
@@ -33661,6 +33959,65 @@ builders.results = function(frame: Frame)
 end
 
 --------------------------------------------------------------------------
+-- Panel: failure
+--------------------------------------------------------------------------
+
+-- The whole crew is down. The run is not over: retry from the last station,
+-- or go back to the yard. With no choice made the server retries by itself,
+-- which the countdown makes plain.
+local lastFailure: { [string]: any }? = nil
+
+builders.failed = function(frame: Frame)
+	local failure: { [string]: any } = lastFailure or {}
+	local scroll = Widgets.scroll(frame, 1)
+	Widgets.label({
+		text = "Everyone is down",
+		size = "display",
+		font = Theme.Font.display,
+		colour = Theme.colour("signalRed"),
+		parent = scroll,
+		layoutOrder = 1,
+	})
+	Widgets.caption(
+		scroll,
+		string.format(
+			"Nobody is left standing. You can go back to %s with the train as you left it, or return to the yard.",
+			tostring(failure.stationName or "the last station")
+		),
+		2
+	)
+	local countdown = Widgets.caption(scroll, "", 3)
+	local seconds = tonumber(failure.autoRetrySeconds) or 30
+	local openedAt = os.clock()
+	task.spawn(function()
+		while countdown.Parent do
+			local remaining = math.max(0, math.ceil(seconds - (os.clock() - openedAt)))
+			countdown.Text = string.format("Retrying on its own in %d seconds.", remaining)
+			task.wait(0.25)
+		end
+	end)
+	Widgets.button({
+		text = "Retry from " .. tostring(failure.stationName or "the last station"),
+		primary = true,
+		parent = scroll,
+		layoutOrder = 10,
+		onClick = function()
+			Net.invokeServer("ExpeditionCommand", "retry")
+			MenuController.close()
+		end,
+	})
+	Widgets.button({
+		text = "Return to the yard",
+		parent = scroll,
+		layoutOrder = 11,
+		onClick = function()
+			Net.invokeServer("ExpeditionCommand", "abandon")
+			MenuController.close()
+		end,
+	})
+end
+
+--------------------------------------------------------------------------
 -- Panel: admin
 --------------------------------------------------------------------------
 
@@ -33824,6 +34181,23 @@ function MenuController.start()
 		if type(payload) == "table" and payload.state == "results" then
 			lastResults = payload
 			MenuController.open("results")
+		elseif type(payload) == "table" and payload.state == "failed" then
+			-- The failed state arrives more than once (the failure itself and
+			-- the routine state push); open() toggles, so only open it once.
+			local detailed = payload.autoRetrySeconds ~= nil
+			if detailed then
+				lastFailure = payload
+			end
+			if currentPanel ~= "failed" then
+				MenuController.open("failed")
+			elseif detailed and rebuild then
+				-- The detailed message names the station; redraw with it.
+				rebuild()
+			end
+		elseif type(payload) == "table" and lastFailure and payload.state ~= "failed" and currentPanel == "failed" then
+			-- The server retried by itself, or a crewmate chose.
+			lastFailure = nil
+			MenuController.close()
 		end
 	end)
 

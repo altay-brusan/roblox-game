@@ -680,6 +680,10 @@ function CreatureService.start()
 	ExpeditionService.Ended:Connect(function(expedition)
 		CreatureService.despawnFor(expedition.id)
 	end)
+	-- A retry starts the station over with nothing already hunting the crew.
+	ExpeditionService.Retried:Connect(function(expedition)
+		CreatureService.despawnFor(expedition.id)
+	end)
 
 	log.info("started")
 end

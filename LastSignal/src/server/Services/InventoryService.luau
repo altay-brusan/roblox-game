@@ -232,6 +232,20 @@ function InventoryService.add(player: Player, itemId: string, quantity: number, 
 	return added
 end
 
+--- Replaces a player's carried items with a saved list, as a retry does.
+function InventoryService.restore(player: Player, stacks: { { id: string, quantity: number } })
+	local inventory = inventories[player.UserId]
+	if not inventory then
+		return
+	end
+	inventory.stacks = {}
+	for _, stack in stacks do
+		table.insert(inventory.stacks, { id = stack.id, quantity = stack.quantity })
+	end
+	InventoryService.push(player)
+	InventoryService.Changed:Fire(player, inventory)
+end
+
 --- Removes items. Returns how many were removed.
 function InventoryService.remove(player: Player, itemId: string, quantity: number): number
 	local inventory = inventories[player.UserId]
